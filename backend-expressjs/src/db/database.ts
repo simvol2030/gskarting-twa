@@ -1,69 +1,71 @@
-import Database from 'better-sqlite3';
-import { join } from 'path';
+/**
+ * Database module - миграция на Drizzle ORM
+ *
+ * Этот файл обеспечивает обратную совместимость со старым API,
+ * но использует Drizzle ORM под капотом для типобезопасности
+ * и возможности переключения на PostgreSQL
+ */
 
-// Путь к общей базе данных
-const DB_PATH = join(__dirname, '..', '..', '..', 'data', 'db', 'sqlite', 'app.db');
+import { db, dbInfo } from './client';
+import * as schema from './schema';
+import * as queries from './queries';
+import './init'; // Автоматическая инициализация и seed
 
-// Создаём подключение к SQLite с WAL режимом
-export const db = new Database(DB_PATH, { verbose: console.log });
+// Экспорт типов (обратная совместимость)
+export type User = schema.User;
+export type Post = schema.Post & {
+	author_name?: string | null;
+	author_email?: string | null;
+};
+export type Admin = schema.Admin;
 
-// Включаем WAL режим для лучшей производительности
-db.pragma('journal_mode = WAL');
+// Экспорт Drizzle клиента
+export { db };
 
-// Инициализация таблиц
+// Экспорт информации о БД
+export { dbInfo };
+
+/**
+ * Queries object - обеспечивает обратную совместимость
+ * Внимание: Drizzle использует async/await, поэтому все методы возвращают Promise
+ */
+export const dbQueries = {
+	// Users - теперь все методы async
+	getAllUsers: queries.getAllUsers,
+	getUserById: queries.getUserById,
+	getUserByEmail: queries.getUserByEmail,
+	createUser: queries.createUser,
+	updateUser: queries.updateUser,
+	deleteUser: queries.deleteUser,
+
+	// Posts - теперь все методы async
+	getAllPosts: queries.getAllPosts,
+	getPostById: queries.getPostById,
+	createPost: queries.createPost,
+	updatePost: queries.updatePost,
+	deletePost: queries.deletePost,
+
+	// Admins - теперь все методы async
+	getAdminByEmail: queries.getAdminByEmail,
+	getAllAdmins: queries.getAllAdmins,
+	createAdmin: queries.createAdmin,
+	updateAdmin: queries.updateAdmin,
+	updateAdminPassword: queries.updateAdminPassword,
+	deleteAdmin: queries.deleteAdmin
+};
+
+/**
+ * Функции инициализации (для обратной совместимости)
+ * Теперь выполняются автоматически через ./init
+ */
 export function initializeDatabase() {
-	// Таблица users
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			email TEXT NOT NULL UNIQUE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-
-	// Таблица posts
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS posts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			title TEXT NOT NULL,
-			content TEXT,
-			published INTEGER DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id)
-		)
-	`);
-
-	// Таблица admins для аутентификации
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS admins (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			email TEXT NOT NULL UNIQUE,
-			password TEXT NOT NULL,
-			role TEXT NOT NULL DEFAULT 'viewer',
-			name TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-
-	// Проверяем, есть ли админы
-	const adminCount = db.prepare('SELECT COUNT(*) as count FROM admins').get() as { count: number };
-
-	if (adminCount.count === 0) {
-		// Создаём дефолтного супер-админа
-		const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-		const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
-		db.prepare(`
-			INSERT INTO admins (email, password, role, name)
-			VALUES (?, ?, ?, ?)
-		`).run(adminEmail, adminPassword, 'super-admin', 'Super Admin');
-
-		console.log('✅ Default super-admin created');
-	}
-
-	console.log('✅ Database initialized with WAL mode');
+	console.log('✅ Database tables managed by Drizzle ORM');
 }
+
+// Экспорт схемы для прямого использования
+export { schema };
+
+// Экспорт queries для прямого использования
+export { queries };
 
 export default db;

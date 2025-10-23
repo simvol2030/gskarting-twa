@@ -13,7 +13,7 @@ export const load: PageServerLoad = async (event) => {
 		throw error(403, 'Access denied. Super-admin only.');
 	}
 
-	const admins = queries.getAllAdmins.all();
+	const admins = await queries.getAllAdmins();
 	return { admins };
 };
 
@@ -55,10 +55,15 @@ export const actions: Actions = {
 		try {
 			// Хешируем пароль
 			const hashedPassword = await bcrypt.hash(password!, 10);
-			queries.createAdmin.run(email, hashedPassword, role, name);
+			await queries.createAdmin({
+				email: email!,
+				password: hashedPassword,
+				role: role! as 'super-admin' | 'editor' | 'viewer',
+				name: name!
+			});
 			return { success: true };
 		} catch (error: any) {
-			if (error.code === 'SQLITE_CONSTRAINT') {
+			if (error.message && error.message.includes('UNIQUE constraint')) {
 				return fail(409, { error: 'Email already exists' });
 			}
 			return fail(500, { error: 'Failed to create admin' });
@@ -100,13 +105,17 @@ export const actions: Actions = {
 		}
 
 		try {
-			const result = queries.updateAdmin.run(email, role, name, id);
-			if (result.changes === 0) {
+			const result = await queries.updateAdmin(parseInt(id!), {
+				email: email!,
+				role: role! as 'super-admin' | 'editor' | 'viewer',
+				name: name!
+			});
+			if (!result) {
 				return fail(404, { error: 'Admin not found' });
 			}
 			return { success: true };
 		} catch (error: any) {
-			if (error.code === 'SQLITE_CONSTRAINT') {
+			if (error.message && error.message.includes('UNIQUE constraint')) {
 				return fail(409, { error: 'Email already exists' });
 			}
 			return fail(500, { error: 'Failed to update admin' });
@@ -137,8 +146,8 @@ export const actions: Actions = {
 
 		try {
 			const hashedPassword = await bcrypt.hash(password!, 10);
-			const result = queries.updateAdminPassword.run(hashedPassword, id);
-			if (result.changes === 0) {
+			const result = await queries.updateAdminPassword(parseInt(id!), hashedPassword);
+			if (!result) {
 				return fail(404, { error: 'Admin not found' });
 			}
 			return { success: true };
@@ -164,7 +173,7 @@ export const actions: Actions = {
 		}
 
 		// Проверяем, что это не последний super-admin
-		const allAdmins = queries.getAllAdmins.all() as any[];
+		const allAdmins = await queries.getAllAdmins();
 		const superAdmins = allAdmins.filter((a) => a.role === 'super-admin');
 
 		if (superAdmins.length === 1 && superAdmins[0].id === parseInt(id!)) {
@@ -172,8 +181,8 @@ export const actions: Actions = {
 		}
 
 		try {
-			const result = queries.deleteAdmin.run(id);
-			if (result.changes === 0) {
+			const result = await queries.deleteAdmin(parseInt(id!));
+			if (!result) {
 				return fail(404, { error: 'Admin not found' });
 			}
 			return { success: true };

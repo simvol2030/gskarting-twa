@@ -68,8 +68,8 @@
 							</td>
 							<td>{post.author_name}</td>
 							<td>
-								<span class="badge" class:published={post.published === 1}>
-									{post.published === 1 ? 'Published' : 'Draft'}
+								<span class="badge" class:published={post.published}>
+									{post.published ? 'Published' : 'Draft'}
 								</span>
 							</td>
 							<td class="text-muted">

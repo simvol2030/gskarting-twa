@@ -1,0 +1,42 @@
+[
+  {
+    "id": "pets",
+    "icon": "🐾",
+    "iconColor": "orange",
+    "title": "Мои питомцы",
+    "description": "Управление информацией о питомцах",
+    "action": "openPetsModal"
+  },
+  {
+    "id": "notifications",
+    "icon": "🔔",
+    "iconColor": "blue",
+    "title": "Настройки уведомлений",
+    "description": "Управление push-уведомлениями",
+    "action": "openNotificationsModal"
+  },
+  {
+    "id": "payment",
+    "icon": "💳",
+    "iconColor": "green",
+    "title": "Способы оплаты",
+    "description": "Привязанные карты и счета",
+    "action": "openPaymentModal"
+  },
+  {
+    "id": "referral",
+    "icon": "🎁",
+    "iconColor": "purple",
+    "title": "Пригласить друзей",
+    "description": "Получите бонусы за приглашение",
+    "action": null
+  },
+  {
+    "id": "support",
+    "icon": "💬",
+    "iconColor": "pink",
+    "title": "Поддержка",
+    "description": "Свяжитесь с нами",
+    "action": "alert"
+  }
+]

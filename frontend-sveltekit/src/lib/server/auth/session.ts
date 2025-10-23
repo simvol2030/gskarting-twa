@@ -14,7 +14,7 @@ export interface SessionUser {
 // Проверка учётных данных
 export async function validateCredentials(email: string, password: string): Promise<SessionUser | null> {
 	try {
-		const admin = queries.getAdminByEmail.get(email) as Admin | undefined;
+		const admin = await queries.getAdminByEmail(email);
 
 		if (!admin) {
 			// Use timing-safe comparison to prevent timing attacks

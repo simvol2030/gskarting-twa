@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import db from '../db/database';
+import { queries } from '../db/database';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
+import { validateEmail, validateName, validateId } from '../utils/validation';
 
 const router = Router();
 
@@ -8,9 +9,9 @@ const router = Router();
 router.use(authenticateToken);
 
 // GET /api/users - получить всех пользователей
-router.get('/', (req: AuthRequest, res) => {
+router.get('/', async (req: AuthRequest, res) => {
 	try {
-		const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+		const users = await queries.getAllUsers();
 		res.json({ success: true, data: users });
 	} catch (error) {
 		console.error('Get users error:', error);
@@ -19,9 +20,15 @@ router.get('/', (req: AuthRequest, res) => {
 });
 
 // GET /api/users/:id - получить одного пользователя
-router.get('/:id', (req: AuthRequest, res) => {
+router.get('/:id', async (req: AuthRequest, res) => {
+	// Validate ID
+	const idValidation = validateId(req.params.id);
+	if (!idValidation.valid) {
+		return res.status(400).json({ error: idValidation.error });
+	}
+
 	try {
-		const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+		const user = await queries.getUserById(parseInt(req.params.id));
 
 		if (!user) {
 			return res.status(404).json({ error: 'User not found' });
@@ -35,64 +42,80 @@ router.get('/:id', (req: AuthRequest, res) => {
 });
 
 // POST /api/users - создать пользователя (только super-admin и editor)
-router.post('/', requireRole('super-admin', 'editor'), (req: AuthRequest, res) => {
+router.post('/', requireRole('super-admin', 'editor'), async (req: AuthRequest, res) => {
 	const { name, email } = req.body;
 
-	if (!name || !email) {
-		return res.status(400).json({ error: 'Name and email are required' });
+	// Validate inputs
+	const nameValidation = validateName(name);
+	if (!nameValidation.valid) {
+		return res.status(400).json({ error: nameValidation.error });
+	}
+
+	const emailValidation = validateEmail(email);
+	if (!emailValidation.valid) {
+		return res.status(400).json({ error: emailValidation.error });
 	}
 
 	try {
-		const result = db.prepare('INSERT INTO users (name, email) VALUES (?, ?)').run(name, email);
-
-		const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
-
+		const newUser = await queries.createUser({ name, email });
 		res.status(201).json({ success: true, data: newUser });
 	} catch (error: any) {
-		if (error.code === 'SQLITE_CONSTRAINT') {
+		console.error('Create user error:', error);
+		if (error.message && error.message.includes('UNIQUE constraint')) {
 			return res.status(409).json({ error: 'Email already exists' });
 		}
-		console.error('Create user error:', error);
 		res.status(500).json({ error: 'Failed to create user' });
 	}
 });
 
 // PUT /api/users/:id - обновить пользователя (только super-admin и editor)
-router.put('/:id', requireRole('super-admin', 'editor'), (req: AuthRequest, res) => {
+router.put('/:id', requireRole('super-admin', 'editor'), async (req: AuthRequest, res) => {
 	const { name, email } = req.body;
 
-	if (!name || !email) {
-		return res.status(400).json({ error: 'Name and email are required' });
+	// Validate ID
+	const idValidation = validateId(req.params.id);
+	if (!idValidation.valid) {
+		return res.status(400).json({ error: idValidation.error });
+	}
+
+	// Validate inputs
+	const nameValidation = validateName(name);
+	if (!nameValidation.valid) {
+		return res.status(400).json({ error: nameValidation.error });
+	}
+
+	const emailValidation = validateEmail(email);
+	if (!emailValidation.valid) {
+		return res.status(400).json({ error: emailValidation.error });
 	}
 
 	try {
-		const result = db.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?').run(name, email, req.params.id);
+		const updatedUser = await queries.updateUser(parseInt(req.params.id), { name, email });
 
-		if (result.changes === 0) {
+		if (!updatedUser) {
 			return res.status(404).json({ error: 'User not found' });
 		}
 
-		const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-
 		res.json({ success: true, data: updatedUser });
 	} catch (error: any) {
-		if (error.code === 'SQLITE_CONSTRAINT') {
+		console.error('Update user error:', error);
+		if (error.message && error.message.includes('UNIQUE constraint')) {
 			return res.status(409).json({ error: 'Email already exists' });
 		}
-		console.error('Update user error:', error);
 		res.status(500).json({ error: 'Failed to update user' });
 	}
 });
 
 // DELETE /api/users/:id - удалить пользователя (только super-admin)
-router.delete('/:id', requireRole('super-admin'), (req: AuthRequest, res) => {
+router.delete('/:id', requireRole('super-admin'), async (req: AuthRequest, res) => {
+	// Validate ID
+	const idValidation = validateId(req.params.id);
+	if (!idValidation.valid) {
+		return res.status(400).json({ error: idValidation.error });
+	}
+
 	try {
-		const result = db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-
-		if (result.changes === 0) {
-			return res.status(404).json({ error: 'User not found' });
-		}
-
+		await queries.deleteUser(parseInt(req.params.id));
 		res.json({ success: true, message: 'User deleted successfully' });
 	} catch (error) {
 		console.error('Delete user error:', error);

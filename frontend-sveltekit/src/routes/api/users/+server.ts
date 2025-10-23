@@ -1,10 +1,10 @@
 import { json } from '@sveltejs/kit';
-import { db } from '$lib/server/db/database';
+import { queries } from '$lib/server/db/database';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = () => {
+export const GET: RequestHandler = async () => {
 	try {
-		const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+		const users = await queries.getAllUsers();
 		return json(users);
 	} catch (error) {
 		console.error('Error fetching users:', error);

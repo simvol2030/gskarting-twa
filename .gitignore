@@ -7,6 +7,10 @@ frontend-sveltekit/build/
 backend-expressjs/dist/
 backend-expressjs/build/
 
+# Drizzle ORM
+frontend-sveltekit/drizzle/
+backend-expressjs/drizzle/
+
 # Database files
 data/db/sqlite/*.db
 data/db/sqlite/*.db-shm

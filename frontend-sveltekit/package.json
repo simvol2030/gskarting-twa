@@ -11,7 +11,11 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint ."
+		"lint": "prettier --check . && eslint .",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:push": "drizzle-kit push",
+		"db:studio": "drizzle-kit studio"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -21,6 +25,7 @@
 		"@sveltejs/vite-plugin-svelte": "^6.2.0",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^22",
+		"@types/pg": "^8.15.5",
 		"eslint": "^9.36.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.12.4",
@@ -36,6 +41,9 @@
 	"dependencies": {
 		"@types/bcrypt": "^6.0.0",
 		"bcrypt": "^6.0.0",
-		"better-sqlite3": "^12.4.1"
+		"better-sqlite3": "^12.4.1",
+		"drizzle-kit": "^0.31.5",
+		"drizzle-orm": "^0.44.6",
+		"pg": "^8.16.3"
 	}
 }

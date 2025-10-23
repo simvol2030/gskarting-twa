@@ -1,25 +1,59 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
-import db from '../db/database';
+import bcrypt from 'bcrypt';
+import { queries } from '../db/database';
+import { validateEmail, validatePassword } from '../utils/validation';
+import { checkRateLimit, resetRateLimit, getClientIP, RATE_LIMIT_CONFIGS } from '../utils/rate-limit';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
 
 // POST /api/auth/login - вход в систему
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
 	const { email, password } = req.body;
 
-	if (!email || !password) {
-		return res.status(400).json({ error: 'Email and password required' });
+	// Validate inputs
+	const emailValidation = validateEmail(email);
+	if (!emailValidation.valid) {
+		return res.status(400).json({ error: emailValidation.error });
+	}
+
+	const passwordValidation = validatePassword(password);
+	if (!passwordValidation.valid) {
+		return res.status(400).json({ error: passwordValidation.error });
+	}
+
+	// Rate limiting check
+	const clientIP = getClientIP(req);
+	const rateLimitResult = checkRateLimit(clientIP, RATE_LIMIT_CONFIGS.LOGIN);
+
+	if (!rateLimitResult.allowed) {
+		return res.status(429).json({
+			error: rateLimitResult.message,
+			retryAfter: rateLimitResult.retryAfterMs
+		});
 	}
 
 	try {
-		// Ищем админа в базе
-		const admin = db.prepare('SELECT * FROM admins WHERE email = ?').get(email) as any;
+		// Ищем админа в базе (используем Drizzle queries)
+		const admin = await queries.getAdminByEmail(email);
 
-		if (!admin || admin.password !== password) {
+		// Timing-safe password comparison to prevent timing attacks
+		if (!admin) {
+			// Use dummy bcrypt comparison to prevent timing attacks
+			await bcrypt.compare(password, '$2b$10$dummyhashtopreventtimingattacks12345678901234567890');
 			return res.status(401).json({ error: 'Invalid credentials' });
 		}
+
+		// Verify password with bcrypt
+		const isValid = await bcrypt.compare(password, admin.password);
+
+		if (!isValid) {
+			return res.status(401).json({ error: 'Invalid credentials' });
+		}
+
+		// Reset rate limit on successful login
+		resetRateLimit(clientIP);
 
 		// Генерируем JWT токен
 		const token = jwt.sign(

@@ -2,13 +2,17 @@ import type { PageServerLoad } from './$types';
 import { queries } from '$lib/server/db/database';
 
 export const load: PageServerLoad = async () => {
-	// Получаем статистику
-	const usersCount = queries.getAllUsers.all().length;
-	const postsCount = queries.getAllPosts.all().length;
-	const publishedCount = queries.getAllPosts.all().filter((p: any) => p.published === 1).length;
+	// Получаем данные (queries теперь async)
+	const users = await queries.getAllUsers();
+	const posts = await queries.getAllPosts();
+
+	// Вычисляем статистику
+	const usersCount = users.length;
+	const postsCount = posts.length;
+	const publishedCount = posts.filter((p) => p.published).length;
 
 	// Получаем недавние посты
-	const recentPosts = queries.getAllPosts.all().slice(0, 5);
+	const recentPosts = posts.slice(0, 5);
 
 	return {
 		stats: {

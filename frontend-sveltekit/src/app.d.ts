@@ -10,6 +10,25 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	interface Window {
+		Telegram?: {
+			WebApp: {
+				ready: () => void;
+				expand: () => void;
+				enableClosingConfirmation: () => void;
+				colorScheme?: 'light' | 'dark';
+				initDataUnsafe?: {
+					user?: {
+						id: number;
+						first_name: string;
+						last_name?: string;
+						username?: string;
+					};
+				};
+			};
+		};
+	}
 }
 
 export {};

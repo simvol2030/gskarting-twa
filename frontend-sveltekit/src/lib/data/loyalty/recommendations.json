@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "name": "Витамины для шерсти",
+    "description": "Для здоровья и блеска",
+    "price": 890,
+    "image": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=300&h=300&fit=crop"
+  },
+  {
+    "id": 2,
+    "name": "Антипаразитарные капли",
+    "description": "Защита на 30 дней",
+    "price": 1250,
+    "image": "https://images.unsplash.com/photo-1615485500704-8e990f9900f7?w=300&h=300&fit=crop"
+  },
+  {
+    "id": 3,
+    "name": "Зубная паста для кошек",
+    "description": "Свежее дыхание",
+    "price": 380,
+    "image": "https://images.unsplash.com/photo-1583511655826-05700d52f4d9?w=300&h=300&fit=crop"
+  },
+  {
+    "id": 4,
+    "name": "Шампунь гипоаллергенный",
+    "description": "Для чувствительной кожи",
+    "price": 650,
+    "image": "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=300&h=300&fit=crop"
+  }
+]

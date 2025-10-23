@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { initializeDatabase } from './db/database';
+import { securityHeaders } from './middleware/security';
 
 // Импорт роутеров
 import authRouter from './routes/auth';
@@ -10,6 +11,9 @@ import postsRouter from './routes/posts';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Security middleware (applied first)
+app.use(securityHeaders);
 
 // Middleware
 app.use(cors({

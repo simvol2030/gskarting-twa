@@ -5,7 +5,7 @@ import { requireRole } from '$lib/server/auth/session';
 import { validateEmail, validateName, validateId } from '$lib/server/validation';
 
 export const load: PageServerLoad = async () => {
-	const users = queries.getAllUsers.all();
+	const users = await queries.getAllUsers();
 	return { users };
 };
 
@@ -34,10 +34,10 @@ export const actions: Actions = {
 		}
 
 		try {
-			queries.createUser.run(name, email);
+			await queries.createUser({ name: name!, email: email! });
 			return { success: true };
 		} catch (error: any) {
-			if (error.code === 'SQLITE_CONSTRAINT') {
+			if (error.message && error.message.includes('UNIQUE constraint')) {
 				return fail(409, { error: 'Email already exists' });
 			}
 			return fail(500, { error: 'Failed to create user' });
@@ -74,13 +74,17 @@ export const actions: Actions = {
 		}
 
 		try {
-			const result = queries.updateUser.run(name, email, id);
-			if (result.changes === 0) {
+			const result = await queries.updateUser(parseInt(id!), {
+				name: name!,
+				email: email!
+			});
+
+			if (!result) {
 				return fail(404, { error: 'User not found' });
 			}
 			return { success: true };
 		} catch (error: any) {
-			if (error.code === 'SQLITE_CONSTRAINT') {
+			if (error.message && error.message.includes('UNIQUE constraint')) {
 				return fail(409, { error: 'Email already exists' });
 			}
 			return fail(500, { error: 'Failed to update user' });
@@ -105,10 +109,7 @@ export const actions: Actions = {
 		}
 
 		try {
-			const result = queries.deleteUser.run(id);
-			if (result.changes === 0) {
-				return fail(404, { error: 'User not found' });
-			}
+			await queries.deleteUser(parseInt(id!));
 			return { success: true };
 		} catch {
 			return fail(500, { error: 'Failed to delete user' });

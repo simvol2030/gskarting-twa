@@ -1,0 +1,98 @@
+/* ========================================
+   Murzico Theme System
+   Telegram-style Dark Theme
+   ======================================== */
+
+:root {
+    /* Primary Colors - Same for both themes */
+    --primary-orange: #ff6b00;
+    --primary-orange-dark: #e55d00;
+    --primary-orange-light: #ff8533;
+    --secondary-green: #10b981;
+    --secondary-green-dark: #059669;
+    --accent-red: #dc2626;
+
+    /* Light Theme Colors */
+    --bg-white: #ffffff;
+    --bg-light: #f9fafb;
+    --bg-tertiary: #f3f4f6;
+    --text-primary: #111827;
+    --text-secondary: #6b7280;
+    --text-tertiary: #9ca3af;
+    --border-color: #e5e7eb;
+    --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
+    /* Card backgrounds */
+    --card-bg: #ffffff;
+    --card-hover: #fafafa;
+}
+
+/* ========================================
+   Dark Theme - Telegram Style (Authentic Colors)
+   ======================================== */
+[data-theme="dark"] {
+    /* Keep accent colors bright */
+    --primary-orange: #ff8533;
+    --primary-orange-dark: #ff6b00;
+    --primary-orange-light: #ff9a4d;
+    --secondary-green: #34d399;
+    --secondary-green-dark: #10b981;
+    --accent-red: #ef4444;
+
+    /* Telegram Original Dark Theme Colors */
+    --bg-white: #17212b;        /* Main background - Telegram's exact dark blue-grey */
+    --bg-light: #0e1621;        /* Darker areas - Telegram's deep blue-grey */
+    --bg-tertiary: #1f2c38;     /* Hover states - slightly lighter blue-grey */
+
+    /* Telegram text colors for perfect readability */
+    --text-primary: #ffffff;    /* Primary text - pure white like Telegram */
+    --text-secondary: #aaaaaa;  /* Secondary text - Telegram's grey */
+    --text-tertiary: #707579;   /* Tertiary text - Telegram's dim grey */
+
+    /* Telegram borders */
+    --border-color: #2b3943;    /* Telegram's subtle border color */
+
+    /* Softer shadows for Telegram style */
+    --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+
+    /* Card backgrounds - Telegram layered approach */
+    --card-bg: #1f2c38;         /* Cards - Telegram's message bubble color */
+    --card-hover: #242f3d;      /* Hover state - slightly lighter */
+}
+
+/* ========================================
+   Fast Theme Transitions (for testing)
+   ======================================== */
+html {
+    transition: background-color 0.05s ease;
+}
+
+body,
+.app-container,
+.app-header,
+.bottom-nav,
+.sidebar,
+.content,
+.loyalty-card,
+.product-card,
+.recommendation-card,
+.list-item,
+.history-item,
+.promo-card,
+.modal-content,
+.theme-toggle,
+.hamburger-button,
+.nav-item {
+    transition: background-color 0.05s ease, color 0.05s ease, border-color 0.05s ease, box-shadow 0.05s ease;
+}
+
+/* Prevent transition on hover states */
+.product-card:hover,
+.recommendation-card:hover,
+.list-item:hover,
+.nav-item:hover {
+    transition-property: transform, box-shadow;
+    transition-duration: 0.15s;
+}
