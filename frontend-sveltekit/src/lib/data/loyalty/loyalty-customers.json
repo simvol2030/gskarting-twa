@@ -1,0 +1,52 @@
+[
+  {
+    "id": 1,
+    "name": "Сергей Мурзин",
+    "cardNumber": "42 18 567891",
+    "balance": 8456,
+    "phone": "+7 (999) 123-45-67",
+    "totalPurchases": 47,
+    "totalSaved": 23450,
+    "qrCode": "MURZICO_USER_1_42185678"
+  },
+  {
+    "id": 2,
+    "name": "Анна Петрова",
+    "cardNumber": "42 18 567892",
+    "balance": 3210,
+    "phone": "+7 (999) 234-56-78",
+    "totalPurchases": 28,
+    "totalSaved": 15200,
+    "qrCode": "MURZICO_USER_2_42185679"
+  },
+  {
+    "id": 3,
+    "name": "Иван Сидоров",
+    "cardNumber": "42 18 567893",
+    "balance": 12500,
+    "phone": "+7 (999) 345-67-89",
+    "totalPurchases": 65,
+    "totalSaved": 38900,
+    "qrCode": "MURZICO_USER_3_42185680"
+  },
+  {
+    "id": 4,
+    "name": "Мария Кузнецова",
+    "cardNumber": "42 18 567894",
+    "balance": 560,
+    "phone": "+7 (999) 456-78-90",
+    "totalPurchases": 12,
+    "totalSaved": 4200,
+    "qrCode": "MURZICO_USER_4_42185681"
+  },
+  {
+    "id": 5,
+    "name": "Дмитрий Волков",
+    "cardNumber": "42 18 567895",
+    "balance": 18200,
+    "phone": "+7 (999) 567-89-01",
+    "totalPurchases": 89,
+    "totalSaved": 52100,
+    "qrCode": "MURZICO_USER_5_42185682"
+  }
+]

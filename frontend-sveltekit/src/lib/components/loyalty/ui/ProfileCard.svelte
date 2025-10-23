@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { User } from '$lib/types/loyalty';
-  import { formatNumber } from '$lib/telegram';
+  import { formatNumber, initializeUser, getTelegramUser } from '$lib/telegram';
 
   interface Props {
     user: User;
@@ -8,31 +9,76 @@
 
   let { user }: Props = $props();
 
+  // State for merged user data (Telegram + JSON)
+  let displayUser = $state<User>(user);
+  let isLoading = $state(true);
+
   // Get user initials
   const getInitials = (name: string): string => {
     const parts = name.split(' ');
     return parts.map(p => p[0]).join('').toUpperCase().slice(0, 2);
   };
+
+  // Initialize Telegram user on mount
+  onMount(async () => {
+    const telegramUser = getTelegramUser();
+
+    // If running in Telegram Web App, initialize user
+    if (telegramUser) {
+      try {
+        // TODO: Extract store_id from URL parameter when implementing QR codes
+        // For now, store_id is undefined (will be added later)
+        const result = await initializeUser();
+
+        if (result && result.success) {
+          // Merge Telegram user data with existing user structure
+          displayUser = {
+            ...user,
+            name: `${result.user.first_name}${result.user.last_name ? ' ' + result.user.last_name : ''}`,
+            currentBalance: result.user.current_balance,
+            // Keep other fields from demo user.json for now
+            // (totalPurchases, totalSaved, etc. will come from database later)
+          };
+
+          console.log('Telegram user initialized:', {
+            isNewUser: result.isNewUser,
+            bonus: result.isNewUser ? '500 Murzikoyns awarded' : 'Welcome back',
+            balance: result.user.current_balance
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initialize Telegram user:', error);
+        // Fall back to demo user from props
+        displayUser = user;
+      }
+    } else {
+      // Not in Telegram Web App - use demo user
+      console.log('Demo mode: Not running in Telegram Web App');
+      displayUser = user;
+    }
+
+    isLoading = false;
+  });
 </script>
 
 <div class="profile-card">
   <div class="profile-header">
     <div class="profile-avatar">
-      {getInitials(user.name)}
+      {getInitials(displayUser.name)}
     </div>
     <div class="profile-info">
-      <h2 class="profile-name">{user.name}</h2>
+      <h2 class="profile-name">{displayUser.name}</h2>
       <p class="profile-status">Статус: VIP клиент 🌟</p>
     </div>
   </div>
 
   <div class="profile-stats">
     <div class="profile-stat-item">
-      <div class="profile-stat-value profile-stat-orange">{user.totalPurchases}</div>
+      <div class="profile-stat-value profile-stat-orange">{displayUser.totalPurchases}</div>
       <div class="profile-stat-label">Покупок</div>
     </div>
     <div class="profile-stat-item">
-      <div class="profile-stat-value profile-stat-green">{formatNumber(user.totalSaved)}</div>
+      <div class="profile-stat-value profile-stat-green">{formatNumber(displayUser.totalSaved)}</div>
       <div class="profile-stat-label">Сэкономлено</div>
     </div>
   </div>

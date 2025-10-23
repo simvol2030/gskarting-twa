@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Настройки кассы</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				padding: 2rem;
+				background: #f5f5f5;
+			}
+
+			h1 {
+				margin-bottom: 2rem;
+				color: #333;
+			}
+
+			.form-group {
+				margin-bottom: 1.5rem;
+			}
+
+			label {
+				display: block;
+				margin-bottom: 0.5rem;
+				font-weight: 600;
+				color: #555;
+			}
+
+			input,
+			select {
+				width: 100%;
+				padding: 0.75rem;
+				font-size: 1rem;
+				border: 2px solid #ddd;
+				border-radius: 6px;
+				outline: none;
+			}
+
+			input:focus,
+			select:focus {
+				border-color: #667eea;
+			}
+
+			.checkbox-group {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			.checkbox-group input {
+				width: auto;
+			}
+
+			.btn {
+				padding: 0.75rem 2rem;
+				font-size: 1rem;
+				font-weight: 600;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+
+			.btn-primary {
+				background: #667eea;
+				color: white;
+			}
+
+			.btn-primary:hover {
+				background: #5568d3;
+			}
+
+			.btn-secondary {
+				background: #6b7280;
+				color: white;
+			}
+
+			.btn-secondary:hover {
+				background: #4b5563;
+			}
+
+			.actions {
+				display: flex;
+				gap: 1rem;
+				margin-top: 2rem;
+			}
+
+			.info {
+				margin-top: 2rem;
+				padding: 1rem;
+				background: #e0e7ff;
+				border-radius: 6px;
+				color: #3730a3;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>⚙️ Настройки кассы</h1>
+
+		<form id="settingsForm">
+			<div class="form-group">
+				<label for="storeId">Магазин:</label>
+				<select id="storeId" required>
+					<option value="1">Магазин на Зеленоградской</option>
+					<option value="2">Магазин в Ашукино</option>
+					<option value="3">Магазин в Софрино</option>
+					<option value="4">Магазин в Заветах Ильича</option>
+					<option value="5">Магазин в Клязьме</option>
+					<option value="6">Магазин в Зверосовхозе</option>
+				</select>
+			</div>
+
+			<div class="form-group">
+				<label for="apiUrl">URL сервера:</label>
+				<input
+					type="url"
+					id="apiUrl"
+					placeholder="https://murzicoin.murzico.ru"
+					required
+				/>
+			</div>
+
+			<div class="form-group">
+				<label class="checkbox-group">
+					<input type="checkbox" id="kioskMode" />
+					<span>Киоск-режим (полноэкранный без выхода)</span>
+				</label>
+			</div>
+
+			<div class="form-group">
+				<label class="checkbox-group">
+					<input type="checkbox" id="autoStart" />
+					<span>Автозапуск при включении компьютера</span>
+				</label>
+			</div>
+
+			<div class="actions">
+				<button type="submit" class="btn btn-primary">💾 Сохранить и перезапустить</button>
+				<button type="button" class="btn btn-secondary" onclick="window.close()">
+					Отмена
+				</button>
+			</div>
+		</form>
+
+		<div class="info">
+			<strong>ℹ️ Информация:</strong><br />
+			После изменения настроек приложение будет автоматически перезапущено.<br />
+			Для корректной работы сканера QR-кодов убедитесь, что устройство подключено.
+		</div>
+
+		<script>
+			// Загрузить текущие настройки
+			window.electronAPI.getConfig().then((config) => {
+				document.getElementById('storeId').value = config.storeId;
+				document.getElementById('apiUrl').value = config.apiUrl;
+				document.getElementById('kioskMode').checked = config.kioskMode;
+				document.getElementById('autoStart').checked = config.autoStart;
+			});
+
+			// Сохранить настройки
+			document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+				e.preventDefault();
+
+				const config = {
+					storeId: parseInt(document.getElementById('storeId').value),
+					apiUrl: document.getElementById('apiUrl').value.trim(),
+					kioskMode: document.getElementById('kioskMode').checked,
+					autoStart: document.getElementById('autoStart').checked
+				};
+
+				await window.electronAPI.saveConfig(config);
+				await window.electronAPI.restartApp();
+			});
+		</script>
+	</body>
+</html>

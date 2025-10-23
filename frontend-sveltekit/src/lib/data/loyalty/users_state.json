@@ -1,0 +1,29 @@
+{
+  "users": [],
+  "_metadata": {
+    "description": "Temporary storage for Telegram Web App users. Will be migrated to database.",
+    "fields": {
+      "telegram_user_id": "Telegram user ID (primary identifier)",
+      "first_name": "User's first name from Telegram",
+      "last_name": "User's last name from Telegram (optional)",
+      "username": "Telegram username (optional, without @)",
+      "language_code": "Telegram user language code (e.g., 'ru', 'en')",
+      "current_balance": "Current Murzikoyns balance (starts at 500 for new users)",
+      "store_id": "Which of 6 stores user registered from (CRITICAL for tracking)",
+      "first_login_bonus_claimed": "Boolean flag - true after 500 coins awarded",
+      "registration_date": "ISO 8601 timestamp when user first logged in",
+      "last_activity": "ISO 8601 timestamp of last interaction",
+      "chat_id": "Telegram chat ID for bot messaging (equals telegram_user_id for private chats)"
+    },
+    "database_migration_notes": {
+      "table_name": "users",
+      "sql_schema": "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, telegram_user_id BIGINT UNIQUE NOT NULL, first_name VARCHAR(255) NOT NULL, last_name VARCHAR(255), username VARCHAR(255), language_code VARCHAR(10), current_balance DECIMAL(10,2) DEFAULT 500.00, store_id INT NOT NULL, first_login_bonus_claimed BOOLEAN DEFAULT TRUE, registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_activity TIMESTAMP, chat_id BIGINT NOT NULL, FOREIGN KEY (store_id) REFERENCES stores(id))",
+      "indexes": [
+        "CREATE INDEX idx_telegram_user_id ON users(telegram_user_id)",
+        "CREATE INDEX idx_store_id ON users(store_id)",
+        "CREATE INDEX idx_registration_date ON users(registration_date DESC)"
+      ],
+      "important": "Store association tracking is CRITICAL - track which of 6 stores user came from for analytics and targeted campaigns"
+    }
+  }
+}
