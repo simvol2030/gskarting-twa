@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { TELEGRAM_BOT_TOKEN } from '$lib/server/env';
 
 /**
  * API Endpoint: POST /api/telegram/welcome
@@ -7,11 +8,14 @@ import type { RequestHandler } from './$types';
  * Sends welcome message to user via Telegram Bot API
  * Called automatically when new user is initialized
  *
- * Bot Token: 8182226460:AAHzGWQoqPhb2dYJ4D9ORzmHzHW7G8S_JzM
  * Telegram Bot API Documentation: https://core.telegram.org/bots/api#sendmessage
  *
- * IMPORTANT: In production, store BOT_TOKEN in environment variables
+ * IMPORTANT: Requires TELEGRAM_BOT_TOKEN in .env file
  * Create .env file with: TELEGRAM_BOT_TOKEN=your_token_here
+ *
+ * PRODUCTION NOTE:
+ * Token is loaded from $lib/server/env.ts which automatically loads .env file
+ * This ensures it works both in development (Vite) and production (Node.js)
  *
  * MIGRATION NOTES:
  * When switching to database:
@@ -38,11 +42,9 @@ interface WelcomeMessageRequest {
   bonus_amount: number;
 }
 
-// In production, use environment variable
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8182226460:AAHzGWQoqPhb2dYJ4D9ORzmHzHW7G8S_JzM';
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
 export const POST: RequestHandler = async ({ request }) => {
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+
   try {
     const { chat_id, first_name, bonus_amount }: WelcomeMessageRequest = await request.json();
 
@@ -119,6 +121,8 @@ export const POST: RequestHandler = async ({ request }) => {
  * Returns bot info if token is valid
  */
 export const GET: RequestHandler = async () => {
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/getMe`);
 

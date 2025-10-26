@@ -24,6 +24,11 @@
   let menuOpen = $state(false);
   let qrModalOpen = $state(false);
 
+  // Reactive user data for QR Modal (updated by LoyaltyCard)
+  let currentCardNumber = $state(data.user.cardNumber);
+  let currentBalance = $state(data.user.balance);
+  let currentUserId = $state(data.user.id || 1);
+
   function openMenu() {
     menuOpen = true;
   }
@@ -40,16 +45,59 @@
     qrModalOpen = false;
   }
 
-  // Set context so child components can access openQRModal
-  setContext('openQRModal', openQRModal);
+  // Function to update user data from child components
+  function updateUserData(cardNumber: string, balance: number, userId?: number) {
+    currentCardNumber = cardNumber;
+    currentBalance = balance;
+    if (userId !== undefined) currentUserId = userId;
+  }
 
-  onMount(() => {
+  // Set context so child components can access these functions
+  setContext('openQRModal', openQRModal);
+  setContext('updateUserData', updateUserData);
+
+  onMount(async () => {
     if (isLoyaltyApp) {
+      console.log('[+layout] 🚀 Loyalty app detected, starting initialization');
+      console.log('[+layout] 🌐 window.Telegram at mount:', !!window.Telegram);
+      console.log('[+layout] 📍 Current pathname:', $page.url.pathname);
+
       // Initialize theme
       initTheme();
 
-      // Initialize Telegram Web App
-      initTelegramWebApp();
+      // CRITICAL: Call ensureTelegramReady() IMMEDIATELY to unblock scroll
+      // This must happen BEFORE waiting for user data
+      const { ensureTelegramReady, initializeUser } = await import('$lib/telegram');
+
+      console.log('[+layout] 🔄 Calling ensureTelegramReady...');
+      await ensureTelegramReady();
+      console.log('[+layout] ✅ Telegram ready, scroll enabled');
+      console.log('[+layout] 🔍 initDataUnsafe after ready:', !!window.Telegram?.WebApp?.initDataUnsafe?.user);
+
+      // CRITICAL: Initialize user on FIRST app load (any page)
+      // This ensures user is registered in DB even if they land on /history directly
+      // The API endpoint is idempotent - safe to call multiple times
+      try {
+        console.log('[+layout] 🔄 Initializing user...');
+        const result = await initializeUser();
+        console.log('[+layout] 📊 initializeUser result:', result);
+
+        if (result?.success) {
+          console.log('[+layout] ✅ User initialized:', {
+            isNewUser: result.isNewUser,
+            telegram_user_id: result.user.telegram_user_id,
+            balance: result.user.current_balance,
+            bonus: result.isNewUser ? '500 Murzikoyns awarded' : 'Welcome back'
+          });
+        } else {
+          console.warn('[+layout] ⚠️ User initialization returned no result');
+          console.warn('[+layout] ⚠️ Check browser console for errors in initializeUser()');
+        }
+      } catch (error) {
+        console.error('[+layout] ❌ Failed to initialize user:', error);
+        console.error('[+layout] ❌ Stack:', error instanceof Error ? error.stack : 'No stack trace');
+        // Don't block app load if initialization fails
+      }
     }
   });
 </script>
@@ -62,7 +110,6 @@
     <meta name="theme-color" content="#ff6b00" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
   {/if}
 </svelte:head>
 
@@ -79,8 +126,9 @@
 
     {#if data?.user && qrModalOpen}
       <QRModal
-        cardNumber={data.user.cardNumber}
-        balance={data.user.balance}
+        userId={currentUserId}
+        cardNumber={currentCardNumber}
+        balance={currentBalance}
         open={qrModalOpen}
         onClose={closeQRModal}
       />

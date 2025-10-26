@@ -1,39 +1,94 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = () => {
-  console.log('[PROFILE PAGE] Load function started');
+  // Profile menu items (static config)
+  const profileMenu = [
+    {
+      id: 'pets',
+      icon: '🐾',
+      iconColor: 'orange',
+      title: 'Мои питомцы',
+      description: 'Управление информацией о питомцах',
+      action: 'openPetsModal'
+    },
+    {
+      id: 'notifications',
+      icon: '🔔',
+      iconColor: 'blue',
+      title: 'Настройки уведомлений',
+      description: 'Управление push-уведомлениями',
+      action: 'openNotificationsModal'
+    },
+    {
+      id: 'payment',
+      icon: '💳',
+      iconColor: 'green',
+      title: 'Способы оплаты',
+      description: 'Привязанные карты и счета',
+      action: 'openPaymentModal'
+    },
+    {
+      id: 'referral',
+      icon: '🎁',
+      iconColor: 'purple',
+      title: 'Пригласить друзей',
+      description: 'Получите бонусы за приглашение',
+      action: null
+    },
+    {
+      id: 'support',
+      icon: '💬',
+      iconColor: 'pink',
+      title: 'Поддержка',
+      description: 'Свяжитесь с нами',
+      action: 'alert'
+    }
+  ];
 
-  try {
-    const userPath = join(process.cwd(), 'src/lib/data/loyalty/user.json');
-    const menuPath = join(process.cwd(), 'src/lib/data/loyalty/profile-menu.json');
-    const rulesPath = join(process.cwd(), 'src/lib/data/loyalty/loyalty-rules-detailed.json');
+  // Loyalty rules (static config)
+  const loyaltyRulesDetailed = {
+    title: 'Правила программы лояльности',
+    icon: '🎁',
+    rules: [
+      {
+        id: 'earning',
+        emoji: '💰',
+        title: 'Начисление бонусов',
+        description: 'Получайте <strong>4% от суммы покупки</strong> в виде Мурзи-коинов за каждую покупку',
+        example: 'Пример: покупка на 1000₽ = 40 Мурзи-коинов'
+      },
+      {
+        id: 'payment',
+        emoji: '🎯',
+        title: 'Оплата бонусами',
+        description: 'Оплачивайте до <strong>20% от суммы чека</strong> накопленными Мурзи-коинами',
+        example: 'Чек на 500₽ → можно списать до 100 Мурзи-коинов'
+      },
+      {
+        id: 'expiry',
+        emoji: '⏱️',
+        title: 'Срок действия',
+        description: 'Мурзи-коины действуют <strong>90 дней</strong> с момента начисления',
+        example: 'Не забудьте использовать бонусы вовремя!'
+      },
+      {
+        id: 'conditions',
+        emoji: '⚠️',
+        title: 'Важные условия',
+        description: '',
+        list: [
+          'Минимальная сумма для списания: <strong>100 Мурзи-коинов</strong>',
+          'Бонусы не начисляются на <strong>акционные товары</strong>',
+          'Начисление только при <strong>полной оплате деньгами</strong>',
+          'Бонусы нельзя передать другому лицу'
+        ]
+      }
+    ],
+    footer: '✨ Копите бонусы и экономьте на покупках для ваших питомцев!'
+  };
 
-    console.log('[PROFILE PAGE] Loading from:', { userPath, menuPath, rulesPath });
-
-    const user = JSON.parse(readFileSync(userPath, 'utf-8'));
-    const profileMenu = JSON.parse(readFileSync(menuPath, 'utf-8'));
-    const loyaltyRulesDetailed = JSON.parse(readFileSync(rulesPath, 'utf-8'));
-
-    console.log('[PROFILE PAGE] Data loaded:', {
-      userName: user?.name,
-      menuItems: profileMenu?.length,
-      rulesTitle: loyaltyRulesDetailed?.title,
-      rulesIcon: loyaltyRulesDetailed?.icon
-    });
-
-    const result = {
-      user,
-      profileMenu,
-      loyaltyRulesDetailed
-    };
-
-    console.log('[PROFILE PAGE] Returning data:', Object.keys(result));
-
-    return result;
-  } catch (error) {
-    console.error('[PROFILE PAGE] Error loading profile data:', error);
-    throw error;
-  }
+  return {
+    profileMenu,
+    loyaltyRulesDetailed
+  };
 };

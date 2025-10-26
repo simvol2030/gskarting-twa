@@ -1,42 +1,33 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { db } from '$lib/server/db/client';
+import { offers } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 /**
- * Data loader for Offers page
- *
- * MIGRATION NOTES:
- * When switching to database:
- * 1. Replace readFileSync with database query
- * 2. Use ORM/Query builder (e.g., Prisma, Drizzle, Kysely)
- * 3. Keep the same return structure
- *
- * Example with Prisma:
- * const offers = await prisma.offer.findMany({
- *   orderBy: { createdAt: 'desc' }
- * });
- *
- * Database schema suggestion:
- * Table: offers
- * Columns:
- *   - id: INT PRIMARY KEY AUTO_INCREMENT
- *   - title: VARCHAR(255) NOT NULL
- *   - description: TEXT
- *   - icon: VARCHAR(10)
- *   - icon_color: VARCHAR(50)
- *   - deadline: VARCHAR(100)
- *   - deadline_class: VARCHAR(50)
- *   - details: TEXT
- *   - conditions: JSON (array of strings)
- *   - created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
- *   - updated_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
- *   - is_active: BOOLEAN DEFAULT TRUE
+ * Data loader for Offers page - DATABASE VERSION
  */
-export const load: PageServerLoad = () => {
-  const offersPath = join(process.cwd(), 'src/lib/data/loyalty/offers.json');
-  const offers = JSON.parse(readFileSync(offersPath, 'utf-8'));
+export const load: PageServerLoad = async () => {
+  const allOffers = await db
+    .select()
+    .from(offers)
+    .where(eq(offers.is_active, true))
+    .all();
+
+  // Parse conditions JSON and map to camelCase
+  const parsedOffers = allOffers.map((offer) => ({
+    id: offer.id,
+    title: offer.title,
+    description: offer.description,
+    icon: offer.icon,
+    iconColor: offer.icon_color, // snake_case -> camelCase
+    deadline: offer.deadline,
+    deadlineClass: offer.deadline_class, // snake_case -> camelCase
+    details: offer.details,
+    conditions: JSON.parse(offer.conditions),
+    is_active: offer.is_active
+  }));
 
   return {
-    offers
+    offers: parsedOffers
   };
 };

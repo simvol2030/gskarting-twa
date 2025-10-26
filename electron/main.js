@@ -10,7 +10,9 @@ const DEFAULT_CONFIG = {
 	storeName: 'Магазин на Зеленоградской',
 	apiUrl: 'https://murzicoin.murzico.ru',
 	kioskMode: false, // Киоск-режим (полноэкранный без выхода)
-	autoStart: true
+	autoStart: true,
+	compactMode: true, // Малое окно для работы вместе с 1С
+	alwaysOnTop: true // Всегда поверх других окон
 };
 
 // Получить конфигурацию
@@ -20,7 +22,9 @@ function getConfig() {
 		storeName: store.get('storeName', DEFAULT_CONFIG.storeName),
 		apiUrl: store.get('apiUrl', DEFAULT_CONFIG.apiUrl),
 		kioskMode: store.get('kioskMode', DEFAULT_CONFIG.kioskMode),
-		autoStart: store.get('autoStart', DEFAULT_CONFIG.autoStart)
+		autoStart: store.get('autoStart', DEFAULT_CONFIG.autoStart),
+		compactMode: store.get('compactMode', DEFAULT_CONFIG.compactMode),
+		alwaysOnTop: store.get('alwaysOnTop', DEFAULT_CONFIG.alwaysOnTop)
 	};
 }
 
@@ -36,9 +40,8 @@ let mainWindow = null;
 function createWindow() {
 	const config = getConfig();
 
-	mainWindow = new BrowserWindow({
-		width: 1280,
-		height: 800,
+	// Размер окна зависит от режима
+	let windowOptions = {
 		fullscreen: config.kioskMode,
 		kiosk: config.kioskMode,
 		autoHideMenuBar: true,
@@ -49,7 +52,39 @@ function createWindow() {
 		},
 		title: `Мурзико Касса - ${config.storeName}`,
 		icon: path.join(__dirname, 'assets', 'icon.png')
-	});
+	};
+
+	if (config.compactMode) {
+		// Малое окно для работы вместе с 1С
+		// 1/3 экрана по ширине и высоте, левый нижний угол
+		const { screen } = require('electron');
+		const primaryDisplay = screen.getPrimaryDisplay();
+		const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
+		const windowWidth = Math.floor(screenWidth / 3);
+		const windowHeight = Math.floor(screenHeight / 3);
+
+		windowOptions = {
+			...windowOptions,
+			width: windowWidth,
+			height: windowHeight,
+			x: 0, // Левый край
+			y: screenHeight - windowHeight, // Нижний край
+			alwaysOnTop: config.alwaysOnTop,
+			frame: true, // С рамкой для возможности перемещения
+			resizable: true,
+			movable: true
+		};
+	} else {
+		// Обычный режим - полное окно
+		windowOptions = {
+			...windowOptions,
+			width: 1280,
+			height: 800
+		};
+	}
+
+	mainWindow = new BrowserWindow(windowOptions);
 
 	// Убрать меню в киоск-режиме
 	if (config.kioskMode) {

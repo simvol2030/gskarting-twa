@@ -10,14 +10,14 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 
 	// Content Security Policy - защита от XSS атак
-	// Разрешаем только собственные скрипты и стили
+	// Разрешаем собственные скрипты, стили и Telegram SDK
 	const csp = [
 		"default-src 'self'",
-		"script-src 'self' 'unsafe-inline'", // unsafe-inline нужен для SvelteKit в dev mode
+		"script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org", // Telegram Web App SDK
 		"style-src 'self' 'unsafe-inline'", // unsafe-inline для inline стилей Svelte
 		"img-src 'self' data: https:",
 		"font-src 'self' data:",
-		"connect-src 'self'",
+		"connect-src 'self' https://api.telegram.org https://*.telegram.org", // Telegram Bot API
 		"frame-ancestors 'none'", // запрещаем iframe embedding
 		"base-uri 'self'",
 		"form-action 'self'"
@@ -85,7 +85,13 @@ const csrfProtection: Handle = async ({ event, resolve }) => {
 		// Логин endpoint - особый случай, там нет токена до первого GET
 		const isLoginEndpoint = event.url.pathname === '/login';
 
-		if (!isLoginEndpoint) {
+		// Telegram endpoints освобождаем от CSRF (вызываются из Telegram WebView без cookies)
+		const csrfExemptPrefixes = ['/api/telegram/'];
+		const isTelegramEndpoint = csrfExemptPrefixes.some(prefix =>
+			event.url.pathname.startsWith(prefix)
+		);
+
+		if (!isLoginEndpoint && !isTelegramEndpoint) {
 			// Получаем токен из заголовка или из формы
 			const headerToken = request.headers.get('x-csrf-token');
 

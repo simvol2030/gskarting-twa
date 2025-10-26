@@ -1,6 +1,7 @@
 {
+  "id": 1,
   "name": "Сергей Мурзин",
-  "cardNumber": "42 18 567891",
+  "cardNumber": "421 856",
   "balance": 8456,
   "totalPurchases": 47,
   "totalSaved": 23450

@@ -1,24 +1,52 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { db } from '$lib/server/db/client';
+import { recommendations, offers, products } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = () => {
-  const recommendationsPath = join(process.cwd(), 'src/lib/data/loyalty/recommendations.json');
-  const offersPath = join(process.cwd(), 'src/lib/data/loyalty/offers.json');
-  const productsPath = join(process.cwd(), 'src/lib/data/loyalty/products.json');
+export const load: PageServerLoad = async () => {
+  // Fetch recommendations (generic, not user-specific)
+  const allRecommendations = await db
+    .select()
+    .from(recommendations)
+    .where(eq(recommendations.is_active, true))
+    .all();
 
-  const recommendations = JSON.parse(readFileSync(recommendationsPath, 'utf-8'));
-  const offers = JSON.parse(readFileSync(offersPath, 'utf-8'));
-  const products = JSON.parse(readFileSync(productsPath, 'utf-8'));
+  // Fetch offers
+  const allOffers = await db
+    .select()
+    .from(offers)
+    .where(eq(offers.is_active, true))
+    .all();
+
+  // Parse conditions JSON and map to camelCase
+  const parsedOffers = allOffers.map((offer) => ({
+    id: offer.id,
+    title: offer.title,
+    description: offer.description,
+    icon: offer.icon,
+    iconColor: offer.icon_color, // snake_case -> camelCase
+    deadline: offer.deadline,
+    deadlineClass: offer.deadline_class, // snake_case -> camelCase
+    details: offer.details,
+    conditions: JSON.parse(offer.conditions),
+    is_active: offer.is_active
+  }));
+
+  // Fetch products
+  const allProducts = await db
+    .select()
+    .from(products)
+    .where(eq(products.is_active, true))
+    .all();
 
   // Берём первые 2 акции для "Акции месяца"
-  const monthOffers = offers.slice(0, 2);
+  const monthOffers = parsedOffers.slice(0, 2);
 
   // Берём первые 6 товаров для "Топовые товары"
-  const topProducts = products.slice(0, 6);
+  const topProducts = allProducts.slice(0, 6);
 
   return {
-    recommendations,
+    recommendations: allRecommendations,
     monthOffers,
     topProducts
   };

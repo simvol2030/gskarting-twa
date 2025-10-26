@@ -8,6 +8,7 @@ import { securityHeaders } from './middleware/security';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import postsRouter from './routes/posts';
+import cashierRouter from './routes/cashier';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,12 +30,13 @@ initializeDatabase();
 // Базовый роут
 app.get('/', (req, res) => {
 	res.json({
-		message: 'Project Box v2 - REST API',
-		version: '2.0.0',
+		message: 'Project Box v3 - REST API (Loyalty System)',
+		version: '3.0.0',
 		endpoints: {
 			auth: '/api/auth',
 			users: '/api/users',
-			posts: '/api/posts'
+			posts: '/api/posts',
+			cashier: '/api/cashier'
 		}
 	});
 });
@@ -43,6 +45,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/posts', postsRouter);
+app.use('/api/cashier', cashierRouter);
 
 // Обработка 404
 app.use((req, res) => {

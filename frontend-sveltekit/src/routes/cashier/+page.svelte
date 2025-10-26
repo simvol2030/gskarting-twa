@@ -1,630 +1,912 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import {
+		MOCK_STORES,
+		MOCK_QUICK_TESTS,
+		mockIdentifyCustomer,
+		mockGetTransactionAmount,
+		mockEarnPoints,
+		mockRedeemAndEarn,
+		mockForceConfirm
+	} from '$lib/services/cashier-mock-api';
 
-	let { data }: { data: PageData } = $props();
-
+	// =====================================
 	// Состояние интерфейса
+	// =====================================
+
+	// Магазин (фиксированный, из .env)
+	const currentStore = MOCK_STORES[0]; // В реальности из STORE_ID
+
+	// Текущее состояние UI
+	type UIState = 'idle' | 'customer_found' | 'amount_loaded' | 'processing' | 'success' | 'error';
+	let uiState = $state<UIState>('idle');
+
+	// Поле ввода QR/карты
 	let qrInput = $state('');
-	let purchaseAmount = $state<number | ''>('');
-	let selectedCustomer = $state<(typeof data.customers)[0] | null>(null);
-	let showSuccess = $state(false);
+	let qrInputRef: HTMLInputElement | null = null;
+
+	// Данные покупателя
+	let customer = $state<any>(null);
+
+	// Сумма покупки
+	let purchaseAmount = $state<number>(0);
+	let isLoadingAmount = $state(false);
+	let amountError = $state<string | null>(null);
+	let manualAmountInput = $state<string>('');
+
+	// Обработка транзакции
+	let isProcessing = $state(false);
+	let processingMessage = $state('');
 	let successMessage = $state('');
+	let errorMessage = $state('');
+	let showManualConfirm = $state(false);
 
-	// Расчёт максимально возможного списания (20% от покупки)
-	let maxSpend = $derived(() => {
-		if (!purchaseAmount || !selectedCustomer) return 0;
-		const maxPercent = Number(purchaseAmount) * 0.2;
-		return Math.min(maxPercent, selectedCustomer.balance);
-	});
-
-	// Расчёт начисления (4% от покупки)
+	// Расчётные суммы
 	let earnAmount = $derived(() => {
 		if (!purchaseAmount) return 0;
-		return Math.round(Number(purchaseAmount) * 0.04);
+		return Math.round(purchaseAmount * 0.04);
 	});
 
-	// Обработка сканирования QR-кода
-	function handleQRScan() {
-		const customer = data.customers.find((c) => c.qrCode === qrInput.trim());
+	let maxRedeemAmount = $derived(() => {
+		if (!purchaseAmount || !customer) return 0;
+		const maxFromPurchase = purchaseAmount * 0.2;
+		return Math.min(maxFromPurchase, customer.balance);
+	});
 
-		if (customer) {
-			selectedCustomer = customer;
-			showSuccess = false;
-		} else {
-			alert('Покупатель не найден. Проверьте QR-код.');
+	let canRedeem = $derived(() => {
+		return customer && customer.balance >= 50 && maxRedeemAmount() > 0;
+	});
+
+	// =====================================
+	// Обработчики событий
+	// =====================================
+
+	/**
+	 * Поиск покупателя по QR/карте
+	 */
+	async function handleSearch() {
+		if (!qrInput.trim()) return;
+
+		uiState = 'processing';
+		processingMessage = 'Поиск покупателя...';
+
+		try {
+			const result = await mockIdentifyCustomer(qrInput.trim());
+
+			if (result.success) {
+				customer = result.customer;
+				uiState = 'customer_found';
+				qrInput = '';
+
+				// Автоматический запрос суммы из 1С
+				fetchAmountFrom1C();
+			} else {
+				uiState = 'error';
+				errorMessage = result.error || 'Покупатель не найден';
+			}
+		} catch (error) {
+			uiState = 'error';
+			errorMessage = 'Ошибка при поиске покупателя';
 		}
 	}
 
-	// Обработка поиска по номеру карты
-	function handleCardSearch() {
-		const cardNumber = qrInput.trim().replace(/\s/g, '');
-		const customer = data.customers.find((c) => c.cardNumber.replace(/\s/g, '') === cardNumber);
+	/**
+	 * Автоматический запрос суммы из 1С
+	 */
+	async function fetchAmountFrom1C() {
+		isLoadingAmount = true;
+		amountError = null;
 
-		if (customer) {
-			selectedCustomer = customer;
-			showSuccess = false;
-		} else {
-			alert('Покупатель с такой картой не найден.');
+		try {
+			const result = await mockGetTransactionAmount(currentStore.id);
+
+			if (result.success) {
+				purchaseAmount = result.transaction.amount;
+				uiState = 'amount_loaded';
+			} else {
+				amountError = result.error;
+			}
+		} catch (error) {
+			amountError = 'Не удалось получить сумму из 1С';
+		} finally {
+			isLoadingAmount = false;
 		}
 	}
 
-	// Начислить бонусы
-	function handleEarnBonus() {
-		if (!purchaseAmount || !selectedCustomer) {
-			alert('Введите сумму покупки');
-			return;
+	/**
+	 * Ручной ввод суммы (если 1С недоступен)
+	 */
+	function handleManualAmountSubmit() {
+		const amount = parseFloat(manualAmountInput);
+		if (amount > 0) {
+			purchaseAmount = amount;
+			amountError = null;
+			uiState = 'amount_loaded';
 		}
-
-		const earned = earnAmount();
-		// TODO: отправить в API/БД
-		console.log('Начислено:', earned, 'бонусов для', selectedCustomer.name);
-
-		// Временно обновляем в памяти
-		selectedCustomer.balance += earned;
-
-		successMessage = `✅ Начислено ${earned} бонусов`;
-		showSuccess = true;
-
-		setTimeout(() => {
-			resetTransaction();
-		}, 2000);
 	}
 
-	// Списать бонусы
-	function handleSpendBonus() {
-		if (!purchaseAmount || !selectedCustomer) {
-			alert('Введите сумму покупки');
-			return;
+	/**
+	 * Начислить баллы
+	 */
+	async function handleEarnOnly() {
+		if (!customer || !purchaseAmount) return;
+
+		uiState = 'processing';
+		processingMessage = 'Начисление баллов...';
+		isProcessing = true;
+
+		try {
+			const result = await mockEarnPoints({
+				userId: customer.id,
+				storeId: currentStore.id,
+				purchaseAmount,
+				earnAmount: earnAmount()
+			});
+
+			if (result.success) {
+				customer.balance = result.newBalance;
+				uiState = 'success';
+				successMessage = `✅ Начислено: +${result.earned} М\nНовый баланс: ${result.newBalance} М`;
+
+				// Автосброс через 3 секунды
+				setTimeout(resetInterface, 3000);
+			} else {
+				uiState = 'error';
+				errorMessage = result.error;
+			}
+		} catch (error) {
+			uiState = 'error';
+			errorMessage = 'Ошибка при начислении баллов';
+		} finally {
+			isProcessing = false;
 		}
-
-		const maxAllowed = maxSpend();
-		if (maxAllowed === 0) {
-			alert('Списание невозможно (недостаточно бонусов или сумма покупки слишком мала)');
-			return;
-		}
-
-		// TODO: отправить в API/БД
-		console.log('Списано:', maxAllowed, 'бонусов для', selectedCustomer.name);
-
-		// Временно обновляем в памяти
-		selectedCustomer.balance -= maxAllowed;
-
-		successMessage = `✅ Списано ${maxAllowed} бонусов (${maxAllowed}₽)`;
-		showSuccess = true;
-
-		setTimeout(() => {
-			resetTransaction();
-		}, 2000);
 	}
 
-	// Сброс транзакции
-	function resetTransaction() {
-		selectedCustomer = null;
+	/**
+	 * Списать + начислить
+	 */
+	async function handleRedeemAndEarn() {
+		if (!customer || !purchaseAmount || !canRedeem()) return;
+
+		uiState = 'processing';
+		processingMessage = 'Ожидание ответа от 1С...';
+		isProcessing = true;
+
+		try {
+			const result = await mockRedeemAndEarn({
+				userId: customer.id,
+				storeId: currentStore.id,
+				purchaseAmount,
+				redeemAmount: maxRedeemAmount(),
+				earnAmount: earnAmount(),
+				transactionId: 'TXN-MOCK'
+			});
+
+			if (result.success) {
+				customer.balance = result.newBalance;
+				uiState = 'success';
+				const finalAmount = purchaseAmount - maxRedeemAmount();
+				successMessage = `✅ Списано: -${result.redeemed} М\n✅ Начислено: +${result.earned} М\nНовый баланс: ${result.newBalance} М\n\nПокупатель платит: ${finalAmount.toFixed(2)} ₽`;
+
+				setTimeout(resetInterface, 3000);
+			} else if (result.requireManualConfirmation) {
+				// 1С не ответил - показываем ручное подтверждение
+				showManualConfirm = true;
+				processingMessage = result.error;
+			} else {
+				uiState = 'error';
+				errorMessage = result.error;
+			}
+		} catch (error) {
+			uiState = 'error';
+			errorMessage = 'Ошибка при обработке транзакции';
+		} finally {
+			isProcessing = false;
+		}
+	}
+
+	/**
+	 * Принудительное подтверждение (без ответа 1С)
+	 */
+	async function handleForceConfirm() {
+		if (!customer) return;
+
+		isProcessing = true;
+
+		try {
+			const result = await mockForceConfirm({
+				userId: customer.id,
+				redeemAmount: maxRedeemAmount(),
+				earnAmount: earnAmount()
+			});
+
+			if (result.success) {
+				customer.balance = result.newBalance;
+				uiState = 'success';
+				successMessage = `⚠️ ${result.warning}\n\nСписано: -${result.redeemed} М\nНачислено: +${result.earned} М\nНовый баланс: ${result.newBalance} М`;
+
+				showManualConfirm = false;
+				setTimeout(resetInterface, 5000);
+			}
+		} catch (error) {
+			uiState = 'error';
+			errorMessage = 'Ошибка при принудительном подтверждении';
+		} finally {
+			isProcessing = false;
+		}
+	}
+
+	/**
+	 * Сброс интерфейса (Esc или автоматически после успеха)
+	 */
+	function resetInterface() {
+		customer = null;
+		purchaseAmount = 0;
 		qrInput = '';
-		purchaseAmount = '';
-		showSuccess = false;
+		manualAmountInput = '';
+		amountError = null;
+		successMessage = '';
+		errorMessage = '';
+		showManualConfirm = false;
+		uiState = 'idle';
+
+		// Возврат фокуса в поле ввода
+		setTimeout(() => {
+			qrInputRef?.focus();
+		}, 100);
 	}
 
-	// Обработка Enter в поле QR
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') {
-			handleQRScan();
+	/**
+	 * Быстрые кнопки для тестирования
+	 */
+	function quickTest(qr: string) {
+		qrInput = qr;
+		handleSearch();
+	}
+
+	// Глобальная обработка Esc
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			resetInterface();
 		}
 	}
 </script>
 
-<svelte:head>
-	<title>Касса - {data.store.name}</title>
-</svelte:head>
+<svelte:window on:keydown={handleKeyDown} />
 
 <div class="cashier-container">
-	<!-- Шапка с информацией о магазине -->
-	<header class="cashier-header">
+	<!-- ==================== HEADER: Магазин ==================== -->
+	<div class="store-header">
+		<div class="store-icon">🏪</div>
 		<div class="store-info">
-			<h1>🏪 {data.store.name}</h1>
-			<p class="store-address">📍 {data.store.address}</p>
-			<p class="store-hours">🕐 {data.store.hours}</p>
+			<div class="store-name">{currentStore.name}</div>
+			<div class="store-address">{currentStore.address}</div>
 		</div>
-		<div class="header-actions">
-			<button class="btn-secondary" onclick={() => (window.location.href = '/')}>
-				🏠 Главная
+	</div>
+
+	<!-- ==================== ПОИСК ПОКУПАТЕЛЯ ==================== -->
+	<div class="search-section">
+		<label for="qr-input" class="search-label">Номер карты / QR-код:</label>
+		<div class="search-input-row">
+			<input
+				id="qr-input"
+				type="text"
+				bind:value={qrInput}
+				bind:this={qrInputRef}
+				on:keydown={(e) => e.key === 'Enter' && handleSearch()}
+				placeholder="Сканируйте QR или введите номер"
+				class="search-input"
+				disabled={uiState === 'processing'}
+			/>
+			<button
+				onclick={handleSearch}
+				disabled={!qrInput.trim() || uiState === 'processing'}
+				class="search-button"
+			>
+				🔍 Найти
 			</button>
 		</div>
-	</header>
+	</div>
 
-	<main class="cashier-main">
-		{#if !selectedCustomer}
-			<!-- Экран сканирования QR -->
-			<div class="scan-section">
-				<div class="scan-icon">📷</div>
-				<h2>Отсканируйте QR-код покупателя</h2>
-				<p class="scan-hint">Наведите сканер на QR-код в приложении клиента</p>
-
-				<div class="scan-input-group">
-					<input
-						type="text"
-						class="scan-input"
-						placeholder="Данные QR-кода появятся здесь..."
-						bind:value={qrInput}
-						onkeydown={handleKeydown}
-						autofocus
-					/>
-					<button class="btn-primary" onclick={handleQRScan} disabled={!qrInput.trim()}>
-						Найти
-					</button>
-				</div>
-
-				<div class="divider">или</div>
-
-				<div class="card-search">
-					<label for="cardNumber">Введите номер карты вручную:</label>
-					<div class="scan-input-group">
-						<input
-							id="cardNumber"
-							type="text"
-							class="scan-input"
-							placeholder="42 18 567891"
-							bind:value={qrInput}
-						/>
-						<button class="btn-secondary" onclick={handleCardSearch} disabled={!qrInput.trim()}>
-							Поиск
-						</button>
-					</div>
-				</div>
+	<!-- ==================== ДАННЫЕ ПОКУПАТЕЛЯ ==================== -->
+	{#if customer && uiState !== 'idle'}
+		<div class="customer-info">
+			<div class="customer-row">
+				<span class="customer-label">👤 Покупатель:</span>
+				<span class="customer-value">{customer.firstName} {customer.lastName}</span>
 			</div>
-		{:else}
-			<!-- Экран работы с покупателем -->
-			<div class="customer-section">
-				{#if showSuccess}
-					<div class="success-banner">
-						{successMessage}
-					</div>
-				{/if}
+			<div class="customer-row">
+				<span class="customer-label">💳 Карта:</span>
+				<span class="customer-value">{customer.cardNumber}</span>
+			</div>
+			<div class="customer-row">
+				<span class="customer-label">💰 Баланс:</span>
+				<span class="customer-balance">{customer.balance.toFixed(0)} М</span>
+			</div>
+		</div>
+	{/if}
 
-				<div class="customer-card">
-					<div class="customer-header">
-						<div class="customer-avatar">👤</div>
-						<div class="customer-info">
-							<h2>{selectedCustomer.name}</h2>
-							<p class="customer-card-number">💳 Карта: {selectedCustomer.cardNumber}</p>
-							<p class="customer-balance">
-								💰 Баланс: <strong>{selectedCustomer.balance.toLocaleString()} бонусов</strong>
-							</p>
+	<!-- ==================== СУММА ПОКУПКИ ==================== -->
+	{#if customer && uiState !== 'idle'}
+		<div class="amount-section">
+			{#if isLoadingAmount}
+				<div class="amount-loading">🔄 Запрос суммы из 1С...</div>
+			{:else if amountError}
+				<div class="amount-error">
+					<div class="error-text">⚠️ {amountError}</div>
+					<button onclick={fetchAmountFrom1C} class="retry-button">🔄 Повторить запрос</button>
+					<div class="manual-input-section">
+						<label>Или введите сумму вручную:</label>
+						<div class="manual-input-row">
+							<input
+								type="number"
+								bind:value={manualAmountInput}
+								placeholder="Сумма в ₽"
+								class="manual-input"
+							/>
+							<button onclick={handleManualAmountSubmit} class="manual-submit-button">
+								Продолжить
+							</button>
 						</div>
+						<div class="manual-warning">⚠️ При ручном вводе доступно только начисление</div>
 					</div>
+				</div>
+			{:else if purchaseAmount > 0}
+				<div class="amount-display">
+					<span class="amount-label">💵 Сумма покупки:</span>
+					<span class="amount-value">{purchaseAmount.toFixed(2)} ₽</span>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
-					<div class="purchase-section">
-						<label for="purchaseAmount" class="purchase-label">
-							Сумма покупки (₽):
-						</label>
-						<input
-							id="purchaseAmount"
-							type="number"
-							class="purchase-input"
-							placeholder="Введите сумму..."
-							bind:value={purchaseAmount}
-							min="0"
-							step="1"
-						/>
+	<!-- ==================== КНОПКИ ДЕЙСТВИЙ ==================== -->
+	{#if uiState === 'amount_loaded'}
+		<div class="actions-section">
+			<!-- Кнопка: Только начислить -->
+			<button onclick={handleEarnOnly} disabled={isProcessing} class="action-button earn-button">
+				<div class="button-icon">💚</div>
+				<div class="button-title">НАЧИСЛИТЬ</div>
+				<div class="button-details">+ {earnAmount()} М (4% кешбэк)</div>
+				<div class="button-payment">Покупатель платит: {purchaseAmount.toFixed(2)} ₽</div>
+			</button>
 
-						{#if purchaseAmount}
-							<div class="calculation-info">
-								<div class="calc-row">
-									<span>Можно списать (до 20%):</span>
-									<strong>{maxSpend().toLocaleString()} ₽</strong>
-								</div>
-								<div class="calc-row">
-									<span>Будет начислено (4%):</span>
-									<strong>{earnAmount().toLocaleString()} бонусов</strong>
-								</div>
-								<div class="calc-row available">
-									<span>Доступно на балансе:</span>
-									<strong>{selectedCustomer.balance.toLocaleString()} бонусов</strong>
-								</div>
-							</div>
+			<!-- Кнопка: Списать + начислить -->
+			<button
+				onclick={handleRedeemAndEarn}
+				disabled={isProcessing || !canRedeem() || amountError !== null}
+				class="action-button redeem-button"
+				class:disabled={!canRedeem() || amountError !== null}
+			>
+				<div class="button-icon">⭐</div>
+				<div class="button-title">
+					{#if amountError}
+						СПИСАТЬ НЕДОСТУПНО
+					{:else if !canRedeem()}
+						СПИСАТЬ НЕДОСТУПНО
+					{:else}
+						СПИСАТЬ + НАЧИСЛИТЬ
+					{/if}
+				</div>
+				{#if canRedeem() && !amountError}
+					<div class="button-details">- {maxRedeemAmount().toFixed(0)} М (скидка {maxRedeemAmount().toFixed(0)} ₽)</div>
+					<div class="button-details">+ {earnAmount()} М (4% кешбэк)</div>
+					<div class="button-payment">
+						Покупатель платит: {(purchaseAmount - maxRedeemAmount()).toFixed(2)} ₽
+					</div>
+				{:else}
+					<div class="button-disabled-reason">
+						{#if amountError}
+							Нет связи с 1С - скидка невозможна
+						{:else}
+							Недостаточно баллов (минимум 50 М)
 						{/if}
 					</div>
+				{/if}
+			</button>
+		</div>
+	{/if}
 
-					<div class="action-buttons">
-						<button
-							class="btn-earn"
-							onclick={handleEarnBonus}
-							disabled={!purchaseAmount || showSuccess}
-						>
-							➕ Начислить {purchaseAmount ? `${earnAmount()} бонусов` : 'бонусы'}
-						</button>
-
-						<button
-							class="btn-spend"
-							onclick={handleSpendBonus}
-							disabled={!purchaseAmount || maxSpend() === 0 || showSuccess}
-						>
-							➖ Списать {purchaseAmount ? `${maxSpend().toLocaleString()} ₽` : 'бонусы'}
-						</button>
-					</div>
-
-					<div class="transaction-history">
-						<h3>История (последние операции):</h3>
-						<div class="history-placeholder">
-							<p>• 23.10.2025 - Покупка +120 б.</p>
-							<p>• 15.10.2025 - Списание -450 б.</p>
-							<p>• 10.10.2025 - Покупка +85 б.</p>
-						</div>
+	<!-- ==================== ОБРАБОТКА ТРАНЗАКЦИИ ==================== -->
+	{#if uiState === 'processing'}
+		<div class="processing-overlay">
+			<div class="processing-message">{processingMessage}</div>
+			{#if showManualConfirm}
+				<div class="manual-confirm-section">
+					<button onclick={fetchAmountFrom1C} class="retry-button">🔄 Повторить запрос</button>
+					<button onclick={handleForceConfirm} class="force-confirm-button">
+						⚠️ ПОДТВЕРДИТЬ ПРИНУДИТЕЛЬНО
+					</button>
+					<div class="force-warning">
+						⚠️ Баллы спишутся, но скидка в 1С<br />не будет применена автоматически
 					</div>
 				</div>
+			{/if}
+		</div>
+	{/if}
 
-				<div class="footer-actions">
-					<button class="btn-secondary" onclick={resetTransaction}>← Новый покупатель</button>
-				</div>
-			</div>
-		{/if}
-	</main>
+	<!-- ==================== УСПЕХ ==================== -->
+	{#if uiState === 'success'}
+		<div class="success-overlay">
+			<div class="success-icon">✅</div>
+			<div class="success-title">Транзакция завершена</div>
+			<div class="success-message">{successMessage}</div>
+			<div class="success-auto-close">Автоматически закроется через 3 сек</div>
+		</div>
+	{/if}
+
+	<!-- ==================== ОШИБКА ==================== -->
+	{#if uiState === 'error'}
+		<div class="error-overlay">
+			<div class="error-icon">❌</div>
+			<div class="error-title">Ошибка</div>
+			<div class="error-message-text">{errorMessage}</div>
+			<button onclick={resetInterface} class="error-button">OK</button>
+		</div>
+	{/if}
+
+	<!-- ==================== НИЖНЯЯ ПАНЕЛЬ ==================== -->
+	<div class="bottom-panel">
+		<button onclick={resetInterface} class="reset-button">Esc - Сброс</button>
+	</div>
+
+	<!-- ==================== ТЕСТОВЫЕ КНОПКИ (DEV ONLY) ==================== -->
+	<div class="dev-test-buttons">
+		<div class="dev-label">🧪 Тестовые кнопки:</div>
+		<button onclick={() => quickTest(MOCK_QUICK_TESTS.ivan)} class="dev-button">
+			Иван (1,250 М)
+		</button>
+		<button onclick={() => quickTest(MOCK_QUICK_TESTS.maria)} class="dev-button">
+			Мария (3,500 М)
+		</button>
+		<button onclick={() => quickTest(MOCK_QUICK_TESTS.alex)} class="dev-button">
+			Алексей (50 М)
+		</button>
+	</div>
 </div>
 
 <style>
-	.cashier-container {
-		min-height: 100vh;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	:global(body) {
+		margin: 0;
 		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+			sans-serif;
+		background: #f5f5f5;
 	}
 
-	/* Шапка */
-	.cashier-header {
+	.cashier-container {
+		width: 550px;
+		height: 550px;
 		background: white;
-		padding: 1.5rem 2rem;
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		flex-direction: column;
+		overflow: hidden;
 	}
 
-	.store-info h1 {
-		margin: 0 0 0.5rem 0;
-		font-size: 1.5rem;
-		color: #333;
-	}
-
-	.store-address,
-	.store-hours {
-		margin: 0.25rem 0;
-		color: #666;
-		font-size: 0.95rem;
-	}
-
-	.header-actions {
-		display: flex;
-		gap: 1rem;
-	}
-
-	/* Основная область */
-	.cashier-main {
-		max-width: 900px;
-		margin: 2rem auto;
-		padding: 0 1rem;
-	}
-
-	/* Экран сканирования */
-	.scan-section {
-		background: white;
-		border-radius: 16px;
-		padding: 3rem 2rem;
-		text-align: center;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-	}
-
-	.scan-icon {
-		font-size: 4rem;
-		margin-bottom: 1rem;
-	}
-
-	.scan-section h2 {
-		margin: 0 0 0.5rem 0;
-		font-size: 1.75rem;
-		color: #333;
-	}
-
-	.scan-hint {
-		color: #666;
-		margin-bottom: 2rem;
-	}
-
-	.scan-input-group {
-		display: flex;
-		gap: 1rem;
-		max-width: 500px;
-		margin: 0 auto 2rem;
-	}
-
-	.scan-input {
-		flex: 1;
-		padding: 1rem;
-		font-size: 1rem;
-		border: 2px solid #e0e0e0;
-		border-radius: 8px;
-		outline: none;
-		transition: border-color 0.2s;
-	}
-
-	.scan-input:focus {
-		border-color: #667eea;
-	}
-
-	.divider {
-		margin: 2rem 0;
-		color: #999;
-		font-weight: 500;
-		position: relative;
-	}
-
-	.divider::before,
-	.divider::after {
-		content: '';
-		position: absolute;
-		top: 50%;
-		width: 40%;
-		height: 1px;
-		background: #ddd;
-	}
-
-	.divider::before {
-		left: 0;
-	}
-	.divider::after {
-		right: 0;
-	}
-
-	.card-search {
-		max-width: 500px;
-		margin: 0 auto;
-		text-align: left;
-	}
-
-	.card-search label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #555;
-		font-weight: 500;
-	}
-
-	/* Экран покупателя */
-	.customer-section {
-		background: white;
-		border-radius: 16px;
-		padding: 2rem;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-	}
-
-	.success-banner {
-		background: #10b981;
+	/* ========== HEADER: Магазин ========== */
+	.store-header {
+		background: linear-gradient(135deg, #ff6b00 0%, #ff8c00 100%);
 		color: white;
-		padding: 1rem;
-		border-radius: 8px;
-		text-align: center;
-		font-size: 1.1rem;
-		font-weight: 600;
-		margin-bottom: 1.5rem;
-		animation: slideDown 0.3s ease;
-	}
-
-	@keyframes slideDown {
-		from {
-			opacity: 0;
-			transform: translateY(-20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.customer-card {
-		border: 2px solid #f0f0f0;
-		border-radius: 12px;
-		padding: 1.5rem;
-	}
-
-	.customer-header {
-		display: flex;
-		gap: 1.5rem;
-		margin-bottom: 2rem;
-		padding-bottom: 1.5rem;
-		border-bottom: 2px solid #f0f0f0;
-	}
-
-	.customer-avatar {
-		font-size: 4rem;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		width: 80px;
-		height: 80px;
-		border-radius: 50%;
+		padding: 12px 16px;
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		gap: 12px;
+		height: 60px;
 		flex-shrink: 0;
 	}
 
-	.customer-info h2 {
-		margin: 0 0 0.5rem 0;
-		font-size: 1.75rem;
-		color: #333;
+	.store-icon {
+		font-size: 28px;
 	}
 
-	.customer-card-number,
-	.customer-balance {
-		margin: 0.25rem 0;
-		color: #666;
-		font-size: 1rem;
+	.store-info {
+		flex: 1;
 	}
 
-	.customer-balance strong {
-		color: #10b981;
-		font-size: 1.2rem;
-	}
-
-	/* Покупка */
-	.purchase-section {
-		margin-bottom: 2rem;
-	}
-
-	.purchase-label {
-		display: block;
-		margin-bottom: 0.75rem;
+	.store-name {
+		font-size: 16px;
 		font-weight: 600;
-		color: #333;
-		font-size: 1.1rem;
 	}
 
-	.purchase-input {
-		width: 100%;
-		padding: 1rem;
-		font-size: 1.25rem;
-		border: 2px solid #e0e0e0;
-		border-radius: 8px;
-		outline: none;
+	.store-address {
+		font-size: 12px;
+		opacity: 0.9;
+	}
+
+	/* ========== ПОИСК ПОКУПАТЕЛЯ ========== */
+	.search-section {
+		padding: 16px;
+		border-bottom: 1px solid #e0e0e0;
+		flex-shrink: 0;
+	}
+
+	.search-label {
+		display: block;
+		font-size: 13px;
+		font-weight: 500;
+		margin-bottom: 8px;
+		color: #333;
+	}
+
+	.search-input-row {
+		display: flex;
+		gap: 8px;
+	}
+
+	.search-input {
+		flex: 1;
+		padding: 10px 12px;
+		border: 2px solid #ddd;
+		border-radius: 6px;
+		font-size: 14px;
 		transition: border-color 0.2s;
 	}
 
-	.purchase-input:focus {
-		border-color: #667eea;
+	.search-input:focus {
+		outline: none;
+		border-color: #ff6b00;
 	}
 
-	.calculation-info {
-		margin-top: 1.5rem;
-		padding: 1.5rem;
-		background: #f8f9fa;
-		border-radius: 8px;
+	.search-button {
+		padding: 10px 20px;
+		background: #ff6b00;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-size: 14px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.2s;
 	}
 
-	.calc-row {
+	.search-button:hover:not(:disabled) {
+		background: #ff5500;
+	}
+
+	.search-button:disabled {
+		background: #ccc;
+		cursor: not-allowed;
+	}
+
+	/* ========== ДАННЫЕ ПОКУПАТЕЛЯ ========== */
+	.customer-info {
+		padding: 16px;
+		background: #f9f9f9;
+		border-bottom: 1px solid #e0e0e0;
+		flex-shrink: 0;
+	}
+
+	.customer-row {
 		display: flex;
 		justify-content: space-between;
-		padding: 0.75rem 0;
+		margin-bottom: 8px;
+		font-size: 14px;
+	}
+
+	.customer-row:last-child {
+		margin-bottom: 0;
+	}
+
+	.customer-label {
+		font-weight: 500;
+		color: #666;
+	}
+
+	.customer-value {
+		font-weight: 600;
+		color: #333;
+	}
+
+	.customer-balance {
+		font-weight: 700;
+		font-size: 16px;
+		color: #ff6b00;
+	}
+
+	/* ========== СУММА ПОКУПКИ ========== */
+	.amount-section {
+		padding: 16px;
 		border-bottom: 1px solid #e0e0e0;
-		font-size: 1rem;
+		flex-shrink: 0;
 	}
 
-	.calc-row:last-child {
-		border-bottom: none;
+	.amount-loading {
+		text-align: center;
+		color: #666;
+		font-size: 14px;
 	}
 
-	.calc-row.available {
-		color: #10b981;
-		font-weight: 600;
+	.amount-display {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-size: 16px;
 	}
 
-	/* Кнопки действий */
-	.action-buttons {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-		margin-bottom: 2rem;
+	.amount-label {
+		font-weight: 500;
 	}
 
-	button {
-		padding: 1rem 1.5rem;
-		font-size: 1rem;
-		font-weight: 600;
+	.amount-value {
+		font-weight: 700;
+		font-size: 20px;
+		color: #333;
+	}
+
+	.amount-error {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.error-text {
+		color: #d32f2f;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.retry-button {
+		padding: 8px 16px;
+		background: #2196f3;
+		color: white;
 		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 13px;
+	}
+
+	.manual-input-section {
+		margin-top: 12px;
+	}
+
+	.manual-input-section label {
+		display: block;
+		font-size: 13px;
+		margin-bottom: 8px;
+		color: #666;
+	}
+
+	.manual-input-row {
+		display: flex;
+		gap: 8px;
+	}
+
+	.manual-input {
+		flex: 1;
+		padding: 8px 12px;
+		border: 2px solid #ddd;
+		border-radius: 6px;
+		font-size: 14px;
+	}
+
+	.manual-submit-button {
+		padding: 8px 16px;
+		background: #4caf50;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 13px;
+	}
+
+	.manual-warning {
+		margin-top: 8px;
+		font-size: 12px;
+		color: #ff9800;
+	}
+
+	/* ========== КНОПКИ ДЕЙСТВИЙ ========== */
+	.actions-section {
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		flex: 1;
+		overflow-y: auto;
+	}
+
+	.action-button {
+		padding: 16px;
+		border: 2px solid #ddd;
 		border-radius: 8px;
 		cursor: pointer;
 		transition: all 0.2s;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 6px;
+		background: white;
 	}
 
-	button:disabled {
+	.action-button:hover:not(:disabled):not(.disabled) {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	}
+
+	.action-button:disabled,
+	.action-button.disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
-	.btn-primary {
-		background: #667eea;
-		color: white;
+	.earn-button {
+		border-color: #4caf50;
 	}
 
-	.btn-primary:hover:not(:disabled) {
-		background: #5568d3;
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+	.earn-button:hover:not(:disabled) {
+		background: #f1f8f4;
 	}
 
-	.btn-secondary {
-		background: #6b7280;
-		color: white;
+	.redeem-button {
+		border-color: #ff9800;
 	}
 
-	.btn-secondary:hover:not(:disabled) {
-		background: #4b5563;
+	.redeem-button:hover:not(:disabled):not(.disabled) {
+		background: #fff8f0;
 	}
 
-	.btn-earn {
-		background: #10b981;
-		color: white;
-		font-size: 1.1rem;
-		padding: 1.25rem;
+	.button-icon {
+		font-size: 32px;
 	}
 
-	.btn-earn:hover:not(:disabled) {
-		background: #059669;
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+	.button-title {
+		font-weight: 700;
+		font-size: 16px;
+		color: #333;
 	}
 
-	.btn-spend {
-		background: #ef4444;
-		color: white;
-		font-size: 1.1rem;
-		padding: 1.25rem;
-	}
-
-	.btn-spend:hover:not(:disabled) {
-		background: #dc2626;
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-	}
-
-	/* История */
-	.transaction-history {
-		margin-top: 2rem;
-		padding-top: 1.5rem;
-		border-top: 2px solid #f0f0f0;
-	}
-
-	.transaction-history h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1.1rem;
-		color: #555;
-	}
-
-	.history-placeholder p {
-		margin: 0.5rem 0;
+	.button-details {
+		font-size: 13px;
 		color: #666;
-		font-size: 0.95rem;
 	}
 
-	.footer-actions {
-		margin-top: 1.5rem;
+	.button-payment {
+		font-size: 14px;
+		font-weight: 600;
+		color: #ff6b00;
+		margin-top: 4px;
+	}
+
+	.button-disabled-reason {
+		font-size: 12px;
+		color: #999;
 		text-align: center;
+		margin-top: 4px;
 	}
 
-	/* Адаптив */
-	@media (max-width: 768px) {
-		.cashier-header {
-			flex-direction: column;
-			gap: 1rem;
-			text-align: center;
-		}
+	/* ========== ОВЕРЛЕИ ========== */
+	.processing-overlay,
+	.success-overlay,
+	.error-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.9);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		color: white;
+		gap: 16px;
+		padding: 24px;
+	}
 
-		.action-buttons {
-			grid-template-columns: 1fr;
-		}
+	.processing-message {
+		font-size: 18px;
+		font-weight: 500;
+	}
 
-		.customer-header {
-			flex-direction: column;
-			text-align: center;
-		}
+	.success-icon,
+	.error-icon {
+		font-size: 64px;
+	}
 
-		.customer-avatar {
-			margin: 0 auto;
-		}
+	.success-title,
+	.error-title {
+		font-size: 24px;
+		font-weight: 700;
+	}
+
+	.success-message,
+	.error-message-text {
+		font-size: 16px;
+		text-align: center;
+		white-space: pre-line;
+	}
+
+	.success-auto-close {
+		font-size: 13px;
+		opacity: 0.7;
+		margin-top: 8px;
+	}
+
+	.manual-confirm-section {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		margin-top: 24px;
+	}
+
+	.force-confirm-button {
+		padding: 12px 24px;
+		background: #ff9800;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.force-warning {
+		font-size: 12px;
+		text-align: center;
+		opacity: 0.8;
+	}
+
+	.error-button {
+		padding: 12px 32px;
+		background: #d32f2f;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 16px;
+		font-weight: 600;
+		margin-top: 16px;
+	}
+
+	/* ========== НИЖНЯЯ ПАНЕЛЬ ========== */
+	.bottom-panel {
+		padding: 12px 16px;
+		border-top: 1px solid #e0e0e0;
+		text-align: center;
+		flex-shrink: 0;
+	}
+
+	.reset-button {
+		padding: 8px 20px;
+		background: #f5f5f5;
+		border: 1px solid #ddd;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 13px;
+		color: #666;
+	}
+
+	.reset-button:hover {
+		background: #e0e0e0;
+	}
+
+	/* ========== ТЕСТОВЫЕ КНОПКИ ========== */
+	.dev-test-buttons {
+		position: absolute;
+		bottom: 60px;
+		left: 16px;
+		right: 16px;
+		background: rgba(33, 150, 243, 0.95);
+		padding: 12px;
+		border-radius: 8px;
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.dev-label {
+		color: white;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.dev-button {
+		padding: 6px 12px;
+		background: white;
+		border: none;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 11px;
+		font-weight: 600;
+		color: #2196f3;
 	}
 </style>

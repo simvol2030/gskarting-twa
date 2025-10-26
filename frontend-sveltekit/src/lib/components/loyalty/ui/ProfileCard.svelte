@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { User } from '$lib/types/loyalty';
-  import { formatNumber, initializeUser, getTelegramUser } from '$lib/telegram';
+  import { formatNumber, initializeUser, waitForTelegramUser, formatTelegramCardNumber } from '$lib/telegram';
 
   interface Props {
     user: User;
@@ -23,54 +23,64 @@
   onMount(async () => {
     console.log('[ProfileCard] Mounting component...');
 
-    const telegramUser = getTelegramUser();
+    const telegramUser = await waitForTelegramUser(5000);
     console.log('[ProfileCard] Telegram user from SDK:', telegramUser);
 
     // If running in Telegram Web App, initialize user
     if (telegramUser) {
       console.log('[ProfileCard] Running in Telegram Web App mode');
+
+      // 🔥 STEP 1: Update UI IMMEDIATELY (synchronous) - like static version
+      const newName = `${telegramUser.first_name}${telegramUser.last_name ? ' ' + telegramUser.last_name : ''}`.trim();
+      console.log('[ProfileCard] ⚡ INSTANT UPDATE: Setting name to:', newName);
+
+      displayUser = {
+        ...user,
+        name: newName,
+        cardNumber: formatTelegramCardNumber(telegramUser.id),
+        // Keep demo balance until API responds
+      };
+
+      isLoading = false;
+
+      // 🔥 STEP 2: Register user in background (asynchronous)
       try {
-        // TODO: Extract store_id from URL parameter when implementing QR codes
-        // For now, store_id is undefined (will be added later)
-        console.log('[ProfileCard] Calling initializeUser()...');
+        console.log('[ProfileCard] 📡 Background: Calling initializeUser()...');
         const result = await initializeUser();
-        console.log('[ProfileCard] initializeUser() result:', result);
+        console.log('[ProfileCard] 📡 Background: initializeUser() result:', result);
 
         if (result && result.success) {
-          // Merge Telegram user data with existing user structure
-          const newName = `${result.user.first_name}${result.user.last_name ? ' ' + result.user.last_name : ''}`;
-          console.log('[ProfileCard] Updating displayUser with name:', newName, 'balance:', result.user.current_balance);
+          // Update balance from API response
+          console.log('[ProfileCard] 💰 Updating balance from API:', result.user.current_balance);
 
           displayUser = {
-            ...user,
-            name: newName,
-            currentBalance: result.user.current_balance,
+            ...displayUser,
+            balance: result.user.current_balance,
             // Keep other fields from demo user.json for now
             // (totalPurchases, totalSaved, etc. will come from database later)
           };
 
-          console.log('[ProfileCard] Telegram user initialized:', {
+          console.log('[ProfileCard] ✅ Telegram user registered:', {
             isNewUser: result.isNewUser,
             bonus: result.isNewUser ? '500 Murzikoyns awarded' : 'Welcome back',
             displayUserName: displayUser.name,
-            displayUserBalance: displayUser.currentBalance
+            displayUserBalance: displayUser.balance
           });
         } else {
-          console.error('[ProfileCard] initializeUser() returned unsuccessful result');
+          console.warn('[ProfileCard] ⚠️ API failed, but name is already shown');
         }
       } catch (error) {
-        console.error('[ProfileCard] Failed to initialize Telegram user:', error);
-        // Fall back to demo user from props
-        displayUser = user;
+        console.error('[ProfileCard] ❌ Background API failed, but name is already shown:', error);
+        // Name is already displayed from STEP 1, so user sees correct data
       }
     } else {
       // Not in Telegram Web App - use demo user
       console.log('[ProfileCard] Demo mode: Not running in Telegram Web App');
       console.log('[ProfileCard] Using demo user:', user.name);
       displayUser = user;
+      isLoading = false;
     }
 
-    isLoading = false;
     console.log('[ProfileCard] Mount complete. Final displayUser:', displayUser.name);
   });
 </script>
@@ -82,7 +92,7 @@
     </div>
     <div class="profile-info">
       <h2 class="profile-name">{displayUser.name}</h2>
-      <p class="profile-status">Статус: VIP клиент 🌟</p>
+      <p class="profile-status">Карта № {displayUser.cardNumber}</p>
     </div>
   </div>
 

@@ -1,55 +1,51 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { db } from '$lib/server/db/client';
+import { loyaltyUsers } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
 /**
  * Root layout data loader
  *
- * TELEGRAM WEB APP INTEGRATION:
- * This loader now supports both:
- * 1. Demo mode: user.json (default fallback)
- * 2. Telegram mode: users_state.json (when telegram_user_id provided)
- *
- * The frontend will call initializeUser() on mount to:
- * - Check if user exists in users_state.json
- * - Award 500 Murzikoyns if new user
- * - Send welcome message via Telegram Bot
- * - Return real user balance
- *
- * MIGRATION NOTES:
- * When switching to database:
- * 1. Accept telegram_user_id from request headers or cookies
- * 2. Query real user from database: await prisma.user.findUnique({ where: { telegram_user_id }})
- * 3. Remove JSON file operations
- * 4. Keep fallback to demo user if telegram_user_id not provided (for testing)
- *
- * Example with Prisma:
- * const telegramUserId = event.request.headers.get('X-Telegram-User-Id');
- * let user;
- * if (telegramUserId) {
- *   user = await prisma.user.findUnique({
- *     where: { telegram_user_id: parseInt(telegramUserId) }
- *   });
- * }
- * if (!user) {
- *   user = demoUser; // Fallback
- * }
+ * DATABASE VERSION:
+ * - Loads demo user as fallback (for testing in browser)
+ * - Real user data fetched client-side via initializeUser() API
+ * - ProfileCard component merges Telegram SDK data instantly
  */
 export const load: LayoutServerLoad = () => {
-  const loyaltyRulesPath = join(process.cwd(), 'src/lib/data/loyalty/loyalty-rules.json');
-  const loyaltyRules = JSON.parse(readFileSync(loyaltyRulesPath, 'utf-8'));
+  // Demo user data for non-Telegram testing
+  const demoUser = {
+    id: 0, // Demo user ID
+    name: 'Демо Пользователь',
+    cardNumber: '000000', // 6 digits
+    balance: 500, // Default welcome bonus amount
+    totalPurchases: 0,
+    totalSaved: 0
+  };
 
-  // Load demo user as fallback
-  // Real user data will be fetched client-side via initializeUser()
-  // and merged in ProfileCard component
-  const userPath = join(process.cwd(), 'src/lib/data/loyalty/user.json');
-  const demoUser = JSON.parse(readFileSync(userPath, 'utf-8'));
+  // Loyalty rules (static config)
+  const loyaltyRules = {
+    earning: {
+      icon: '💰',
+      title: 'Начисление',
+      value: '4% от покупки'
+    },
+    payment: {
+      icon: '🎯',
+      title: 'Оплата',
+      value: 'До 20% чека'
+    },
+    expiry: {
+      icon: '⏱️',
+      title: 'Срок',
+      value: '90 дней'
+    },
+    detailedRulesLink: '/profile',
+    detailedRulesText: 'Подробные правила программы лояльности'
+  };
 
   return {
     user: demoUser,
     loyaltyRules,
-    // Flag to indicate this is demo mode
-    // Frontend will override with real Telegram user data
-    isDemoMode: true
+    isDemoMode: true // Frontend will override with real Telegram data
   };
 };

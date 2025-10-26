@@ -42,7 +42,7 @@ export interface Offer {
 }
 
 export interface Transaction {
-  id: number;
+  id: string | number; // Allow both string (for examples) and number (from database)
   title: string;
   amount: number;
   date: string;
@@ -57,4 +57,38 @@ export interface Recommendation {
   description: string;
   price: number;
   image: string;
+}
+
+// ============================================
+// 1C Integration Types
+// ============================================
+
+export interface OneCTransaction {
+  Ref_Key: string; // 1C GUID
+  Amount: number; // Purchase amount in rubles
+  StoreId: number; // Store identifier
+  Status: 'Active' | 'Completed' | 'Cancelled';
+  CreatedAt: string; // ISO 8601 timestamp
+}
+
+export interface OneCConfig {
+  baseUrl: string;
+  username: string;
+  password: string;
+  timeout: number;
+}
+
+export interface TransactionFetchState {
+  loading: boolean;
+  amount: number | null;
+  error: string | null;
+  lastFetchedAt: Date | null;
+}
+
+export interface Customer {
+  id: number;
+  name: string;
+  cardNumber: string;
+  balance: number;
+  qrCode: string;
 }

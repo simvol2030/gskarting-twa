@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { getContext } from 'svelte';
+  import { getContext, onMount } from 'svelte';
   import type { User } from '$lib/types/loyalty';
-  import { formatNumber } from '$lib/telegram';
+  import { formatNumber, waitForTelegramUser, initializeUser, formatTelegramCardNumber } from '$lib/telegram';
 
   interface LoyaltyRule {
     icon: string;
@@ -24,13 +24,83 @@
 
   let { user, loyaltyRules }: Props = $props();
   const openQRModal = getContext<() => void>('openQRModal');
+  const updateUserData = getContext<(cardNumber: string, balance: number, userId?: number) => void>('updateUserData');
+
+  // State for merged user data (Telegram + demo)
+  let displayUser = $state<User>(user);
+  let isLoading = $state(true);
+
+  // HYBRID APPROACH: Initialize Telegram user on mount
+  onMount(async () => {
+    console.log('[LoyaltyCard] Mounting component...');
+
+    const telegramUser = await waitForTelegramUser(5000);
+    console.log('[LoyaltyCard] Telegram user from SDK:', telegramUser);
+
+    if (telegramUser) {
+      console.log('[LoyaltyCard] Running in Telegram Web App mode');
+
+      // 🔥 STEP 1: Update UI IMMEDIATELY (synchronous) - like static version
+      const newName = `${telegramUser.first_name}${telegramUser.last_name ? ' ' + telegramUser.last_name : ''}`.trim();
+      console.log('[LoyaltyCard] ⚡ INSTANT UPDATE: Setting name to:', newName);
+
+      displayUser = {
+        ...user,
+        name: newName,
+        cardNumber: formatTelegramCardNumber(telegramUser.id),
+      };
+
+      // Update parent layout for QR Modal
+      updateUserData(displayUser.cardNumber, displayUser.balance, telegramUser.id);
+
+      isLoading = false;
+
+      // 🔥 STEP 2: Register user in background (asynchronous)
+      try {
+        console.log('[LoyaltyCard] 📡 Background: Calling initializeUser()...');
+        const result = await initializeUser();
+        console.log('[LoyaltyCard] 📡 Background: initializeUser() result:', result);
+
+        if (result && result.success) {
+          console.log('[LoyaltyCard] 💰 Updating balance from API:', result.user.current_balance);
+
+          displayUser = {
+            ...displayUser,
+            balance: result.user.current_balance,
+          };
+
+          // Update parent layout with new balance
+          updateUserData(displayUser.cardNumber, displayUser.balance, telegramUser.id);
+
+          console.log('[LoyaltyCard] ✅ Telegram user registered:', {
+            isNewUser: result.isNewUser,
+            bonus: result.isNewUser ? '500 Murzikoyns awarded' : 'Welcome back',
+            displayUserName: displayUser.name,
+            displayUserBalance: displayUser.balance
+          });
+        } else {
+          console.warn('[LoyaltyCard] ⚠️ API failed, but name is already shown');
+        }
+      } catch (error) {
+        console.error('[LoyaltyCard] ❌ Background API failed, but name is already shown:', error);
+      }
+    } else {
+      console.log('[LoyaltyCard] Demo mode: Not running in Telegram Web App');
+      console.log('[LoyaltyCard] Using demo user:', user.name);
+      displayUser = user;
+      isLoading = false;
+    }
+
+    console.log('[LoyaltyCard] Mount complete. Final displayUser:', displayUser.name);
+  });
 </script>
 
 <div class="loyalty-card">
   <div class="card-header">
     <div class="card-info">
       <div class="user-badge">
-        <div class="user-name">{user.name}</div>
+        <div class="user-name">{displayUser.name}</div>
+        <div class="card-number">Карта: {displayUser.cardNumber}</div>
       </div>
     </div>
 
@@ -40,7 +110,7 @@
   </div>
 
   <div class="balance">
-    <div class="balance-amount">{formatNumber(user.balance)}</div>
+    <div class="balance-amount">{formatNumber(displayUser.balance)}</div>
     <div class="balance-label">Мурзи-коинов</div>
   </div>
 
@@ -161,6 +231,14 @@
     font-weight: bold;
     font-size: 16px;
     letter-spacing: -0.025em;
+  }
+
+  .card-number {
+    color: var(--primary-orange);
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 2px;
+    letter-spacing: 0.5px;
   }
 
   .qr-button {

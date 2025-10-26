@@ -20,11 +20,38 @@
     <span>📜</span>
     <span>История операций</span>
   </h2>
-  <div class="history-list">
-    {#each data.history as transaction}
-      <HistoryItem {transaction} />
-    {/each}
-  </div>
+
+  <!-- Real transactions from database -->
+  {#if data.realHistory && data.realHistory.length > 0}
+    <div class="history-list">
+      {#each data.realHistory as transaction}
+        <HistoryItem {transaction} />
+      {/each}
+    </div>
+  {/if}
+
+  <!-- Example transactions divider and list -->
+  {#if data.showExamples && data.exampleHistory && data.exampleHistory.length > 0}
+    <div class="example-divider">
+      <div class="divider-line"></div>
+      <h3 class="example-header">💡 Пример истории операций</h3>
+      <div class="divider-line"></div>
+    </div>
+
+    <div class="history-list example-list">
+      {#each data.exampleHistory as transaction}
+        <HistoryItem {transaction} isExample={true} />
+      {/each}
+    </div>
+  {/if}
+
+  <!-- Empty state (shouldn't happen because of welcome bonus, but just in case) -->
+  {#if (!data.realHistory || data.realHistory.length === 0) && (!data.exampleHistory || data.exampleHistory.length === 0)}
+    <div class="empty-state">
+      <p>У вас пока нет операций</p>
+      <p class="empty-hint">Совершите первую покупку, чтобы начать копить Мурзи-коины!</p>
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -49,9 +76,67 @@
     gap: 12px;
   }
 
+  /* Example transactions styling */
+  .example-divider {
+    margin: 32px 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .divider-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--border-color),
+      transparent
+    );
+  }
+
+  .example-header {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .example-list {
+    opacity: 0.7;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 48px 16px;
+    color: var(--text-secondary);
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .empty-hint {
+    margin-top: 8px;
+    font-size: 14px;
+    opacity: 0.7;
+  }
+
   @media (max-width: 480px) {
     .section-content {
       padding: 20px 12px 24px;
+    }
+
+    .example-divider {
+      margin: 24px 0 20px;
+      gap: 12px;
+    }
+
+    .example-header {
+      font-size: 14px;
     }
   }
 </style>

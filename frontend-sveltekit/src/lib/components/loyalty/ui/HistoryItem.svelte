@@ -3,9 +3,10 @@
 
   interface Props {
     transaction: Transaction;
+    isExample?: boolean; // Optional flag for styling example transactions differently
   }
 
-  let { transaction }: Props = $props();
+  let { transaction, isExample = false }: Props = $props();
 </script>
 
 <div class="history-item">

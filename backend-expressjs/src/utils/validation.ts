@@ -196,3 +196,92 @@ export function validateContent(content: string | null | undefined): ValidationR
 export function collectValidationErrors(results: ValidationResult[]): string[] {
 	return results.filter((r) => !r.valid).map((r) => r.error!);
 }
+
+/**
+ * Validates purchase amount for cashier transactions
+ */
+export function validatePurchaseAmount(amount: number | null | undefined): ValidationResult {
+	if (amount === null || amount === undefined) {
+		return { valid: false, error: 'Сумма покупки обязательна' };
+	}
+
+	if (typeof amount !== 'number' || isNaN(amount)) {
+		return { valid: false, error: 'Сумма покупки должна быть числом' };
+	}
+
+	if (amount <= 0) {
+		return { valid: false, error: 'Сумма покупки должна быть больше 0' };
+	}
+
+	if (amount > 1000000) {
+		return { valid: false, error: 'Сумма покупки не может превышать 1,000,000 ₽' };
+	}
+
+	return { valid: true };
+}
+
+/**
+ * Validates points to redeem
+ */
+export function validatePointsToRedeem(
+	points: number | null | undefined,
+	customerBalance: number,
+	purchaseAmount: number
+): ValidationResult {
+	if (points === null || points === undefined) {
+		return { valid: false, error: 'Количество баллов обязательно' };
+	}
+
+	if (typeof points !== 'number' || isNaN(points)) {
+		return { valid: false, error: 'Количество баллов должно быть числом' };
+	}
+
+	if (points <= 0) {
+		return { valid: false, error: 'Количество баллов должно быть больше 0' };
+	}
+
+	if (points > customerBalance) {
+		return { valid: false, error: `Недостаточно баллов. Доступно: ${customerBalance}` };
+	}
+
+	// Check 50% discount limit (1 point = 1 ruble)
+	const maxDiscount = purchaseAmount * 0.5;
+	if (points > maxDiscount) {
+		return {
+			valid: false,
+			error: `Скидка не может превышать 50% от покупки. Максимум: ${Math.floor(maxDiscount)} баллов`
+		};
+	}
+
+	return { valid: true };
+}
+
+/**
+ * Validates transaction metadata
+ */
+export function validateTransactionMetadata(metadata: any): ValidationResult {
+	if (metadata && typeof metadata !== 'object') {
+		return { valid: false, error: 'Метаданные транзакции должны быть объектом' };
+	}
+
+	if (metadata) {
+		// Optional fields validation
+		if (metadata.cashierName && typeof metadata.cashierName !== 'string') {
+			return { valid: false, error: 'Имя кассира должно быть строкой' };
+		}
+
+		if (metadata.terminalId && typeof metadata.terminalId !== 'string') {
+			return { valid: false, error: 'ID терминала должен быть строкой' };
+		}
+
+		if (metadata.paymentMethod && typeof metadata.paymentMethod !== 'string') {
+			return { valid: false, error: 'Способ оплаты должен быть строкой' };
+		}
+
+		if (metadata.receiptNumber && typeof metadata.receiptNumber !== 'string') {
+			return { valid: false, error: 'Номер чека должен быть строкой' };
+		}
+	}
+
+	return { valid: true };
+}

@@ -1,20 +1,41 @@
 <script lang="ts">
   import { formatNumber } from '$lib/telegram';
   import { browser } from '$app/environment';
+  import { generateQRCodeImage } from '$lib/utils/qr-generator';
 
   interface Props {
     cardNumber: string;
     balance: number;
     open: boolean;
     onClose: () => void;
+    userId?: number; // Добавляем userId для генерации QR
   }
 
-  let { cardNumber, balance, open, onClose }: Props = $props();
+  let { cardNumber, balance, open, onClose, userId = 1 }: Props = $props();
 
+  let qrCodeDataURL = $state<string>('');
+  let isGenerating = $state(false);
+
+  // Генерация QR-кода при открытии модалки
   $effect(() => {
     if (!browser) return;
+
     if (open) {
       document.body.style.overflow = 'hidden';
+
+      // Генерируем QR-код
+      if (!qrCodeDataURL) {
+        isGenerating = true;
+        generateQRCodeImage(userId, cardNumber)
+          .then((dataURL) => {
+            qrCodeDataURL = dataURL;
+            isGenerating = false;
+          })
+          .catch((error) => {
+            console.error('Ошибка генерации QR:', error);
+            isGenerating = false;
+          });
+      }
     } else {
       document.body.style.overflow = '';
     }
@@ -58,13 +79,24 @@
 
     <div class="qr-container">
       <div class="qr-frame">
-        <img src="/qr-code.png" alt="QR Code" class="qr-large" />
+        {#if isGenerating}
+          <div class="qr-loading">
+            <div class="spinner"></div>
+            <p>Генерация QR-кода...</p>
+          </div>
+        {:else if qrCodeDataURL}
+          <img src={qrCodeDataURL} alt="QR Code" class="qr-large" />
+        {:else}
+          <div class="qr-error">
+            <p>⚠️ Ошибка генерации QR</p>
+          </div>
+        {/if}
       </div>
 
       <div class="balance-info">
         <p>Ваш баланс</p>
         <div class="amount">{formatNumber(balance)}</div>
-        <p>Мурзи-коинов ≈ {formatNumber(Math.round(balance / 10))} ₽</p>
+        <p>Мурзи-коинов</p>
       </div>
 
       <p style="color: var(--text-secondary); font-size: 13px; margin-top: 12px;">
@@ -191,5 +223,48 @@
     color: var(--text-secondary);
     font-size: 13px;
     margin-top: 4px;
+  }
+
+  .qr-loading {
+    width: 192px;
+    height: 192px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--primary-orange);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .qr-loading p {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .qr-error {
+    width: 192px;
+    height: 192px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .qr-error p {
+    color: var(--error-color, #ef4444);
+    font-size: 14px;
   }
 </style>
