@@ -1,466 +1,247 @@
 <script lang="ts">
-	import {
-		MOCK_STORES,
-		MOCK_QUICK_TESTS,
-		mockIdentifyCustomer,
-		mockGetTransactionAmount,
-		mockEarnPoints,
-		mockRedeemAndEarn,
-		mockForceConfirm
-	} from '$lib/services/cashier-mock-api';
+	import { onMount } from 'svelte';
+	import { findCustomer, createTransaction, getRecentTransactions } from '$lib/api/cashier';
+	import type { Customer, Transaction } from '$lib/data/cashier-mocks';
+	import type { PageData } from './$types';
 
-	// =====================================
-	// Состояние интерфейса
-	// =====================================
+	import CustomerSearch from './components/CustomerSearch.svelte';
+	import CustomerInfo from './components/CustomerInfo.svelte';
+	import CheckAmountInput from './components/CheckAmountInput.svelte';
+	import RedeemControl from './components/RedeemControl.svelte';
+	import TransactionButtons from './components/TransactionButtons.svelte';
+	import TransactionStatus from './components/TransactionStatus.svelte';
+	import RecentTransactions from './components/RecentTransactions.svelte';
 
-	// Магазин (фиксированный, из .env)
-	const currentStore = MOCK_STORES[0]; // В реальности из STORE_ID
+	let { data }: { data: PageData } = $props();
 
-	// Текущее состояние UI
-	type UIState = 'idle' | 'customer_found' | 'amount_loaded' | 'processing' | 'success' | 'error';
+	// ===== Состояние UI =====
+	type UIState = 'idle' | 'customer_found' | 'ready' | 'processing' | 'success' | 'error';
 	let uiState = $state<UIState>('idle');
 
-	// Поле ввода QR/карты
+	// ===== Поиск клиента =====
 	let qrInput = $state('');
-	let qrInputRef: HTMLInputElement | null = null;
+	let isSearching = $state(false);
+	let searchError = $state('');
 
-	// Данные покупателя
-	let customer = $state<any>(null);
+	// ===== Данные клиента =====
+	let customer = $state<Customer | null>(null);
 
-	// Сумма покупки
-	let purchaseAmount = $state<number>(0);
-	let isLoadingAmount = $state(false);
-	let amountError = $state<string | null>(null);
-	let manualAmountInput = $state<string>('');
+	// ===== Сумма чека =====
+	let checkAmountInput = $state('');
+	let checkAmount = $state(0);
 
-	// Обработка транзакции
-	let isProcessing = $state(false);
-	let processingMessage = $state('');
-	let successMessage = $state('');
-	let errorMessage = $state('');
-	let showManualConfirm = $state(false);
+	// ===== Списание баллов =====
+	let pointsToRedeem = $state(0);
 
-	// Расчётные суммы
-	let earnAmount = $derived(() => {
-		if (!purchaseAmount) return 0;
-		return Math.round(purchaseAmount * 0.04);
+	// ===== История транзакций =====
+	let recentTransactions = $state<Transaction[]>([]);
+
+	// ===== Ссылка на компонент поиска =====
+	let searchComponent: CustomerSearch;
+
+	// ===== Расчетные значения =====
+	let cashbackAmount = $derived(() => {
+		if (checkAmount === 0) return 0;
+		return Math.floor(checkAmount * data.storeConfig.cashbackPercent / 100);
 	});
 
-	let maxRedeemAmount = $derived(() => {
-		if (!purchaseAmount || !customer) return 0;
-		const maxFromPurchase = purchaseAmount * 0.2;
-		return Math.min(maxFromPurchase, customer.balance);
+	let maxRedeemPoints = $derived(() => {
+		if (!customer || checkAmount === 0) return 0;
+		const maxByPercent = Math.floor(checkAmount * data.storeConfig.maxDiscountPercent / 100);
+		const maxByBalance = customer.balance;
+		return Math.min(maxByPercent, maxByBalance);
 	});
 
 	let canRedeem = $derived(() => {
-		return customer && customer.balance >= 50 && maxRedeemAmount() > 0;
+		return customer !== null && customer.balance > 0 && maxRedeemPoints() > 0;
 	});
 
-	// =====================================
-	// Обработчики событий
-	// =====================================
+	let finalAmount = $derived(() => {
+		return Math.max(0, checkAmount - pointsToRedeem);
+	});
 
-	/**
-	 * Поиск покупателя по QR/карте
-	 */
+	// ===== Загрузка истории при монтировании =====
+	onMount(async () => {
+		recentTransactions = await getRecentTransactions(data.storeId);
+		setTimeout(() => searchComponent?.focus(), 100);
+	});
+
+	// ===== Обработчики событий =====
 	async function handleSearch() {
-		if (!qrInput.trim()) return;
+		if (!qrInput || isSearching) return;
 
-		uiState = 'processing';
-		processingMessage = 'Поиск покупателя...';
+		isSearching = true;
+		searchError = '';
 
 		try {
-			const result = await mockIdentifyCustomer(qrInput.trim());
+			const foundCustomer = await findCustomer(qrInput, data.storeId);
 
-			if (result.success) {
-				customer = result.customer;
+			if (foundCustomer) {
+				customer = foundCustomer;
 				uiState = 'customer_found';
-				qrInput = '';
-
-				// Автоматический запрос суммы из 1С
-				fetchAmountFrom1C();
 			} else {
-				uiState = 'error';
-				errorMessage = result.error || 'Покупатель не найден';
+				searchError = 'Клиент не найден';
+				setTimeout(() => {
+					searchError = '';
+					qrInput = '';
+				}, 2000);
 			}
 		} catch (error) {
-			uiState = 'error';
-			errorMessage = 'Ошибка при поиске покупателя';
-		}
-	}
-
-	/**
-	 * Автоматический запрос суммы из 1С
-	 */
-	async function fetchAmountFrom1C() {
-		isLoadingAmount = true;
-		amountError = null;
-
-		try {
-			const result = await mockGetTransactionAmount(currentStore.id);
-
-			if (result.success) {
-				purchaseAmount = result.transaction.amount;
-				uiState = 'amount_loaded';
-			} else {
-				amountError = result.error;
-			}
-		} catch (error) {
-			amountError = 'Не удалось получить сумму из 1С';
+			searchError = 'Ошибка при поиске клиента';
 		} finally {
-			isLoadingAmount = false;
+			isSearching = false;
 		}
 	}
 
-	/**
-	 * Ручной ввод суммы (если 1С недоступен)
-	 */
-	function handleManualAmountSubmit() {
-		const amount = parseFloat(manualAmountInput);
+	function handleCheckAmountSubmit() {
+		const amount = parseFloat(checkAmountInput);
 		if (amount > 0) {
-			purchaseAmount = amount;
-			amountError = null;
-			uiState = 'amount_loaded';
+			checkAmount = amount;
+			uiState = 'ready';
 		}
 	}
 
-	/**
-	 * Начислить баллы
-	 */
-	async function handleEarnOnly() {
-		if (!customer || !purchaseAmount) return;
-
-		uiState = 'processing';
-		processingMessage = 'Начисление баллов...';
-		isProcessing = true;
-
-		try {
-			const result = await mockEarnPoints({
-				userId: customer.id,
-				storeId: currentStore.id,
-				purchaseAmount,
-				earnAmount: earnAmount()
-			});
-
-			if (result.success) {
-				customer.balance = result.newBalance;
-				uiState = 'success';
-				successMessage = `✅ Начислено: +${result.earned} М\nНовый баланс: ${result.newBalance} М`;
-
-				// Автосброс через 3 секунды
-				setTimeout(resetInterface, 3000);
-			} else {
-				uiState = 'error';
-				errorMessage = result.error;
-			}
-		} catch (error) {
-			uiState = 'error';
-			errorMessage = 'Ошибка при начислении баллов';
-		} finally {
-			isProcessing = false;
-		}
+	function handleRedeemChange(points: number) {
+		const max = maxRedeemPoints();
+		pointsToRedeem = Math.min(points, max);
 	}
 
-	/**
-	 * Списать + начислить
-	 */
-	async function handleRedeemAndEarn() {
-		if (!customer || !purchaseAmount || !canRedeem()) return;
-
-		uiState = 'processing';
-		processingMessage = 'Ожидание ответа от 1С...';
-		isProcessing = true;
-
-		try {
-			const result = await mockRedeemAndEarn({
-				userId: customer.id,
-				storeId: currentStore.id,
-				purchaseAmount,
-				redeemAmount: maxRedeemAmount(),
-				earnAmount: earnAmount(),
-				transactionId: 'TXN-MOCK'
-			});
-
-			if (result.success) {
-				customer.balance = result.newBalance;
-				uiState = 'success';
-				const finalAmount = purchaseAmount - maxRedeemAmount();
-				successMessage = `✅ Списано: -${result.redeemed} М\n✅ Начислено: +${result.earned} М\nНовый баланс: ${result.newBalance} М\n\nПокупатель платит: ${finalAmount.toFixed(2)} ₽`;
-
-				setTimeout(resetInterface, 3000);
-			} else if (result.requireManualConfirmation) {
-				// 1С не ответил - показываем ручное подтверждение
-				showManualConfirm = true;
-				processingMessage = result.error;
-			} else {
-				uiState = 'error';
-				errorMessage = result.error;
-			}
-		} catch (error) {
-			uiState = 'error';
-			errorMessage = 'Ошибка при обработке транзакции';
-		} finally {
-			isProcessing = false;
-		}
+	function handleRedeemMax() {
+		pointsToRedeem = maxRedeemPoints();
 	}
 
-	/**
-	 * Принудительное подтверждение (без ответа 1С)
-	 */
-	async function handleForceConfirm() {
+	function handleRedeemNone() {
+		pointsToRedeem = 0;
+	}
+
+	async function handleCompleteTransaction() {
 		if (!customer) return;
 
-		isProcessing = true;
+		uiState = 'processing';
 
-		try {
-			const result = await mockForceConfirm({
-				userId: customer.id,
-				redeemAmount: maxRedeemAmount(),
-				earnAmount: earnAmount()
-			});
+		const result = await createTransaction({
+			customer,
+			storeId: data.storeId,
+			checkAmount,
+			pointsToRedeem,
+			cashbackAmount: cashbackAmount(),
+			finalAmount: finalAmount()
+		});
 
-			if (result.success) {
-				customer.balance = result.newBalance;
-				uiState = 'success';
-				successMessage = `⚠️ ${result.warning}\n\nСписано: -${result.redeemed} М\nНачислено: +${result.earned} М\nНовый баланс: ${result.newBalance} М`;
+		if (result.success) {
+			// Обновляем баланс клиента в локальном состоянии
+			customer.balance = customer.balance - pointsToRedeem + cashbackAmount();
 
-				showManualConfirm = false;
-				setTimeout(resetInterface, 5000);
-			}
-		} catch (error) {
+			uiState = 'success';
+
+			// Обновляем историю
+			recentTransactions = await getRecentTransactions(data.storeId);
+
+			// Автосброс через 3 секунды
+			setTimeout(() => {
+				resetTransaction();
+			}, 3000);
+		} else {
 			uiState = 'error';
-			errorMessage = 'Ошибка при принудительном подтверждении';
-		} finally {
-			isProcessing = false;
 		}
 	}
 
-	/**
-	 * Сброс интерфейса (Esc или автоматически после успеха)
-	 */
-	function resetInterface() {
+	function resetTransaction() {
 		customer = null;
-		purchaseAmount = 0;
+		checkAmount = 0;
+		pointsToRedeem = 0;
 		qrInput = '';
-		manualAmountInput = '';
-		amountError = null;
-		successMessage = '';
-		errorMessage = '';
-		showManualConfirm = false;
+		checkAmountInput = '';
 		uiState = 'idle';
+		searchError = '';
 
-		// Возврат фокуса в поле ввода
-		setTimeout(() => {
-			qrInputRef?.focus();
-		}, 100);
-	}
-
-	/**
-	 * Быстрые кнопки для тестирования
-	 */
-	function quickTest(qr: string) {
-		qrInput = qr;
-		handleSearch();
-	}
-
-	// Глобальная обработка Esc
-	function handleKeyDown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
-			resetInterface();
-		}
+		setTimeout(() => searchComponent?.focus(), 100);
 	}
 </script>
 
-<svelte:window on:keydown={handleKeyDown} />
-
-<div class="cashier-container">
-	<!-- ==================== HEADER: Магазин ==================== -->
-	<div class="store-header">
-		<div class="store-icon">🏪</div>
-		<div class="store-info">
-			<div class="store-name">{currentStore.name}</div>
-			<div class="store-address">{currentStore.address}</div>
+<div class="app-container">
+	<!-- Header -->
+	<div class="header">
+		<div class="header-title">
+			💳 {data.storeConfig.storeName}
 		</div>
 	</div>
 
-	<!-- ==================== ПОИСК ПОКУПАТЕЛЯ ==================== -->
-	<div class="search-section">
-		<label for="qr-input" class="search-label">Номер карты / QR-код:</label>
-		<div class="search-input-row">
-			<input
-				id="qr-input"
-				type="text"
+	<!-- Content -->
+	<div class="content">
+		<!-- Шаг 1: Поиск клиента -->
+		{#if uiState === 'idle'}
+			<CustomerSearch
+				bind:this={searchComponent}
 				bind:value={qrInput}
-				bind:this={qrInputRef}
-				on:keydown={(e) => e.key === 'Enter' && handleSearch()}
-				placeholder="Сканируйте QR или введите номер"
-				class="search-input"
-				disabled={uiState === 'processing'}
+				{isSearching}
+				errorMessage={searchError}
+				onSearch={handleSearch}
+				onInput={(v) => qrInput = v}
 			/>
-			<button
-				onclick={handleSearch}
-				disabled={!qrInput.trim() || uiState === 'processing'}
-				class="search-button"
-			>
-				🔍 Найти
+
+			<RecentTransactions transactions={recentTransactions} />
+		{/if}
+
+		<!-- Шаг 2: Клиент найден, ввод суммы чека -->
+		{#if uiState === 'customer_found' && customer}
+			<CustomerInfo {customer} />
+
+			<CheckAmountInput
+				bind:value={checkAmountInput}
+				onSubmit={handleCheckAmountSubmit}
+				onCancel={resetTransaction}
+			/>
+		{/if}
+
+		<!-- Шаг 3: Чек готов, выбор списания баллов -->
+		{#if uiState === 'ready' && customer}
+			<CustomerInfo {customer} />
+
+			<RedeemControl
+				{checkAmount}
+				customerBalance={customer.balance}
+				storeConfig={data.storeConfig}
+				bind:pointsToRedeem
+				maxRedeemPoints={maxRedeemPoints()}
+				canRedeem={canRedeem()}
+				onRedeemChange={handleRedeemChange}
+				onRedeemMax={handleRedeemMax}
+				onRedeemNone={handleRedeemNone}
+			/>
+
+			<TransactionButtons
+				onComplete={handleCompleteTransaction}
+				onCancel={resetTransaction}
+			/>
+		{/if}
+
+		<!-- Шаг 4: Обработка транзакции -->
+		{#if uiState === 'processing' && customer}
+			<TransactionStatus status="processing" />
+		{/if}
+
+		<!-- Шаг 5: Успех -->
+		{#if uiState === 'success' && customer}
+			<TransactionStatus
+				status="success"
+				finalAmount={finalAmount()}
+				pointsRedeemed={pointsToRedeem}
+				cashbackEarned={cashbackAmount()}
+				newBalance={customer.balance}
+			/>
+		{/if}
+
+		<!-- Шаг 6: Ошибка -->
+		{#if uiState === 'error'}
+			<TransactionStatus
+				status="error"
+				errorMessage="Ошибка при создании транзакции"
+			/>
+			<button class="btn btn-secondary mt-2" onclick={resetTransaction}>
+				Попробовать снова
 			</button>
-		</div>
-	</div>
-
-	<!-- ==================== ДАННЫЕ ПОКУПАТЕЛЯ ==================== -->
-	{#if customer && uiState !== 'idle'}
-		<div class="customer-info">
-			<div class="customer-row">
-				<span class="customer-label">👤 Покупатель:</span>
-				<span class="customer-value">{customer.firstName} {customer.lastName}</span>
-			</div>
-			<div class="customer-row">
-				<span class="customer-label">💳 Карта:</span>
-				<span class="customer-value">{customer.cardNumber}</span>
-			</div>
-			<div class="customer-row">
-				<span class="customer-label">💰 Баланс:</span>
-				<span class="customer-balance">{customer.balance.toFixed(0)} М</span>
-			</div>
-		</div>
-	{/if}
-
-	<!-- ==================== СУММА ПОКУПКИ ==================== -->
-	{#if customer && uiState !== 'idle'}
-		<div class="amount-section">
-			{#if isLoadingAmount}
-				<div class="amount-loading">🔄 Запрос суммы из 1С...</div>
-			{:else if amountError}
-				<div class="amount-error">
-					<div class="error-text">⚠️ {amountError}</div>
-					<button onclick={fetchAmountFrom1C} class="retry-button">🔄 Повторить запрос</button>
-					<div class="manual-input-section">
-						<label>Или введите сумму вручную:</label>
-						<div class="manual-input-row">
-							<input
-								type="number"
-								bind:value={manualAmountInput}
-								placeholder="Сумма в ₽"
-								class="manual-input"
-							/>
-							<button onclick={handleManualAmountSubmit} class="manual-submit-button">
-								Продолжить
-							</button>
-						</div>
-						<div class="manual-warning">⚠️ При ручном вводе доступно только начисление</div>
-					</div>
-				</div>
-			{:else if purchaseAmount > 0}
-				<div class="amount-display">
-					<span class="amount-label">💵 Сумма покупки:</span>
-					<span class="amount-value">{purchaseAmount.toFixed(2)} ₽</span>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- ==================== КНОПКИ ДЕЙСТВИЙ ==================== -->
-	{#if uiState === 'amount_loaded'}
-		<div class="actions-section">
-			<!-- Кнопка: Только начислить -->
-			<button onclick={handleEarnOnly} disabled={isProcessing} class="action-button earn-button">
-				<div class="button-icon">💚</div>
-				<div class="button-title">НАЧИСЛИТЬ</div>
-				<div class="button-details">+ {earnAmount()} М (4% кешбэк)</div>
-				<div class="button-payment">Покупатель платит: {purchaseAmount.toFixed(2)} ₽</div>
-			</button>
-
-			<!-- Кнопка: Списать + начислить -->
-			<button
-				onclick={handleRedeemAndEarn}
-				disabled={isProcessing || !canRedeem() || amountError !== null}
-				class="action-button redeem-button"
-				class:disabled={!canRedeem() || amountError !== null}
-			>
-				<div class="button-icon">⭐</div>
-				<div class="button-title">
-					{#if amountError}
-						СПИСАТЬ НЕДОСТУПНО
-					{:else if !canRedeem()}
-						СПИСАТЬ НЕДОСТУПНО
-					{:else}
-						СПИСАТЬ + НАЧИСЛИТЬ
-					{/if}
-				</div>
-				{#if canRedeem() && !amountError}
-					<div class="button-details">- {maxRedeemAmount().toFixed(0)} М (скидка {maxRedeemAmount().toFixed(0)} ₽)</div>
-					<div class="button-details">+ {earnAmount()} М (4% кешбэк)</div>
-					<div class="button-payment">
-						Покупатель платит: {(purchaseAmount - maxRedeemAmount()).toFixed(2)} ₽
-					</div>
-				{:else}
-					<div class="button-disabled-reason">
-						{#if amountError}
-							Нет связи с 1С - скидка невозможна
-						{:else}
-							Недостаточно баллов (минимум 50 М)
-						{/if}
-					</div>
-				{/if}
-			</button>
-		</div>
-	{/if}
-
-	<!-- ==================== ОБРАБОТКА ТРАНЗАКЦИИ ==================== -->
-	{#if uiState === 'processing'}
-		<div class="processing-overlay">
-			<div class="processing-message">{processingMessage}</div>
-			{#if showManualConfirm}
-				<div class="manual-confirm-section">
-					<button onclick={fetchAmountFrom1C} class="retry-button">🔄 Повторить запрос</button>
-					<button onclick={handleForceConfirm} class="force-confirm-button">
-						⚠️ ПОДТВЕРДИТЬ ПРИНУДИТЕЛЬНО
-					</button>
-					<div class="force-warning">
-						⚠️ Баллы спишутся, но скидка в 1С<br />не будет применена автоматически
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- ==================== УСПЕХ ==================== -->
-	{#if uiState === 'success'}
-		<div class="success-overlay">
-			<div class="success-icon">✅</div>
-			<div class="success-title">Транзакция завершена</div>
-			<div class="success-message">{successMessage}</div>
-			<div class="success-auto-close">Автоматически закроется через 3 сек</div>
-		</div>
-	{/if}
-
-	<!-- ==================== ОШИБКА ==================== -->
-	{#if uiState === 'error'}
-		<div class="error-overlay">
-			<div class="error-icon">❌</div>
-			<div class="error-title">Ошибка</div>
-			<div class="error-message-text">{errorMessage}</div>
-			<button onclick={resetInterface} class="error-button">OK</button>
-		</div>
-	{/if}
-
-	<!-- ==================== НИЖНЯЯ ПАНЕЛЬ ==================== -->
-	<div class="bottom-panel">
-		<button onclick={resetInterface} class="reset-button">Esc - Сброс</button>
-	</div>
-
-	<!-- ==================== ТЕСТОВЫЕ КНОПКИ (DEV ONLY) ==================== -->
-	<div class="dev-test-buttons">
-		<div class="dev-label">🧪 Тестовые кнопки:</div>
-		<button onclick={() => quickTest(MOCK_QUICK_TESTS.ivan)} class="dev-button">
-			Иван (1,250 М)
-		</button>
-		<button onclick={() => quickTest(MOCK_QUICK_TESTS.maria)} class="dev-button">
-			Мария (3,500 М)
-		</button>
-		<button onclick={() => quickTest(MOCK_QUICK_TESTS.alex)} class="dev-button">
-			Алексей (50 М)
-		</button>
+		{/if}
 	</div>
 </div>
 
@@ -468,445 +249,257 @@
 	:global(body) {
 		margin: 0;
 		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
-			sans-serif;
-		background: #f5f5f5;
+		overflow: hidden;
+		background-color: #0f172a;
+		color: #f8fafc;
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 	}
 
-	.cashier-container {
-		width: 550px;
-		height: 550px;
-		background: white;
+	:global(:root) {
+		--bg-primary: #0f172a;
+		--bg-secondary: #1e293b;
+		--bg-header: #334155;
+		--text-primary: #f8fafc;
+		--text-secondary: #cbd5e1;
+		--accent: #10b981;
+		--accent-hover: #059669;
+		--accent-light: #34d399;
+		--primary: #3b82f6;
+		--primary-hover: #2563eb;
+		--danger: #ef4444;
+		--danger-hover: #dc2626;
+		--warning: #f59e0b;
+		--success: #22c55e;
+		--border: #475569;
+		--glow-accent: rgba(16, 185, 129, 0.3);
+		--glow-primary: rgba(59, 130, 246, 0.3);
+	}
+
+	.app-container {
+		width: 100vw;
+		height: 100vh;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 	}
 
-	/* ========== HEADER: Магазин ========== */
-	.store-header {
-		background: linear-gradient(135deg, #ff6b00 0%, #ff8c00 100%);
-		color: white;
-		padding: 12px 16px;
+	.header {
+		height: 44px;
+		background: linear-gradient(135deg, var(--bg-header) 0%, var(--bg-secondary) 100%);
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		height: 60px;
-		flex-shrink: 0;
-	}
-
-	.store-icon {
-		font-size: 28px;
-	}
-
-	.store-info {
-		flex: 1;
-	}
-
-	.store-name {
-		font-size: 16px;
-		font-weight: 600;
-	}
-
-	.store-address {
-		font-size: 12px;
-		opacity: 0.9;
-	}
-
-	/* ========== ПОИСК ПОКУПАТЕЛЯ ========== */
-	.search-section {
-		padding: 16px;
-		border-bottom: 1px solid #e0e0e0;
-		flex-shrink: 0;
-	}
-
-	.search-label {
-		display: block;
-		font-size: 13px;
-		font-weight: 500;
-		margin-bottom: 8px;
-		color: #333;
-	}
-
-	.search-input-row {
-		display: flex;
-		gap: 8px;
-	}
-
-	.search-input {
-		flex: 1;
-		padding: 10px 12px;
-		border: 2px solid #ddd;
-		border-radius: 6px;
-		font-size: 14px;
-		transition: border-color 0.2s;
-	}
-
-	.search-input:focus {
-		outline: none;
-		border-color: #ff6b00;
-	}
-
-	.search-button {
-		padding: 10px 20px;
-		background: #ff6b00;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: background 0.2s;
-	}
-
-	.search-button:hover:not(:disabled) {
-		background: #ff5500;
-	}
-
-	.search-button:disabled {
-		background: #ccc;
-		cursor: not-allowed;
-	}
-
-	/* ========== ДАННЫЕ ПОКУПАТЕЛЯ ========== */
-	.customer-info {
-		padding: 16px;
-		background: #f9f9f9;
-		border-bottom: 1px solid #e0e0e0;
-		flex-shrink: 0;
-	}
-
-	.customer-row {
-		display: flex;
 		justify-content: space-between;
-		margin-bottom: 8px;
-		font-size: 14px;
-	}
-
-	.customer-row:last-child {
-		margin-bottom: 0;
-	}
-
-	.customer-label {
-		font-weight: 500;
-		color: #666;
-	}
-
-	.customer-value {
-		font-weight: 600;
-		color: #333;
-	}
-
-	.customer-balance {
-		font-weight: 700;
-		font-size: 16px;
-		color: #ff6b00;
-	}
-
-	/* ========== СУММА ПОКУПКИ ========== */
-	.amount-section {
-		padding: 16px;
-		border-bottom: 1px solid #e0e0e0;
+		padding: 0 16px;
+		border-bottom: 2px solid var(--primary);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 		flex-shrink: 0;
 	}
 
-	.amount-loading {
-		text-align: center;
-		color: #666;
+	.header-title {
 		font-size: 14px;
-	}
-
-	.amount-display {
+		font-weight: 600;
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		font-size: 16px;
-	}
-
-	.amount-label {
-		font-weight: 500;
-	}
-
-	.amount-value {
-		font-weight: 700;
-		font-size: 20px;
-		color: #333;
-	}
-
-	.amount-error {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-
-	.error-text {
-		color: #d32f2f;
-		font-size: 14px;
-		font-weight: 500;
-	}
-
-	.retry-button {
-		padding: 8px 16px;
-		background: #2196f3;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 13px;
-	}
-
-	.manual-input-section {
-		margin-top: 12px;
-	}
-
-	.manual-input-section label {
-		display: block;
-		font-size: 13px;
-		margin-bottom: 8px;
-		color: #666;
-	}
-
-	.manual-input-row {
-		display: flex;
 		gap: 8px;
+		color: var(--accent-light);
+		text-shadow: 0 0 10px var(--glow-accent);
 	}
 
-	.manual-input {
-		flex: 1;
-		padding: 8px 12px;
-		border: 2px solid #ddd;
-		border-radius: 6px;
-		font-size: 14px;
-	}
-
-	.manual-submit-button {
-		padding: 8px 16px;
-		background: #4caf50;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 13px;
-	}
-
-	.manual-warning {
-		margin-top: 8px;
-		font-size: 12px;
-		color: #ff9800;
-	}
-
-	/* ========== КНОПКИ ДЕЙСТВИЙ ========== */
-	.actions-section {
-		padding: 16px;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
+	.content {
 		flex: 1;
 		overflow-y: auto;
+		padding: 20px;
 	}
 
-	.action-button {
-		padding: 16px;
-		border: 2px solid #ddd;
-		border-radius: 8px;
+	:global(.btn) {
+		min-height: 60px;
+		padding: 16px 24px;
+		border: none;
+		border-radius: 12px;
+		font-size: 16px;
+		font-weight: 600;
 		cursor: pointer;
-		transition: all 0.2s;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 6px;
-		background: white;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		width: 100%;
+		color: white;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		position: relative;
+		overflow: hidden;
 	}
 
-	.action-button:hover:not(:disabled):not(.disabled) {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	:global(.btn::before) {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 0;
+		height: 0;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.2);
+		transform: translate(-50%, -50%);
+		transition: width 0.6s, height 0.6s;
 	}
 
-	.action-button:disabled,
-	.action-button.disabled {
+	:global(.btn:hover::before) {
+		width: 300px;
+		height: 300px;
+	}
+
+	:global(.btn:active) {
+		transform: scale(0.95);
+	}
+
+	:global(.btn:disabled) {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
-	.earn-button {
-		border-color: #4caf50;
+	:global(.btn-primary) {
+		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+		box-shadow: 0 4px 16px var(--glow-accent), 0 0 24px var(--glow-accent);
 	}
 
-	.earn-button:hover:not(:disabled) {
-		background: #f1f8f4;
+	:global(.btn-primary:hover:not(:disabled)) {
+		background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent) 100%);
+		box-shadow: 0 6px 24px var(--glow-accent), 0 0 32px var(--glow-accent);
+		transform: translateY(-2px);
 	}
 
-	.redeem-button {
-		border-color: #ff9800;
+	:global(.btn-secondary) {
+		background: linear-gradient(135deg, #64748b 0%, #475569 100%);
 	}
 
-	.redeem-button:hover:not(:disabled):not(.disabled) {
-		background: #fff8f0;
+	:global(.btn-secondary:hover:not(:disabled)) {
+		background: linear-gradient(135deg, #475569 0%, #334155 100%);
 	}
 
-	.button-icon {
-		font-size: 32px;
-	}
-
-	.button-title {
-		font-weight: 700;
-		font-size: 16px;
-		color: #333;
-	}
-
-	.button-details {
-		font-size: 13px;
-		color: #666;
-	}
-
-	.button-payment {
-		font-size: 14px;
-		font-weight: 600;
-		color: #ff6b00;
-		margin-top: 4px;
-	}
-
-	.button-disabled-reason {
-		font-size: 12px;
-		color: #999;
-		text-align: center;
-		margin-top: 4px;
-	}
-
-	/* ========== ОВЕРЛЕИ ========== */
-	.processing-overlay,
-	.success-overlay,
-	.error-overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.9);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		color: white;
-		gap: 16px;
-		padding: 24px;
-	}
-
-	.processing-message {
+	:global(.input) {
+		width: 100%;
+		height: 60px;
+		padding: 0 16px;
 		font-size: 18px;
-		font-weight: 500;
+		background: var(--bg-secondary);
+		border: 2px solid var(--border);
+		border-radius: 12px;
+		color: var(--text-primary);
+		transition: all 0.2s;
 	}
 
-	.success-icon,
-	.error-icon {
-		font-size: 64px;
+	:global(.input:focus) {
+		outline: none;
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--glow-accent);
 	}
 
-	.success-title,
-	.error-title {
-		font-size: 24px;
-		font-weight: 700;
+	:global(.input::placeholder) {
+		color: var(--text-secondary);
 	}
 
-	.success-message,
-	.error-message-text {
-		font-size: 16px;
-		text-align: center;
-		white-space: pre-line;
+	:global(.card) {
+		background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2332 100%);
+		border-radius: 16px;
+		padding: 20px;
+		margin-bottom: 16px;
+		border: 1px solid var(--border);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		transition: all 0.3s ease;
 	}
 
-	.success-auto-close {
-		font-size: 13px;
-		opacity: 0.7;
-		margin-top: 8px;
+	:global(.card:hover) {
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		transform: translateY(-2px);
 	}
 
-	.manual-confirm-section {
+	:global(.info-row) {
 		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		margin-top: 24px;
+		justify-content: space-between;
+		align-items: center;
+		padding: 12px 0;
+		border-bottom: 1px solid var(--border);
 	}
 
-	.force-confirm-button {
-		padding: 12px 24px;
-		background: #ff9800;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
+	:global(.info-row:last-child) {
+		border-bottom: none;
+	}
+
+	:global(.info-label) {
+		font-size: 16px;
+		color: var(--text-secondary);
+	}
+
+	:global(.info-value) {
+		font-size: 20px;
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	:global(.info-value.accent) {
+		color: var(--accent-light);
+		text-shadow: 0 0 10px var(--glow-accent);
+	}
+
+	:global(.info-value.warning) {
+		color: var(--warning);
+	}
+
+	:global(.status-badge) {
+		display: inline-block;
+		padding: 8px 16px;
+		border-radius: 8px;
 		font-size: 14px;
 		font-weight: 600;
+		text-transform: uppercase;
 	}
 
-	.force-warning {
-		font-size: 12px;
+	:global(.status-processing) {
+		background: rgba(245, 158, 11, 0.2);
+		color: var(--warning);
+		animation: processingBlink 1.5s ease-in-out infinite;
+	}
+
+	@keyframes processingBlink {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.6; }
+	}
+
+	:global(.divider) {
+		height: 2px;
+		background: linear-gradient(90deg, transparent 0%, var(--border) 50%, transparent 100%);
+		margin: 20px 0;
+	}
+
+	:global(.text-center) {
 		text-align: center;
-		opacity: 0.8;
 	}
 
-	.error-button {
-		padding: 12px 32px;
-		background: #d32f2f;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 16px;
-		font-weight: 600;
-		margin-top: 16px;
+	:global(.mt-2) { margin-top: 16px; }
+	:global(.mt-3) { margin-top: 24px; }
+	:global(.mb-2) { margin-bottom: 16px; }
+	:global(.mb-3) { margin-bottom: 24px; }
+
+	:global(.grid-2) {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
 	}
 
-	/* ========== НИЖНЯЯ ПАНЕЛЬ ========== */
-	.bottom-panel {
-		padding: 12px 16px;
-		border-top: 1px solid #e0e0e0;
-		text-align: center;
-		flex-shrink: 0;
+	:global(.success-animation) {
+		animation: successZoom 0.5s ease-out;
 	}
 
-	.reset-button {
-		padding: 8px 20px;
-		background: #f5f5f5;
-		border: 1px solid #ddd;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 13px;
-		color: #666;
-	}
-
-	.reset-button:hover {
-		background: #e0e0e0;
-	}
-
-	/* ========== ТЕСТОВЫЕ КНОПКИ ========== */
-	.dev-test-buttons {
-		position: absolute;
-		bottom: 60px;
-		left: 16px;
-		right: 16px;
-		background: rgba(33, 150, 243, 0.95);
-		padding: 12px;
-		border-radius: 8px;
-		display: flex;
-		gap: 8px;
-		align-items: center;
-	}
-
-	.dev-label {
-		color: white;
-		font-size: 12px;
-		font-weight: 600;
-	}
-
-	.dev-button {
-		padding: 6px 12px;
-		background: white;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 11px;
-		font-weight: 600;
-		color: #2196f3;
+	@keyframes successZoom {
+		0% {
+			transform: scale(0.8);
+			opacity: 0;
+		}
+		50% {
+			transform: scale(1.05);
+		}
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
 	}
 </style>

@@ -1,0 +1,59 @@
+<script lang="ts">
+	interface Props {
+		status: 'processing' | 'success' | 'error';
+		finalAmount?: number;
+		pointsRedeemed?: number;
+		cashbackEarned?: number;
+		newBalance?: number;
+		errorMessage?: string;
+	}
+
+	let { 
+		status, 
+		finalAmount = 0,
+		pointsRedeemed = 0,
+		cashbackEarned = 0,
+		newBalance = 0,
+		errorMessage = ''
+	}: Props = $props();
+</script>
+
+{#if status === 'processing'}
+	<div class="card text-center">
+		<h2 class="mb-3">Обработка...</h2>
+		<div class="status-badge status-processing">Транзакция обрабатывается</div>
+	</div>
+{:else if status === 'success'}
+	<div class="card success-animation text-center">
+		<h2 class="mb-3" style="color: var(--accent);">✓ Успешно!</h2>
+		<div class="info-row">
+			<span class="info-label">Оплачено</span>
+			<span class="info-value">{finalAmount.toFixed(2)} ₽</span>
+		</div>
+		{#if pointsRedeemed > 0}
+			<div class="info-row">
+				<span class="info-label">Списано баллов</span>
+				<span class="info-value warning">-{pointsRedeemed} ₽</span>
+			</div>
+		{/if}
+		<div class="info-row">
+			<span class="info-label">Начислено баллов</span>
+			<span class="info-value accent">+{cashbackEarned} ₽</span>
+		</div>
+		<div class="divider"></div>
+		<div class="info-row">
+			<span class="info-label">Новый баланс</span>
+			<span class="info-value accent" style="font-size: 24px;">
+				{newBalance.toFixed(0)} ₽
+			</span>
+		</div>
+		<p class="mt-3" style="color: var(--text-secondary); font-size: 14px;">
+			Автоматический переход к новой транзакции...
+		</p>
+	</div>
+{:else if status === 'error'}
+	<div class="card text-center" style="border-color: var(--danger);">
+		<h2 class="mb-3" style="color: var(--danger);">✗ Ошибка</h2>
+		<p style="color: var(--text-secondary);">{errorMessage}</p>
+	</div>
+{/if}

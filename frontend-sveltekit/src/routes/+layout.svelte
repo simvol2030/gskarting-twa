@@ -13,13 +13,14 @@
 
   let { children, data } = $props();
 
-  // Check if current route is loyalty app (not admin routes)
+  // Check if current route is loyalty app (not admin routes or cashier)
   const isLoyaltyApp = $derived(!$page.url.pathname.startsWith('/dashboard') &&
                                 !$page.url.pathname.startsWith('/users') &&
                                 !$page.url.pathname.startsWith('/posts') &&
                                 !$page.url.pathname.startsWith('/settings') &&
                                 !$page.url.pathname.startsWith('/login') &&
-                                !$page.url.pathname.startsWith('/logout'));
+                                !$page.url.pathname.startsWith('/logout') &&
+                                !$page.url.pathname.startsWith('/cashier'));
 
   let menuOpen = $state(false);
   let qrModalOpen = $state(false);

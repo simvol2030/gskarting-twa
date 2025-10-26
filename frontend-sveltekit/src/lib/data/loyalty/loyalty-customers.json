@@ -7,7 +7,7 @@
     "phone": "+7 (999) 123-45-67",
     "totalPurchases": 47,
     "totalSaved": 23450,
-    "qrCode": "991421856"
+    "qrCode": "99421856"
   },
   {
     "id": 2,
@@ -17,7 +17,7 @@
     "phone": "+7 (999) 234-56-78",
     "totalPurchases": 28,
     "totalSaved": 15200,
-    "qrCode": "992234567"
+    "qrCode": "99234567"
   },
   {
     "id": 3,
@@ -27,7 +27,7 @@
     "phone": "+7 (999) 345-67-89",
     "totalPurchases": 65,
     "totalSaved": 38900,
-    "qrCode": "993345678"
+    "qrCode": "99345678"
   },
   {
     "id": 4,
@@ -37,7 +37,7 @@
     "phone": "+7 (999) 456-78-90",
     "totalPurchases": 12,
     "totalSaved": 4200,
-    "qrCode": "994456789"
+    "qrCode": "99456789"
   },
   {
     "id": 5,
@@ -47,6 +47,6 @@
     "phone": "+7 (999) 567-89-01",
     "totalPurchases": 89,
     "totalSaved": 52100,
-    "qrCode": "995567890"
+    "qrCode": "99567890"
   }
 ]

@@ -1,14 +1,14 @@
-import stores from '$lib/data/loyalty/stores.json';
-import customers from '$lib/data/loyalty/loyalty-customers.json';
+import { getStoreConfig } from '$lib/api/cashier';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = ({ url }) => {
-	const storeId = parseInt(url.searchParams.get('store_id') || '1');
-	const store = stores.find((s) => s.id === storeId) || stores[0];
+export const load: PageLoad = async ({ url }) => {
+	const storeId = parseInt(url.searchParams.get('storeId') || '1');
+
+	// Загружаем конфигурацию магазина
+	const storeConfig = await getStoreConfig(storeId);
 
 	return {
-		store,
-		customers,
-		allStores: stores
+		storeId,
+		storeConfig
 	};
 };
