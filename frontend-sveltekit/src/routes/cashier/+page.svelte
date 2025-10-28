@@ -9,7 +9,6 @@
 	import CheckAmountInput from './components/CheckAmountInput.svelte';
 	import CheckSummary from './components/CheckSummary.svelte';
 	import RedeemChoice from './components/RedeemChoice.svelte';
-	import TransactionButtons from './components/TransactionButtons.svelte';
 	import TransactionStatus from './components/TransactionStatus.svelte';
 	import RecentTransactions from './components/RecentTransactions.svelte';
 
@@ -32,7 +31,7 @@
 	let checkAmount = $state(0);
 
 	// ===== Выбор: списать или накапливать =====
-	let isRedeemSelected = $state(true); // По умолчанию "Списать"
+	let isRedeemSelected = $state(false); // По умолчанию ничего не выбрано
 
 	// ===== История транзакций =====
 	let recentTransactions = $state<Transaction[]>([]);
@@ -103,17 +102,21 @@
 		const amount = parseFloat(checkAmountInput);
 		if (amount > 0) {
 			checkAmount = amount;
-			isRedeemSelected = true; // По умолчанию "Списать" при переходе на шаг 3
+			isRedeemSelected = false; // По умолчанию ничего не выбрано
 			uiState = 'ready';
 		}
 	}
 
 	function handleRedeemSelect() {
 		isRedeemSelected = true;
+		// Сразу запускаем транзакцию при выборе "Списать"
+		handleCompleteTransaction();
 	}
 
 	function handleAccumulateSelect() {
 		isRedeemSelected = false;
+		// Сразу запускаем транзакцию при выборе "Копить"
+		handleCompleteTransaction();
 	}
 
 	async function handleCompleteTransaction() {
@@ -151,7 +154,7 @@
 	function resetTransaction() {
 		customer = null;
 		checkAmount = 0;
-		isRedeemSelected = true; // Сброс на "Списать" по умолчанию
+		isRedeemSelected = false; // Сброс: ничего не выбрано
 		qrInput = '';
 		checkAmountInput = '';
 		uiState = 'idle';
@@ -219,11 +222,10 @@
 				onAccumulateSelect={handleAccumulateSelect}
 			/>
 
-			<!-- Кнопки завершения/отмены -->
-			<TransactionButtons
-				onComplete={handleCompleteTransaction}
-				onCancel={resetTransaction}
-			/>
+			<!-- Кнопка отмены -->
+			<button class="btn btn-secondary mt-2" onclick={resetTransaction}>
+				Отмена
+			</button>
 		{/if}
 
 		<!-- Шаг 4: Обработка транзакции -->
@@ -286,32 +288,36 @@
 	}
 
 	.app-container {
-		width: calc(100vw + 230px);
-		min-width: 1030px;
-		height: 100vh;
+		width: 800px;
+		max-width: 800px;
+		height: 650px;
+		max-height: 650px;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+		border-radius: 12px;
 	}
 
 	.header {
-		height: 44px;
+		height: 36px;
 		background: linear-gradient(135deg, var(--bg-header) 0%, var(--bg-secondary) 100%);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 16px;
+		padding: 0 12px;
 		border-bottom: 2px solid var(--primary);
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 		flex-shrink: 0;
+		border-radius: 12px 12px 0 0;
 	}
 
 	.header-title {
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 600;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 		color: var(--accent-light);
 		text-shadow: 0 0 10px var(--glow-accent);
 	}
@@ -319,15 +325,15 @@
 	.content {
 		flex: 1;
 		overflow-y: auto;
-		padding: 20px;
+		padding: 16px;
 	}
 
 	:global(.btn) {
-		min-height: 60px;
-		padding: 16px 24px;
+		min-height: 50px;
+		padding: 12px 20px;
 		border: none;
-		border-radius: 12px;
-		font-size: 16px;
+		border-radius: 10px;
+		font-size: 14px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -388,12 +394,12 @@
 
 	:global(.input) {
 		width: 100%;
-		height: 60px;
-		padding: 0 16px;
-		font-size: 18px;
+		height: 50px;
+		padding: 0 14px;
+		font-size: 16px;
 		background: var(--bg-secondary);
 		border: 2px solid var(--border);
-		border-radius: 12px;
+		border-radius: 10px;
 		color: var(--text-primary);
 		transition: all 0.2s;
 	}
@@ -410,24 +416,24 @@
 
 	:global(.card) {
 		background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2332 100%);
-		border-radius: 16px;
-		padding: 20px;
-		margin-bottom: 16px;
+		border-radius: 12px;
+		padding: 14px;
+		margin-bottom: 12px;
 		border: 1px solid var(--border);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 		transition: all 0.3s ease;
 	}
 
 	:global(.card:hover) {
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-		transform: translateY(-2px);
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+		transform: translateY(-1px);
 	}
 
 	:global(.info-row) {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 12px 0;
+		padding: 8px 0;
 		border-bottom: 1px solid var(--border);
 	}
 
@@ -436,12 +442,12 @@
 	}
 
 	:global(.info-label) {
-		font-size: 16px;
+		font-size: 14px;
 		color: var(--text-secondary);
 	}
 
 	:global(.info-value) {
-		font-size: 20px;
+		font-size: 16px;
 		font-weight: 600;
 		color: var(--text-primary);
 	}
@@ -485,15 +491,15 @@
 		text-align: center;
 	}
 
-	:global(.mt-2) { margin-top: 16px; }
-	:global(.mt-3) { margin-top: 24px; }
-	:global(.mb-2) { margin-bottom: 16px; }
-	:global(.mb-3) { margin-bottom: 24px; }
+	:global(.mt-2) { margin-top: 12px; }
+	:global(.mt-3) { margin-top: 18px; }
+	:global(.mb-2) { margin-bottom: 12px; }
+	:global(.mb-3) { margin-bottom: 18px; }
 
 	:global(.grid-2) {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 12px;
+		gap: 10px;
 	}
 
 	:global(.success-animation) {

@@ -10,37 +10,61 @@
 
 <div class="card compact">
 	<div class="info-row compact">
-		<span class="info-label compact">Клиент</span>
+		<span class="info-label-icon compact" title="Клиент">
+			👤 <span class="info-hint">ⓘ</span>
+		</span>
 		<span class="info-value compact">{customer.name || 'Без имени'}</span>
 	</div>
 	<div class="info-row compact">
-		<span class="info-label compact">Номер карты</span>
+		<span class="info-label-icon compact" title="Номер карты">
+			💳 <span class="info-hint">ⓘ</span>
+		</span>
 		<span class="info-value compact" style="font-family: monospace;">{customer.cardNumber}</span>
 	</div>
 	<div class="info-row compact">
-		<span class="info-label compact">Баланс баллов</span>
+		<span class="info-label-icon compact" title="Баланс баллов">
+			💰 <span class="info-hint">ⓘ</span>
+		</span>
 		<span class="info-value accent compact">{customer.balance.toFixed(0)} ₽</span>
 	</div>
 </div>
 
 <style>
 	:global(.card.compact) {
-		padding: 16px;
+		padding: 12px;
 		margin-bottom: 0;
 	}
 
 	:global(.info-row.compact) {
-		padding: 8px 0;
+		padding: 6px 0;
 	}
 
-	:global(.info-label.compact) {
-		font-size: 14px;
+	:global(.info-label-icon.compact) {
+		font-size: 20px;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		cursor: help;
+		transition: opacity 0.2s;
+	}
+
+	:global(.info-label-icon.compact:hover) {
+		opacity: 0.8;
+	}
+
+	:global(.info-hint) {
+		font-size: 12px;
 		color: var(--text-secondary);
-		font-weight: 500;
+		opacity: 0.6;
+		transition: opacity 0.2s;
+	}
+
+	:global(.info-label-icon:hover .info-hint) {
+		opacity: 1;
 	}
 
 	:global(.info-value.compact) {
-		font-size: 18px;
+		font-size: 16px;
 		color: #ffffff !important;
 		font-weight: 600;
 	}
