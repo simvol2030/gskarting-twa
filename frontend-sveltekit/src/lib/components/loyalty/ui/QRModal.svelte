@@ -26,7 +26,7 @@
       // Генерируем QR-код
       if (!qrCodeDataURL) {
         isGenerating = true;
-        generateQRCodeImage(userId, cardNumber)
+        generateQRCodeImage(cardNumber)
           .then((dataURL) => {
             qrCodeDataURL = dataURL;
             isGenerating = false;

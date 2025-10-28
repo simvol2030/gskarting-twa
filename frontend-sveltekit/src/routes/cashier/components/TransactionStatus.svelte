@@ -20,30 +20,30 @@
 
 {#if status === 'processing'}
 	<div class="card text-center">
-		<h2 class="mb-3">Обработка...</h2>
-		<div class="status-badge status-processing">Транзакция обрабатывается</div>
+		<h2 class="mb-3" style="font-size: 23px;">Обработка...</h2>
+		<div class="status-badge status-processing" style="font-size: 15px;">Транзакция обрабатывается</div>
 	</div>
 {:else if status === 'success'}
 	<div class="card success-animation text-center">
-		<h2 class="mb-3" style="color: var(--accent);">✓ Успешно!</h2>
+		<h2 class="mb-3" style="color: var(--accent); font-size: 25px;">✓ Успешно!</h2>
 		<div class="info-row">
-			<span class="info-label">Оплачено</span>
-			<span class="info-value">{finalAmount.toFixed(2)} ₽</span>
+			<span class="info-label" style="font-size: 16px;">Оплачено</span>
+			<span class="info-value" style="font-size: 20px;">{finalAmount.toFixed(2)} ₽</span>
 		</div>
 		{#if pointsRedeemed > 0}
 			<div class="info-row">
-				<span class="info-label">Списано баллов</span>
-				<span class="info-value warning">-{pointsRedeemed} ₽</span>
+				<span class="info-label" style="font-size: 16px;">Списано баллов</span>
+				<span class="info-value warning" style="font-size: 20px;">-{pointsRedeemed} ₽</span>
 			</div>
 		{/if}
 		<div class="info-row">
-			<span class="info-label">Начислено баллов</span>
-			<span class="info-value accent">+{cashbackEarned} ₽</span>
+			<span class="info-label" style="font-size: 16px;">Начислено баллов</span>
+			<span class="info-value accent" style="font-size: 20px;">+{cashbackEarned} ₽</span>
 		</div>
 		<div class="divider"></div>
 		<div class="info-row">
-			<span class="info-label">Новый баланс</span>
-			<span class="info-value accent" style="font-size: 24px;">
+			<span class="info-label" style="font-size: 16px;">Новый баланс</span>
+			<span class="info-value accent" style="font-size: 35px;">
 				{newBalance.toFixed(0)} ₽
 			</span>
 		</div>
@@ -53,7 +53,7 @@
 	</div>
 {:else if status === 'error'}
 	<div class="card text-center" style="border-color: var(--danger);">
-		<h2 class="mb-3" style="color: var(--danger);">✗ Ошибка</h2>
-		<p style="color: var(--text-secondary);">{errorMessage}</p>
+		<h2 class="mb-3" style="color: var(--danger); font-size: 25px;">✗ Ошибка</h2>
+		<p style="color: var(--text-secondary); font-size: 18px;">{errorMessage}</p>
 	</div>
 {/if}

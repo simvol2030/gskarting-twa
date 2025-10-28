@@ -143,6 +143,10 @@
 		gap: 8px;
 	}
 
+	.button-group .btn-secondary {
+		font-size: 9px;
+	}
+
 	.test-buttons {
 		display: flex;
 		gap: 8px;

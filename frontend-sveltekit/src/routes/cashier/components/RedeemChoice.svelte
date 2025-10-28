@@ -30,7 +30,7 @@
 			class:selected={isRedeemSelected}
 			onclick={onRedeemSelect}
 		>
-			<div class="choice-title">💳 СПИСАТЬ</div>
+			<div class="choice-title">СПИСАТЬ</div>
 			<div class="choice-amount">-{maxRedeemPoints} ₽</div>
 		</button>
 
@@ -40,32 +40,32 @@
 			class:selected={!isRedeemSelected}
 			onclick={onAccumulateSelect}
 		>
-			<div class="choice-title">💰 КОПИТЬ</div>
+			<div class="choice-title">КОПИТЬ</div>
 		</button>
 	</div>
 </div>
 
 <style>
 	:global(.card.compact) {
-		padding: 12px;
+		padding: 6px;
 		margin-bottom: 0;
 	}
 
 	.info-hint-text {
 		text-align: center;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 600;
 		color: var(--text-primary);
-		margin-bottom: 10px;
+		margin-bottom: 4px;
 		cursor: help;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 4px;
+		gap: 3px;
 	}
 
 	.info-hint-icon {
-		font-size: 12px;
+		font-size: 11px;
 		color: var(--text-secondary);
 		opacity: 0.6;
 	}
@@ -77,52 +77,48 @@
 	.choice-buttons {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 10px;
-		margin-top: 10px;
+		gap: 6px;
+		margin-top: 4px;
 	}
 
 	.choice-btn {
-		background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2332 100%);
-		border: 2px solid var(--border);
-		border-radius: 12px;
-		padding: 16px 12px;
+		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+		border: 1px solid var(--accent);
+		border-radius: 6px;
+		padding: 8px 6px;
 		cursor: pointer;
 		transition: all 0.3s ease;
 		text-align: center;
-		min-height: 100px;
+		min-height: 50px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 8px;
+		gap: 4px;
+		color: white;
+		box-shadow: 0 2px 8px var(--glow-accent);
 	}
 
 	.choice-btn:hover {
-		border-color: var(--accent);
 		transform: translateY(-2px);
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		box-shadow: 0 6px 24px var(--glow-accent), 0 0 32px var(--glow-accent);
+		border-color: var(--accent-light);
 	}
 
-	.choice-btn.selected {
-		border-color: var(--accent);
-		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
-		color: white;
-		box-shadow: 0 0 24px var(--glow-accent);
+	.choice-btn:active {
+		transform: translateY(0);
+		box-shadow: 0 2px 8px var(--glow-accent);
 	}
 
 	.choice-title {
-		font-size: 16px;
+		font-size: 14px;
 		font-weight: 600;
 	}
 
 	.choice-amount {
-		font-size: 22px;
+		font-size: 19px;
 		font-weight: 700;
-		color: var(--text-primary);
-	}
-
-	.choice-btn.selected .choice-amount {
 		color: white;
-		text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+		text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
 	}
 </style>
