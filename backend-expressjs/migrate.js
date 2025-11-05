@@ -1,0 +1,32 @@
+/**
+ * Скрипт для применения миграции pending_discounts
+ * Запуск: node migrate.js
+ */
+
+const Database = require('better-sqlite3');
+const { join } = require('path');
+const { readFileSync } = require('fs');
+
+const SQLITE_PATH = join(__dirname, '..', 'data', 'db', 'sqlite', 'app.db');
+const MIGRATION_SQL = join(__dirname, 'src', 'db', 'create-pending-discounts.sql');
+
+console.log('🔄 Применение миграции pending_discounts...');
+console.log(`📁 База данных: ${SQLITE_PATH}`);
+
+const db = new Database(SQLITE_PATH);
+
+try {
+  const migration = readFileSync(MIGRATION_SQL, 'utf8');
+
+  db.exec(migration);
+
+  console.log('✅ Миграция применена успешно!');
+  console.log('✅ Таблица pending_discounts создана');
+  console.log('✅ Индексы созданы');
+
+} catch (error) {
+  console.error('❌ Ошибка миграции:', error.message);
+  process.exit(1);
+} finally {
+  db.close();
+}

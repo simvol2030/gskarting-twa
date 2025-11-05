@@ -52,12 +52,12 @@ export async function parseQRData(qrString: string): Promise<{
 			};
 		}
 
-		// Форматируем номер карты с пробелом (XXX XXX)
-		const cardNumberFormatted = cardNumberClean.replace(/(\d{3})(\d{3})/, '$1 $2');
+		// НЕ форматируем номер карты с пробелом - backend ожидает без пробелов
+		// const cardNumberFormatted = cardNumberClean.replace(/(\d{3})(\d{3})/, '$1 $2');
 
 		return {
 			valid: true,
-			cardNumber: cardNumberFormatted
+			cardNumber: cardNumberClean  // Возвращаем без пробелов!
 		};
 	} catch (error) {
 		return { valid: false, error: 'Ошибка при разборе QR-кода' };

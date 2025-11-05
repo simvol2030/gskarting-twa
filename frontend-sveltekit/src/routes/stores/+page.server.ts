@@ -1,29 +1,35 @@
-import { db } from '$lib/server/db/client';
-import { stores } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { PUBLIC_BACKEND_URL } from '$env/static/public';
+
+const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 /**
- * Data loader for Stores page - DATABASE VERSION
+ * Data loader for Stores page - API VERSION
+ * Fetches all active stores from backend API
  */
-export const load: PageServerLoad = async () => {
-  const allStores = await db
-    .select()
-    .from(stores)
-    .where(eq(stores.is_active, true))
-    .all();
+export const load: PageServerLoad = async ({ fetch }) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/content/stores`);
 
-  // Parse features JSON string to array and restructure coords
-  const parsedStores = allStores.map((store) => ({
-    ...store,
-    features: JSON.parse(store.features),
-    coords: {
-      lat: store.coords_lat,
-      lng: store.coords_lng
+    if (!response.ok) {
+      console.error('[STORES PAGE] API error:', response.status, response.statusText);
+      // Return empty data on error instead of failing
+      return {
+        stores: []
+      };
     }
-  }));
 
-  return {
-    stores: parsedStores
-  };
+    const data = await response.json();
+
+    return {
+      stores: data.stores || []
+    };
+
+  } catch (error) {
+    console.error('[STORES PAGE] Failed to fetch stores:', error);
+    // Return empty data on error instead of failing
+    return {
+      stores: []
+    };
+  }
 };

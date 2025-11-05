@@ -1,53 +1,41 @@
-import { db } from '$lib/server/db/client';
-import { recommendations, offers, products } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
-export const load: PageServerLoad = async () => {
-  // Fetch recommendations (generic, not user-specific)
-  const allRecommendations = await db
-    .select()
-    .from(recommendations)
-    .where(eq(recommendations.is_active, true))
-    .all();
+const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
-  // Fetch offers
-  const allOffers = await db
-    .select()
-    .from(offers)
-    .where(eq(offers.is_active, true))
-    .all();
+/**
+ * Data loader for Home page - API VERSION
+ * Fetches recommendations, offers, and products from backend API
+ */
+export const load: PageServerLoad = async ({ fetch }) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/content/home`);
 
-  // Parse conditions JSON and map to camelCase
-  const parsedOffers = allOffers.map((offer) => ({
-    id: offer.id,
-    title: offer.title,
-    description: offer.description,
-    icon: offer.icon,
-    iconColor: offer.icon_color, // snake_case -> camelCase
-    deadline: offer.deadline,
-    deadlineClass: offer.deadline_class, // snake_case -> camelCase
-    details: offer.details,
-    conditions: JSON.parse(offer.conditions),
-    is_active: offer.is_active
-  }));
+    if (!response.ok) {
+      console.error('[HOME PAGE] API error:', response.status, response.statusText);
+      // Return empty data on error instead of failing
+      return {
+        recommendations: [],
+        monthOffers: [],
+        topProducts: []
+      };
+    }
 
-  // Fetch products
-  const allProducts = await db
-    .select()
-    .from(products)
-    .where(eq(products.is_active, true))
-    .all();
+    const data = await response.json();
 
-  // Берём первые 2 акции для "Акции месяца"
-  const monthOffers = parsedOffers.slice(0, 2);
+    return {
+      recommendations: data.recommendations || [],
+      monthOffers: data.monthOffers || [],
+      topProducts: data.topProducts || []
+    };
 
-  // Берём первые 6 товаров для "Топовые товары"
-  const topProducts = allProducts.slice(0, 6);
-
-  return {
-    recommendations: allRecommendations,
-    monthOffers,
-    topProducts
-  };
+  } catch (error) {
+    console.error('[HOME PAGE] Failed to fetch home data:', error);
+    // Return empty data on error instead of failing
+    return {
+      recommendations: [],
+      monthOffers: [],
+      topProducts: []
+    };
+  }
 };

@@ -11,13 +11,18 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 
 	// Content Security Policy - защита от XSS атак
 	// Разрешаем собственные скрипты, стили и Telegram SDK
+	const isDev = process.env.NODE_ENV !== 'production';
+
 	const csp = [
 		"default-src 'self'",
 		"script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org", // Telegram Web App SDK
 		"style-src 'self' 'unsafe-inline'", // unsafe-inline для inline стилей Svelte
 		"img-src 'self' data: https:",
 		"font-src 'self' data:",
-		"connect-src 'self' https://api.telegram.org https://*.telegram.org", // Telegram Bot API
+		// В dev разрешаем localhost:3000 (backend), localhost:3015 (backend alt), и localhost:3333 (agent), в prod только HTTPS
+		isDev
+			? "connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 http://localhost:3015 http://127.0.0.1:3015 http://localhost:3333 http://127.0.0.1:3333 https://api.telegram.org https://*.telegram.org"
+			: "connect-src 'self' https://api.telegram.org https://*.telegram.org https://murzicoin.murzico.ru",
 		"frame-ancestors 'none'", // запрещаем iframe embedding
 		"base-uri 'self'",
 		"form-action 'self'"

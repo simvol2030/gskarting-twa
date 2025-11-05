@@ -1,0 +1,18 @@
+[Unit]
+Description=Murzicoin Loyalty Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=webmaster
+WorkingDirectory=/opt/websites/murzicoin.murzico.ru/telegram-bot
+ExecStart=/usr/bin/node /opt/websites/murzicoin.murzico.ru/telegram-bot/dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=murzicoin-bot
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

@@ -22,6 +22,8 @@
 	let qrInput = $state('');
 	let isSearching = $state(false);
 	let searchError = $state('');
+	let errorMessage = $state(''); // 🔴 FIX: Добавляем хранение конкретной ошибки
+	let isProcessingTransaction = $state(false); // 🔴 FIX: Защита от двойного клика
 
 	// ===== Данные клиента =====
 	let customer = $state<Customer | null>(null);
@@ -53,7 +55,7 @@
 	});
 
 	let canRedeem = $derived(() => {
-		return customer !== null && customer.balance > 0 && maxRedeemPoints() > 0;
+		return customer !== null && customer.balance >= 0 && maxRedeemPoints() > 0;
 	});
 
 	// Сумма списания зависит от выбора пользователя
@@ -83,7 +85,28 @@
 
 			if (foundCustomer) {
 				customer = foundCustomer;
-				uiState = 'customer_found';
+				console.log('[CASHIER] Customer found:', customer);
+
+				// Получаем сумму чека от Agent'а (из amount.json от 1С)
+				try {
+					const agentResponse = await fetch('http://localhost:3333/get-amount');
+					if (agentResponse.ok) {
+						const agentData = await agentResponse.json();
+						checkAmount = agentData.amount || 0;
+						checkAmountInput = checkAmount.toString();
+
+						console.log('[CASHIER] Amount from Agent:', checkAmount);
+
+						// Сразу переходим к выбору "Списать/Копить" (минуя экран ввода суммы)
+						uiState = 'ready';
+					} else {
+						console.warn('[CASHIER] Agent не отвечает, переход к ручному вводу');
+						uiState = 'customer_found'; // Fallback: ручной ввод
+					}
+				} catch (err) {
+					console.error('[CASHIER] Ошибка получения суммы от Agent:', err);
+					uiState = 'customer_found'; // Fallback: ручной ввод
+				}
 			} else {
 				searchError = 'Клиент не найден';
 				setTimeout(() => {
@@ -108,32 +131,58 @@
 	}
 
 	function handleRedeemSelect() {
+		if (isProcessingTransaction) return; // 🔴 FIX: Блокируем повторный вызов
+
 		isRedeemSelected = true;
 		// Сразу запускаем транзакцию при выборе "Списать"
 		handleCompleteTransaction();
 	}
 
 	function handleAccumulateSelect() {
+		if (isProcessingTransaction) return; // 🔴 FIX: Блокируем повторный вызов
+
 		isRedeemSelected = false;
 		// Сразу запускаем транзакцию при выборе "Копить"
 		handleCompleteTransaction();
 	}
 
 	async function handleCompleteTransaction() {
-		if (!customer) return;
+		if (!customer || isProcessingTransaction) return;
 
+		isProcessingTransaction = true;
 		uiState = 'processing';
+		errorMessage = '';
 
-		const result = await createTransaction({
-			customer,
-			storeId: data.storeId,
-			checkAmount,
-			pointsToRedeem: pointsToRedeem(),
-			cashbackAmount: cashbackAmount(),
-			finalAmount: finalAmount()
-		});
+		try {
+			// Создать транзакцию в backend (обновит баланс клиента)
+			// Agent потом заберёт через polling и передаст в 1C через файлы
+			console.log('[CASHIER] Creating transaction:', {
+				customer: customer.name,
+				checkAmount,
+				pointsToRedeem: pointsToRedeem(),
+				cashbackAmount: cashbackAmount(),
+				finalAmount: finalAmount()
+			});
 
-		if (result.success) {
+			const result = await createTransaction({
+				customer,
+				storeId: data.storeId,
+				checkAmount,
+				pointsToRedeem: pointsToRedeem(),
+				cashbackAmount: cashbackAmount(),
+				finalAmount: finalAmount()
+			});
+
+			if (!result.success) {
+				console.error('[CASHIER] Failed to create transaction:', result.error);
+				errorMessage = result.error || 'Ошибка при создании транзакции';
+				uiState = 'error';
+				return;
+			}
+
+			console.log('[CASHIER] Transaction created successfully:', result.transaction);
+
+			// Успех!
 			// Обновляем баланс клиента в локальном состоянии
 			customer.balance = customer.balance - pointsToRedeem() + cashbackAmount();
 
@@ -146,8 +195,13 @@
 			setTimeout(() => {
 				resetTransaction();
 			}, 5500);
-		} else {
+
+		} catch (error) {
+			console.error('[CASHIER] Error in transaction flow:', error);
+			errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
 			uiState = 'error';
+		} finally {
+			isProcessingTransaction = false; // 🔴 FIX: Разблокируем в конце
 		}
 	}
 
@@ -165,6 +219,16 @@
 </script>
 
 <div class="app-container">
+	<!-- Error Handler: Show if backend API failed -->
+	{#if data.error}
+		<div class="fatal-error">
+			<h2>❌ Ошибка подключения к backend</h2>
+			<p>{data.error}</p>
+			<button class="btn btn-primary" onclick={() => window.location.reload()}>
+				🔄 Перезагрузить страницу
+			</button>
+		</div>
+	{:else}
 	<!-- Header -->
 	<div class="header">
 		<div class="header-title">
@@ -248,13 +312,14 @@
 		{#if uiState === 'error'}
 			<TransactionStatus
 				status="error"
-				errorMessage="Ошибка при создании транзакции"
+				errorMessage={errorMessage || 'Ошибка при создании транзакции'}
 			/>
 			<button class="btn btn-secondary mt-2" onclick={resetTransaction}>
 				Попробовать снова
 			</button>
 		{/if}
 	</div>
+	{/if}
 </div>
 
 <style>
@@ -288,15 +353,37 @@
 	}
 
 	.app-container {
-		width: 327px;
-		max-width: 327px;
-		height: 180px;
-		max-height: 180px;
+		width: 330px;
+		max-width: 330px;
+		height: 360px;
+		max-height: 360px;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 		border-radius: 8px;
+	}
+
+	.fatal-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 20px;
+		text-align: center;
+		height: 100%;
+		background: var(--bg-secondary);
+	}
+
+	.fatal-error h2 {
+		color: var(--danger);
+		margin-bottom: 16px;
+	}
+
+	.fatal-error p {
+		color: var(--text-secondary);
+		margin-bottom: 20px;
+		white-space: pre-wrap;
 	}
 
 	.header {

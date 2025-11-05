@@ -1,33 +1,35 @@
-import { db } from '$lib/server/db/client';
-import { offers } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { PUBLIC_BACKEND_URL } from '$env/static/public';
+
+const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 /**
- * Data loader for Offers page - DATABASE VERSION
+ * Data loader for Offers page - API VERSION
+ * Fetches all active offers from backend API
  */
-export const load: PageServerLoad = async () => {
-  const allOffers = await db
-    .select()
-    .from(offers)
-    .where(eq(offers.is_active, true))
-    .all();
+export const load: PageServerLoad = async ({ fetch }) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/content/offers`);
 
-  // Parse conditions JSON and map to camelCase
-  const parsedOffers = allOffers.map((offer) => ({
-    id: offer.id,
-    title: offer.title,
-    description: offer.description,
-    icon: offer.icon,
-    iconColor: offer.icon_color, // snake_case -> camelCase
-    deadline: offer.deadline,
-    deadlineClass: offer.deadline_class, // snake_case -> camelCase
-    details: offer.details,
-    conditions: JSON.parse(offer.conditions),
-    is_active: offer.is_active
-  }));
+    if (!response.ok) {
+      console.error('[OFFERS PAGE] API error:', response.status, response.statusText);
+      // Return empty data on error instead of failing
+      return {
+        offers: []
+      };
+    }
 
-  return {
-    offers: parsedOffers
-  };
+    const data = await response.json();
+
+    return {
+      offers: data.offers || []
+    };
+
+  } catch (error) {
+    console.error('[OFFERS PAGE] Failed to fetch offers:', error);
+    // Return empty data on error instead of failing
+    return {
+      offers: []
+    };
+  }
 };

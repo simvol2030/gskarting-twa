@@ -1,0 +1,530 @@
+/**
+ * 1С Integration API Routes
+ *
+ * Endpoints для интеграции с 1С:Розница 3.0
+ *
+ * Сценарий работы:
+ * 1. 1С → GET /api/1c/check-amount?storeId=1 → получить сумму предчека
+ * 2. Loyalty → POST /api/1c/apply-discount → применить скидку
+ * 3. 1С → POST /api/1c/confirm → подтвердить транзакцию
+ */
+
+import { Router, Request, Response } from 'express';
+import { db } from '../db/client';
+import { cashierTransactions, loyaltyUsers, pendingDiscounts } from '../db/schema';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+
+const router = Router();
+
+// ==================== Временное хранилище предчека ====================
+// В production это должно быть в Redis или БД
+interface PreCheckData {
+	checkAmount: number;
+	storeId: number;
+	timestamp: string;
+}
+
+// Хранилище: ключ = storeId, значение = данные предчека
+const preCheckStore = new Map<number, PreCheckData>();
+
+// ==================== GET /api/1c/check-amount ====================
+/**
+ * Получить сумму текущего предчека
+ *
+ * Query params:
+ * - storeId: number - ID магазина
+ *
+ * Response:
+ * {
+ *   "checkAmount": 1500.00,
+ *   "storeId": 1,
+ *   "timestamp": "2025-10-29T15:30:00Z"
+ * }
+ */
+router.get('/check-amount', async (req: Request, res: Response) => {
+	try {
+		const storeId = parseInt(req.query.storeId as string);
+
+		if (!storeId || isNaN(storeId)) {
+			return res.status(400).json({
+				error: 'Invalid storeId parameter'
+			});
+		}
+
+		// ИНТЕГРАЦИЯ С АГЕНТОМ: Читаем сумму из агента (который читает из 1С)
+		const AGENT_URL = process.env.AGENT_URL || 'http://localhost:3333';
+
+		try {
+			const agentResponse = await fetch(`${AGENT_URL}/get-amount`);
+
+			if (!agentResponse.ok) {
+				throw new Error('Agent not responding');
+			}
+
+			const agentData = await agentResponse.json() as { amount?: number; timestamp?: string };
+
+			console.log(`[1C API] Check amount from agent (store ${storeId}): ${agentData.amount}₽`);
+
+			return res.json({
+				checkAmount: agentData.amount || 0,
+				storeId,
+				timestamp: agentData.timestamp || new Date().toISOString()
+			});
+
+		} catch (agentError) {
+			// Если агент недоступен - возвращаем 0 (fallback)
+			console.warn('[1C API] Agent unavailable, returning 0:', agentError);
+			return res.json({
+				checkAmount: 0,
+				storeId,
+				timestamp: new Date().toISOString()
+			});
+		}
+
+	} catch (error) {
+		console.error('[1C API] Error getting check amount:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
+});
+
+// ==================== POST /api/1c/set-check-amount ====================
+/**
+ * Установить сумму предчека (вызывается из 1С)
+ *
+ * Body:
+ * {
+ *   "checkAmount": 1500.00,
+ *   "storeId": 1
+ * }
+ */
+router.post('/set-check-amount', async (req: Request, res: Response) => {
+	try {
+		const { checkAmount, storeId } = req.body;
+
+		if (!checkAmount || !storeId) {
+			return res.status(400).json({
+				error: 'Missing required fields: checkAmount, storeId'
+			});
+		}
+
+		// Сохраняем в временное хранилище
+		preCheckStore.set(storeId, {
+			checkAmount: parseFloat(checkAmount),
+			storeId: parseInt(storeId),
+			timestamp: new Date().toISOString()
+		});
+
+		console.log(`[1C API] Pre-check set for store ${storeId}: ${checkAmount}₽`);
+
+		return res.json({
+			success: true,
+			checkAmount: parseFloat(checkAmount),
+			storeId: parseInt(storeId)
+		});
+
+	} catch (error) {
+		console.error('[1C API] Error setting check amount:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
+});
+
+// ==================== POST /api/1c/apply-discount ====================
+/**
+ * Применить скидку лояльности к чеку
+ *
+ * Body:
+ * {
+ *   "cardNumber": "12345678",
+ *   "checkAmount": 1500.00,
+ *   "discountAmount": 150.00,
+ *   "earnPoints": 75.00,
+ *   "storeId": 1
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "transactionId": 42,
+ *   "finalAmount": 1350.00
+ * }
+ */
+router.post('/apply-discount', async (req: Request, res: Response) => {
+	try {
+		const { cardNumber, checkAmount, discountAmount, earnPoints, storeId } = req.body;
+
+		if (!cardNumber || !checkAmount || discountAmount === undefined || !storeId) {
+			return res.status(400).json({
+				error: 'Missing required fields: cardNumber, checkAmount, discountAmount, storeId'
+			});
+		}
+
+		// Найти пользователя по номеру карты
+		// Поддержка двух форматов:
+		// 1. "654321" - обычный 6-значный номер карты
+		// 2. "99654321" - QR код с префиксом "99" (убираем префикс)
+		let searchCardNumber = cardNumber;
+		if (cardNumber.startsWith('99') && cardNumber.length === 8) {
+			searchCardNumber = cardNumber.substring(2); // Убираем "99"
+		}
+
+		const customer = await db.query.loyaltyUsers.findFirst({
+			where: eq(loyaltyUsers.card_number, searchCardNumber)
+		});
+
+		if (!customer) {
+			return res.status(404).json({
+				error: 'Customer not found',
+				cardNumber: searchCardNumber,
+				originalCardNumber: cardNumber
+			});
+		}
+
+		// Рассчитываем финальную сумму
+		const finalAmount = parseFloat(checkAmount) - parseFloat(discountAmount || 0);
+
+		// Создаем транзакцию в БД
+		const transactionType = discountAmount > 0 ? 'redeem' : 'earn';
+
+		const [transaction] = await db.insert(cashierTransactions).values({
+			customer_id: customer.id,
+			store_id: parseInt(storeId),
+			type: transactionType,
+			purchase_amount: parseFloat(checkAmount),
+			points_amount: Math.round(parseFloat(earnPoints || 0)),
+			discount_amount: parseFloat(discountAmount || 0),
+			metadata: JSON.stringify({
+				cardNumber,
+				cashierName: 'Кассир',
+				terminalId: `STORE_${storeId}`,
+				paymentMethod: 'mixed' // наличные + баллы
+			}),
+			synced_with_1c: false // Пока не синхронизировано
+		}).returning();
+
+		console.log(`[1C API] Transaction created: ID=${transaction.id}, discount=${discountAmount}₽`);
+
+		// 🔴 NEW ARCHITECTURE: Создаём pending discount для polling агентом
+		if (discountAmount > 0) {
+			const expiresAt = new Date(Date.now() + 30000).toISOString(); // 30 секунд
+
+			const [pendingDiscount] = await db.insert(pendingDiscounts).values({
+				store_id: parseInt(storeId),
+				transaction_id: transaction.id,
+				discount_amount: parseFloat(discountAmount),
+				status: 'pending',
+				expires_at: expiresAt
+			}).returning();
+
+			console.log(`[1C API] Pending discount created: ID=${pendingDiscount.id}, store=${storeId}, amount=${discountAmount}₽`);
+		}
+
+		return res.json({
+			success: true,
+			transactionId: transaction.id,
+			finalAmount,
+			customerId: customer.id
+		});
+
+	} catch (error) {
+		console.error('[1C API] Error applying discount:', error);
+		return res.status(500).json({
+			error: 'Internal server error',
+			details: error instanceof Error ? error.message : String(error)
+		});
+	}
+});
+
+/**
+ * Отправить уведомление в Telegram бот
+ */
+async function notifyTelegramBot(params: {
+	telegramUserId: number;
+	type: 'earn' | 'redeem';
+	purchaseAmount: number;
+	pointsEarned: number;
+	pointsRedeemed?: number;
+	discountAmount?: number;
+	newBalance: number;
+	storeName?: string;
+}) {
+	try {
+		// 🔴 FIX: Автоопределение webhook URL
+		const BOT_WEBHOOK_URL = process.env.BOT_WEBHOOK_URL ||
+			(process.env.NODE_ENV === 'production'
+				? 'http://localhost:2017'  // На production сервере
+				: 'http://localhost:2017'); // Локально тоже localhost
+
+		const response = await fetch(`${BOT_WEBHOOK_URL}/notify-transaction`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(params)
+		});
+
+		if (response.ok) {
+			console.log(`[TELEGRAM] Notification sent to user ${params.telegramUserId}`);
+		} else {
+			console.warn(`[TELEGRAM] Failed to notify user ${params.telegramUserId}:`, await response.text());
+		}
+	} catch (error) {
+		console.error('[TELEGRAM] Error sending notification:', error);
+		// Не прерываем транзакцию если бот недоступен
+	}
+}
+
+// ==================== POST /api/1c/confirm ====================
+/**
+ * Подтвердить транзакцию (чек пробит в 1С)
+ *
+ * Body:
+ * {
+ *   "transactionId": 42,
+ *   "checkNumber": "ЧЕК-0001234",
+ *   "paidAmount": 1350.00,
+ *   "onecTransactionId": "1C-TXN-123456"
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true
+ * }
+ */
+router.post('/confirm', async (req: Request, res: Response) => {
+	try {
+		const { transactionId, checkNumber, paidAmount, onecTransactionId } = req.body;
+
+		if (!transactionId) {
+			return res.status(400).json({
+				error: 'Missing required field: transactionId'
+			});
+		}
+
+		// Обновляем транзакцию
+		await db.update(cashierTransactions)
+			.set({
+				synced_with_1c: true,
+				synced_at: new Date().toISOString(),
+				onec_transaction_id: onecTransactionId || checkNumber,
+				metadata: JSON.stringify({
+					checkNumber,
+					paidAmount: parseFloat(paidAmount || 0),
+					confirmedAt: new Date().toISOString()
+				})
+			})
+			.where(eq(cashierTransactions.id, parseInt(transactionId)));
+
+		// Обновить баланс пользователя
+		const transaction = await db.query.cashierTransactions.findFirst({
+			where: eq(cashierTransactions.id, parseInt(transactionId))
+		});
+
+		if (transaction) {
+			const customer = await db.query.loyaltyUsers.findFirst({
+				where: eq(loyaltyUsers.id, transaction.customer_id)
+			});
+
+			if (customer) {
+				const newBalance = transaction.type === 'redeem'
+					? customer.current_balance - transaction.discount_amount + transaction.points_amount
+					: customer.current_balance + transaction.points_amount;
+
+				await db.update(loyaltyUsers)
+					.set({
+						current_balance: newBalance,
+						total_purchases: customer.total_purchases + 1,
+						total_saved: customer.total_saved + transaction.discount_amount,
+						last_activity: new Date().toISOString()
+					})
+					.where(eq(loyaltyUsers.id, customer.id));
+
+				console.log(`[1C API] Transaction confirmed: ID=${transactionId}, new balance=${newBalance}₽`);
+
+				// 🔔 УВЕДОМЛЕНИЕ В TELEGRAM
+				if (customer.telegram_user_id) {
+					await notifyTelegramBot({
+						telegramUserId: customer.telegram_user_id,
+						type: transaction.type,
+						purchaseAmount: transaction.purchase_amount,
+						pointsEarned: transaction.points_amount,
+						pointsRedeemed: transaction.type === 'redeem' ? transaction.points_amount : undefined,
+						discountAmount: transaction.discount_amount,
+						newBalance: newBalance,
+						storeName: `Магазин #${transaction.store_id}`
+					});
+				}
+			}
+		}
+
+		return res.json({
+			success: true
+		});
+
+	} catch (error) {
+		console.error('[1C API] Error confirming transaction:', error);
+		return res.status(500).json({
+			error: 'Internal server error',
+			details: error instanceof Error ? error.message : String(error)
+		});
+	}
+});
+
+// ==================== GET /api/1c/pending-discounts ====================
+/**
+ * Агент забирает pending скидки для своего магазина
+ *
+ * Query params:
+ * - storeId: number - ID магазина
+ *
+ * Headers:
+ * - x-store-api-key: string - API ключ магазина (для безопасности)
+ *
+ * Response:
+ * [
+ *   { id: 42, discountAmount: 150, transactionId: 123, createdAt: "..." },
+ *   ...
+ * ]
+ */
+router.get('/pending-discounts', async (req: Request, res: Response) => {
+	try {
+		const storeId = parseInt(req.query.storeId as string);
+
+		if (!storeId || isNaN(storeId)) {
+			return res.status(400).json({
+				error: 'Invalid storeId parameter'
+			});
+		}
+
+		// 🔴 FIX #5: Простая аутентификация по API ключу
+		const apiKey = req.headers['x-store-api-key'] as string;
+		const expectedKey = process.env[`STORE_${storeId}_API_KEY`];
+
+		// КРИТИЧНО: Проверка что ключ настроен
+		if (!expectedKey) {
+			console.error(`[1C API] STORE_${storeId}_API_KEY not configured in environment!`);
+			return res.status(500).json({
+				error: 'Server misconfiguration - API key not set'
+			});
+		}
+
+		if (apiKey !== expectedKey) {
+			console.warn(`[1C API] Unauthorized access attempt to store ${storeId}`);
+			return res.status(401).json({
+				error: 'Unauthorized - invalid API key'
+			});
+		}
+
+		// 🔴 FIX #3: Атомарный UPDATE - сразу помечаем как processing
+		const discounts = await db.update(pendingDiscounts)
+			.set({ status: 'processing', applied_at: new Date().toISOString() })
+			.where(and(
+				eq(pendingDiscounts.store_id, storeId),
+				eq(pendingDiscounts.status, 'pending')
+			))
+			.returning();
+
+		// Фильтруем expired
+		const now = new Date();
+		const validDiscounts = discounts.filter(d => new Date(d.expires_at) > now);
+
+		// 🔴 FIX #2: Помечаем expired BATCH UPDATE (не N+1)
+		const expiredIds = discounts.filter(d => new Date(d.expires_at) <= now).map(d => d.id);
+		if (expiredIds.length > 0) {
+			await db.update(pendingDiscounts)
+				.set({ status: 'expired' })
+				.where(inArray(pendingDiscounts.id, expiredIds));
+		}
+
+		console.log(`[1C API] Agent poll: store=${storeId}, pending=${validDiscounts.length}, expired=${expiredIds.length}`);
+
+		// Возвращаем в формате для агента
+		return res.json(validDiscounts.map(d => ({
+			id: d.id,
+			discountAmount: d.discount_amount,
+			transactionId: d.transaction_id,
+			createdAt: d.created_at,
+			expiresAt: d.expires_at
+		})));
+
+	} catch (error) {
+		console.error('[1C API] Error getting pending discounts:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
+});
+
+// ==================== POST /api/1c/confirm-discount ====================
+/**
+ * Агент подтверждает применение скидки в 1С
+ *
+ * Body:
+ * {
+ *   "id": 42,
+ *   "status": "applied" | "failed",
+ *   "errorMessage"?: "..." (опционально при failed)
+ * }
+ */
+router.post('/confirm-discount', async (req: Request, res: Response) => {
+	try {
+		const { id, status, errorMessage } = req.body;
+
+		if (!id || !status) {
+			return res.status(400).json({
+				error: 'Missing required fields: id, status'
+			});
+		}
+
+		if (!['applied', 'failed'].includes(status)) {
+			return res.status(400).json({
+				error: 'Invalid status. Must be "applied" or "failed"'
+			});
+		}
+
+		// Обновляем статус pending discount
+		const updated = await db.update(pendingDiscounts)
+			.set({
+				status,
+				applied_at: new Date().toISOString(),
+				error_message: errorMessage || null
+			})
+			.where(eq(pendingDiscounts.id, parseInt(id)))
+			.returning();
+
+		if (updated.length === 0) {
+			return res.status(404).json({
+				error: 'Pending discount not found'
+			});
+		}
+
+		console.log(`[1C API] Discount confirmed: id=${id}, status=${status}`);
+
+		return res.json({
+			success: true,
+			discount: updated[0]
+		});
+
+	} catch (error) {
+		console.error('[1C API] Error confirming discount:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
+});
+
+// ==================== GET /api/1c/health ====================
+/**
+ * Health check endpoint
+ */
+router.get('/health', (req: Request, res: Response) => {
+	res.json({
+		status: 'ok',
+		service: '1C Integration API',
+		timestamp: new Date().toISOString(),
+		preCheckStoreCount: preCheckStore.size
+	});
+});
+
+export default router;

@@ -95,29 +95,9 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
 
         console.log('[API] 📝 Transaction created for legacy user bonus');
 
-        // Send welcome message
-        try {
-          console.log('[API] 📨 Sending welcome message to chat_id:', userData.chat_id);
-          const welcomeResponse = await fetch('/api/telegram/welcome', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: userData.chat_id,
-              first_name: updatedUser.first_name, // Use UPDATED user data
-              bonus_amount: 500
-            })
-          });
-
-          if (welcomeResponse.ok) {
-            const welcomeResult = await welcomeResponse.json();
-            console.log('[API] ✅ Welcome message sent successfully:', welcomeResult);
-          } else {
-            const errorText = await welcomeResponse.text();
-            console.error('[API] ❌ Welcome message failed:', welcomeResponse.status, errorText);
-          }
-        } catch (error) {
-          console.error('[API] ❌ Failed to send welcome message:', error);
-        }
+        // 🔴 FIX: УДАЛЕНО дублирующееся приветствие
+        // Приветствие отправляется только через bot /start
+        console.log('[API] ℹ️ Welcome message will be sent via Telegram Bot /start command');
 
         // FIX #3: Set cookie on server (prevents race condition)
         cookies.set('telegram_user_id', updatedUser.telegram_user_id.toString(), {
@@ -177,10 +157,15 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
       // New user - award 500 Murzikoyns welcome bonus
       console.log('[API] 🆕 NEW USER DETECTED! Creating account for:', userData.telegram_user_id);
 
+      // Generate 6-digit card number from telegram_user_id (last 6 digits)
+      const cardNumber = userData.telegram_user_id.toString().slice(-6).padStart(6, '0');
+      console.log('[API] 📝 Generated card number:', cardNumber);
+
       const newUser = await db
         .insert(loyaltyUsers)
         .values({
           telegram_user_id: userData.telegram_user_id,
+          card_number: cardNumber, // ✅ Сохраняем номер карты
           first_name: userData.first_name,
           last_name: userData.last_name,
           username: userData.username,
@@ -193,7 +178,7 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
         .returning()
         .get();
 
-      console.log('[API] ✅ New user created with 500 Murzikoyns');
+      console.log('[API] ✅ New user created with 500 Murzikoyns, card:', cardNumber);
 
       // Create transaction record for welcome bonus
       // FIX #6: Add explicit created_at
@@ -210,32 +195,9 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
 
       console.log('[API] 📝 Transaction created for new user bonus');
 
-      // Send welcome message via Telegram Bot API
-      try {
-        console.log('[API] 📨 Sending welcome message to chat_id:', userData.chat_id);
-        const welcomeResponse = await fetch('/api/telegram/welcome', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            chat_id: userData.chat_id,
-            first_name: userData.first_name,
-            bonus_amount: 500
-          })
-        });
-
-        if (welcomeResponse.ok) {
-          const welcomeResult = await welcomeResponse.json();
-          console.log('[API] ✅ Welcome message sent successfully:', welcomeResult);
-        } else {
-          const errorText = await welcomeResponse.text();
-          console.error('[API] ❌ Welcome message failed:', welcomeResponse.status, errorText);
-        }
-      } catch (error) {
-        console.error('[API] ❌ Failed to send welcome message:', error);
-        // Don't fail the entire request if welcome message fails
-      }
+      // 🔴 FIX: УДАЛЕНО дублирующееся приветствие
+      // Приветствие отправляется только через bot /start
+      console.log('[API] ℹ️ Welcome message will be sent via Telegram Bot /start command');
 
       // FIX #3: Set cookie for new user
       cookies.set('telegram_user_id', newUser.telegram_user_id.toString(), {

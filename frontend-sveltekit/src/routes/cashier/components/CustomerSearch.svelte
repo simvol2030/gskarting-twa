@@ -30,8 +30,10 @@
 			autoSearchTimer = null;
 		}
 
-		// Если введено ровно 6 цифр → автопоиск через 1 сек
-		if (newValue.length === 6 && /^\d{6}$/.test(newValue)) {
+		// Автопоиск для USB QR сканера (8 цифр с префиксом "99") или ручного ввода (6 цифр)
+		const isValidLength = (newValue.length === 6 || newValue.length === 8) && /^\d+$/.test(newValue);
+
+		if (isValidLength) {
 			autoSearchTimer = setTimeout(() => {
 				onSearch();
 			}, 1000) as unknown as number;
@@ -102,22 +104,7 @@
 	{/if}
 </div>
 
-<div class="card">
-	<p class="text-center" style="color: var(--text-secondary); font-size: 14px;">
-		Для теста используйте:
-	</p>
-	<div class="test-buttons">
-		<button class="test-btn" onclick={() => { value = QUICK_TESTS.high; onSearch(); }}>
-			{QUICK_TESTS.high}
-		</button>
-		<button class="test-btn" onclick={() => { value = QUICK_TESTS.medium; onSearch(); }}>
-			{QUICK_TESTS.medium}
-		</button>
-		<button class="test-btn" onclick={() => { value = QUICK_TESTS.low; onSearch(); }}>
-			{QUICK_TESTS.low}
-		</button>
-	</div>
-</div>
+<!-- Демо-кнопки удалены для production -->
 
 <VirtualKeyboard
 	{value}

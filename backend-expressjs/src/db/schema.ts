@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -47,6 +47,7 @@ export const admins = sqliteTable('admins', {
 export const loyaltyUsers = sqliteTable('loyalty_users', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	telegram_user_id: integer('telegram_user_id').notNull().unique(),
+	card_number: text('card_number').unique(), // 6-8 digit loyalty card number (e.g., "421856" or "99421856")
 	first_name: text('first_name').notNull(),
 	last_name: text('last_name'),
 	username: text('username'),
@@ -93,6 +94,9 @@ export const transactions = sqliteTable('transactions', {
 	title: text('title').notNull(),
 	amount: real('amount').notNull(),
 	type: text('type', { enum: ['earn', 'spend'] }).notNull(),
+	check_amount: real('check_amount'), // Сумма чека (для статистики)
+	points_redeemed: real('points_redeemed'), // Списано баллов
+	cashback_earned: real('cashback_earned'), // Начислено баллов
 	spent: text('spent'),
 	store_name: text('store_name'),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
@@ -129,7 +133,93 @@ export const cashierTransactions = sqliteTable('cashier_transactions', {
 	// Timestamps
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	// 🔴 FIX: Индексы для производительности
+	storeIdx: index('idx_cashier_tx_store').on(table.store_id),
+	customerIdx: index('idx_cashier_tx_customer').on(table.customer_id),
+	createdIdx: index('idx_cashier_tx_created').on(table.created_at),
+	storeCreatedIdx: index('idx_cashier_tx_store_created').on(table.store_id, table.created_at)
+}));
+
+/**
+ * Products table - товары каталога
+ */
+export const products = sqliteTable('products', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull(),
+	price: real('price').notNull(),
+	old_price: real('old_price'),
+	image: text('image').notNull(),
+	category: text('category').notNull(),
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
 });
+
+/**
+ * Offers table - акции и специальные предложения
+ */
+export const offers = sqliteTable('offers', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	title: text('title').notNull(),
+	description: text('description').notNull(),
+	icon: text('icon').notNull(),
+	icon_color: text('icon_color').notNull(),
+	deadline: text('deadline').notNull(),
+	deadline_class: text('deadline_class').notNull(),
+	details: text('details').notNull(),
+	conditions: text('conditions').notNull(), // JSON array as string
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
+});
+
+/**
+ * Recommendations table - персональные рекомендации товаров
+ */
+export const recommendations = sqliteTable('recommendations', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	loyalty_user_id: integer('loyalty_user_id').references(() => loyaltyUsers.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	description: text('description').notNull(),
+	price: real('price').notNull(),
+	image: text('image').notNull(),
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
+});
+
+/**
+ * Pending Discounts table - очередь скидок для агентов
+ * Polling-based архитектура: агент сам забирает pending скидки
+ */
+export const pendingDiscounts = sqliteTable('pending_discounts', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+
+	// Store identification
+	store_id: integer('store_id')
+		.notNull()
+		.references(() => stores.id, { onDelete: 'cascade' }),
+
+	// Transaction link
+	transaction_id: integer('transaction_id')
+		.notNull()
+		.references(() => transactions.id, { onDelete: 'cascade' }),
+
+	// Discount data
+	discount_amount: real('discount_amount').notNull(),
+
+	// Status tracking
+	status: text('status', { enum: ['pending', 'processing', 'applied', 'failed', 'expired'] })
+		.notNull()
+		.default('pending'),
+
+	// Processing timestamps
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	applied_at: text('applied_at'),
+	expires_at: text('expires_at').notNull(), // 30 секунд после создания
+
+	// Error handling
+	error_message: text('error_message')
+}, (table) => ({
+	// 🔴 FIX: Индексы для быстрого polling
+	storeStatusIdx: index('idx_pending_store_status').on(table.store_id, table.status),
+	expiresIdx: index('idx_pending_expires').on(table.expires_at)
+}));
 
 // TypeScript типы, выведенные из схемы
 export type User = typeof users.$inferSelect;
@@ -147,8 +237,20 @@ export type NewLoyaltyUser = typeof loyaltyUsers.$inferInsert;
 export type Store = typeof stores.$inferSelect;
 export type NewStore = typeof stores.$inferInsert;
 
+export type PendingDiscount = typeof pendingDiscounts.$inferSelect;
+export type NewPendingDiscount = typeof pendingDiscounts.$inferInsert;
+
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 
 export type CashierTransaction = typeof cashierTransactions.$inferSelect;
 export type NewCashierTransaction = typeof cashierTransactions.$inferInsert;
+
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+
+export type Offer = typeof offers.$inferSelect;
+export type NewOffer = typeof offers.$inferInsert;
+
+export type Recommendation = typeof recommendations.$inferSelect;
+export type NewRecommendation = typeof recommendations.$inferInsert;

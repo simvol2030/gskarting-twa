@@ -5,9 +5,13 @@
 
 import { MOCK_STORES, MOCK_CUSTOMERS, type Store, type Customer, type Transaction } from '$lib/data/cashier-mocks';
 import { parseQRData } from '$lib/utils/qr-generator';
+import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
 // ===== Режим работы (true = моки, false = реальный API) =====
-const USE_MOCKS = true;
+const USE_MOCKS = false; // ✅ ВСЕГДА REAL API
+
+// ===== Backend URL для server-side И client-side fetch =====
+const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 // ===== Хранилище транзакций (для моков) =====
 const mockTransactions: Transaction[] = [];
@@ -26,9 +30,14 @@ export async function getStoreConfig(storeId: number): Promise<Store> {
 		}
 		return store;
 	} else {
-		// Реальный API
-		const response = await fetch(`/api/stores/${storeId}/config`);
-		if (!response.ok) throw new Error('Ошибка загрузки конфигурации магазина');
+		// Реальный API - ВАЖНО: абсолютный URL для server-side fetch
+		const url = new URL(`/api/stores/${storeId}/config`, BACKEND_URL);
+		console.log('[getStoreConfig] Fetching:', url.toString());
+		const response = await fetch(url.toString());
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Store config fetch failed: ${response.status} ${errorText}`);
+		}
 		return response.json();
 	}
 }
@@ -53,10 +62,25 @@ export async function findCustomer(input: string, storeId: number): Promise<Cust
 		const customer = MOCK_CUSTOMERS.find(c => c.cardNumber === cardNumberClean);
 		return customer || null;
 	} else {
-		// Реальный API
-		const response = await fetch(`/api/customers/search?card=${cardNumberClean}&storeId=${storeId}`);
-		if (!response.ok) return null;
-		return response.json();
+		// Реальный API - абсолютный URL
+		const url = new URL(`/api/customers/search?card=${cardNumberClean}&storeId=${storeId}`, BACKEND_URL);
+		console.log('[findCustomer] Input:', input);
+		console.log('[findCustomer] Parsed:', parsed);
+		console.log('[findCustomer] Card clean:', cardNumberClean);
+		console.log('[findCustomer] Fetching:', url.toString());
+
+		const response = await fetch(url.toString());
+		console.log('[findCustomer] Response:', response.status, response.statusText);
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			console.error('[findCustomer] Error response:', errorText);
+			return null;
+		}
+
+		const customer = await response.json();
+		console.log('[findCustomer] Customer found:', customer);
+		return customer;
 	}
 }
 
@@ -104,14 +128,18 @@ export async function createTransaction(data: {
 
 		return { success: true, transaction };
 	} else {
-		// Реальный API
-		const response = await fetch('/api/transactions', {
+		// Реальный API - абсолютный URL
+		const url = new URL('/api/transactions', BACKEND_URL);
+		console.log('[createTransaction] Fetching:', url.toString());
+		const response = await fetch(url.toString(), {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(data)
 		});
 
 		if (!response.ok) {
+			const errorText = await response.text();
+			console.error('[createTransaction] Error:', response.status, errorText);
 			return { success: false, error: 'Ошибка при создании транзакции' };
 		}
 
@@ -130,9 +158,14 @@ export async function getRecentTransactions(storeId: number, limit: number = 10)
 			.filter(t => t.storeId === storeId)
 			.slice(0, limit);
 	} else {
-		// Реальный API
-		const response = await fetch(`/api/transactions/recent?storeId=${storeId}&limit=${limit}`);
-		if (!response.ok) return [];
+		// Реальный API - абсолютный URL
+		const url = new URL(`/api/transactions/recent?storeId=${storeId}&limit=${limit}`, BACKEND_URL);
+		console.log('[getRecentTransactions] Fetching:', url.toString());
+		const response = await fetch(url.toString());
+		if (!response.ok) {
+			console.error('[getRecentTransactions] Error:', response.status);
+			return [];
+		}
 		return response.json();
 	}
 }
