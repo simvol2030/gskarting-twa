@@ -1,18 +1,17 @@
 <script lang="ts">
-  import Header from '$lib/components/loyalty/layout/Header.svelte';
-  import MobileMenu from '$lib/components/loyalty/layout/MobileMenu.svelte';
   import HistoryItem from '$lib/components/loyalty/ui/HistoryItem.svelte';
 
   let { data } = $props();
-  let menuOpen = $state(false);
 
-  function openMenu() {
-    menuOpen = true;
-  }
-
-  function closeMenu() {
-    menuOpen = false;
-  }
+  // DEBUG: Log data structure to diagnose rendering issue
+  $effect(() => {
+    console.log('[history/+page.svelte] === DATA DEBUG ===');
+    console.log('[history/+page.svelte] data:', data);
+    console.log('[history/+page.svelte] data?.realHistory:', data?.realHistory);
+    console.log('[history/+page.svelte] realHistory.length:', data?.realHistory?.length);
+    console.log('[history/+page.svelte] showExamples:', data?.showExamples);
+    console.log('[history/+page.svelte] exampleHistory.length:', data?.exampleHistory?.length);
+  });
 </script>
 
 <section class="section-content">
@@ -22,7 +21,7 @@
   </h2>
 
   <!-- Real transactions from database -->
-  {#if data.realHistory && data.realHistory.length > 0}
+  {#if data?.realHistory && data.realHistory.length > 0}
     <div class="history-list">
       {#each data.realHistory as transaction}
         <HistoryItem {transaction} />
@@ -31,7 +30,7 @@
   {/if}
 
   <!-- Example transactions divider and list -->
-  {#if data.showExamples && data.exampleHistory && data.exampleHistory.length > 0}
+  {#if data?.showExamples && data?.exampleHistory && data.exampleHistory.length > 0}
     <div class="example-divider">
       <div class="divider-line"></div>
       <h3 class="example-header">💡 Пример истории операций</h3>
@@ -46,7 +45,7 @@
   {/if}
 
   <!-- Empty state (shouldn't happen because of welcome bonus, but just in case) -->
-  {#if (!data.realHistory || data.realHistory.length === 0) && (!data.exampleHistory || data.exampleHistory.length === 0)}
+  {#if (!data?.realHistory || data.realHistory.length === 0) && (!data?.exampleHistory || data.exampleHistory.length === 0)}
     <div class="empty-state">
       <p>У вас пока нет операций</p>
       <p class="empty-hint">Совершите первую покупку, чтобы начать копить Мурзи-коины!</p>
