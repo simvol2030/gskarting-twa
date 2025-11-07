@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db/client';
-import { transactions, loyaltyUsers, cashierTransactions, pendingDiscounts, stores } from '../db/schema';
+import { transactions, loyaltyUsers } from '../db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 
 const router = Router();
@@ -180,141 +180,63 @@ router.post('/', async (req: Request, res: Response) => {
 			});
 		}
 
-		// Get store info
-		const store = await db.query.stores.findFirst({
-			where: eq(stores.id, storeId)
-		});
+		// Calculate new balance
+		const newBalance = customerRecord.current_balance - pointsToRedeem + cashbackAmount;
 
-		// Определяем тип операции
-		const isRedeem = pointsToRedeem > 0;
-		const discountAmount = pointsToRedeem;
+		// Create transaction record
+		const title = pointsToRedeem > 0
+			? `Списание: -${pointsToRedeem}₽, Начисление: +${cashbackAmount}₽`
+			: `Начисление: +${cashbackAmount}₽`;
 
-		// 🔴 FIX: ATOMIC TRANSACTION с полной бизнес-логикой (SYNC для SQLite!)
-		const result = db.transaction((tx) => {
-			// 1. Update customer balance atomically
-			const balanceDelta = -pointsToRedeem + cashbackAmount;
+		const [newTransaction] = await db.insert(transactions).values({
+			loyalty_user_id: customer.id,
+			store_id: storeId || null,
+			title,
+			amount: pointsToRedeem > 0 ? -pointsToRedeem : cashbackAmount,
+			type: pointsToRedeem > 0 ? 'spend' : 'earn',
+			check_amount: checkAmount, // Сохраняем сумму чека
+			points_redeemed: pointsToRedeem, // Сохраняем списание
+			cashback_earned: cashbackAmount, // Сохраняем начисление
+			spent: pointsToRedeem > 0 ? 'Оплата покупки' : null,
+			store_name: null
+		}).returning();
 
-			const updatedCustomer = tx.update(loyaltyUsers)
-				.set({
-					current_balance: sql`current_balance + ${balanceDelta}`,
-					last_activity: new Date().toISOString()
-				})
-				.where(eq(loyaltyUsers.id, customer.id))
-				.returning()
-				.get(); // SQLite sync: .get() вместо деструктуризации
+		// Update customer balance
+		await db.update(loyaltyUsers)
+			.set({ current_balance: newBalance })
+			.where(eq(loyaltyUsers.id, customer.id));
 
-			if (!updatedCustomer) {
-				throw new Error('Failed to update customer balance');
-			}
+		console.log(`[TRANSACTIONS API] Created transaction #${newTransaction.id} for customer #${customer.id}`);
+		console.log(`  Balance: ${customerRecord.current_balance} → ${newBalance}`);
 
-			// 2. Update customer stats
-			tx.update(loyaltyUsers)
-				.set({
-					total_purchases: customerRecord.total_purchases + 1,
-					total_saved: customerRecord.total_saved + discountAmount
-				})
-				.where(eq(loyaltyUsers.id, customer.id))
-				.run();
+		// Если есть списание - создаём pending_discount для Agent'а
+		if (pointsToRedeem > 0) {
+			const { pendingDiscounts } = await import('../db/schema');
+			const expiresAt = new Date(Date.now() + 30000).toISOString(); // 30 секунд
 
-			// 3. Create cashier_transactions record
-			const cashierTx = tx.insert(cashierTransactions)
-				.values({
-					customer_id: customer.id,
-					store_id: storeId,
-					type: isRedeem ? 'redeem' : 'earn',
-					purchase_amount: checkAmount,
-					points_amount: cashbackAmount, // Начисленные баллы
-					discount_amount: discountAmount,
-					metadata: null,
-					synced_with_1c: false
-				})
-				.returning()
-				.get(); // SQLite sync: .get() для одной записи
+			await db.insert(pendingDiscounts).values({
+				store_id: storeId,
+				transaction_id: newTransaction.id,
+				discount_amount: pointsToRedeem,
+				status: 'pending',
+				expires_at: expiresAt
+			});
 
-			// 4. Create transactions record(s)
-			if (isRedeem) {
-				// 4a. Spend record (списание баллов)
-				tx.insert(transactions).values({
-					loyalty_user_id: customer.id,
-					store_id: storeId,
-					title: 'Списание за покупку',
-					amount: pointsToRedeem,
-					type: 'spend',
-					check_amount: checkAmount,
-					points_redeemed: pointsToRedeem,
-					cashback_earned: 0,
-					spent: `${discountAmount} ₽`,
-					store_name: store?.name || null
-				}).run();
+			console.log(`  📝 Created pending_discount: ${pointsToRedeem}₽ (expires in 30s)`);
+		}
 
-				// 4b. Earn record (кешбэк от оплаченной суммы)
-				if (cashbackAmount > 0) {
-					tx.insert(transactions).values({
-						loyalty_user_id: customer.id,
-						store_id: storeId,
-						title: 'Начисление кешбэка (4% от оплаты)',
-						amount: cashbackAmount,
-						type: 'earn',
-						check_amount: checkAmount,
-						points_redeemed: 0,
-						cashback_earned: cashbackAmount,
-						spent: null,
-						store_name: store?.name || null
-					}).run();
-				}
-
-				// 4c. Create pending_discount for Agent
-				// 🔴 FIX: В production БД pending_discounts.transaction_id ссылается на cashier_transactions.id
-				const expiresAt = new Date(Date.now() + 30000).toISOString();
-				tx.insert(pendingDiscounts).values({
-					store_id: storeId,
-					transaction_id: cashierTx.id, // Ссылка на cashier_transactions.id (как в production)
-					discount_amount: pointsToRedeem,
-					status: 'pending',
-					expires_at: expiresAt
-				}).run();
-
-				console.log(`[TRANSACTIONS API] Redeem: -${pointsToRedeem}₽ +${cashbackAmount}₽, pending_discount created`);
-
-			} else {
-				// 4d. Только earn record (накопление)
-				tx.insert(transactions).values({
-					loyalty_user_id: customer.id,
-					store_id: storeId,
-					title: 'Начисление за покупку',
-					amount: cashbackAmount,
-					type: 'earn',
-					check_amount: checkAmount,
-					points_redeemed: 0,
-					cashback_earned: cashbackAmount,
-					spent: null,
-					store_name: store?.name || null
-				}).run();
-
-				console.log(`[TRANSACTIONS API] Earn: +${cashbackAmount}₽`);
-			}
-
-			return {
-				cashierTx,
-				newBalance: updatedCustomer.current_balance
-			};
-		});
-
-		console.log(`[TRANSACTIONS API] Transaction completed for customer #${customer.id}`);
-		console.log(`  Balance: ${customerRecord.current_balance} → ${result.newBalance}`);
-
-		// Return formatted response (compatible with frontend)
+		// Return formatted response
 		return res.json({
 			success: true,
 			transaction: {
-				id: `TXN-${result.cashierTx.id}`,
+				id: `TXN-${newTransaction.id}`,
 				customerId: customer.cardNumber,
 				customerName: customer.name,
 				checkAmount,
 				pointsRedeemed: pointsToRedeem,
 				cashbackEarned: cashbackAmount,
 				finalAmount,
-				timestamp: result.cashierTx.created_at,
+				timestamp: newTransaction.created_at,
 				storeId
 			}
 		});
@@ -322,8 +244,7 @@ router.post('/', async (req: Request, res: Response) => {
 	} catch (error) {
 		console.error('[TRANSACTIONS API] Error creating transaction:', error);
 		return res.status(500).json({
-			error: 'Internal server error',
-			details: error instanceof Error ? error.message : String(error)
+			error: 'Internal server error'
 		});
 	}
 });

@@ -37,7 +37,8 @@ export const loyaltyUsers = sqliteTable('loyalty_users', {
 	registration_date: text('registration_date').default(sql`CURRENT_TIMESTAMP`).notNull(),
 	last_activity: text('last_activity').default(sql`CURRENT_TIMESTAMP`),
 	chat_id: integer('chat_id').notNull(),
-	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	card_number: text('card_number').unique() // 6-значный номер карты лояльности
 });
 
 /**

@@ -21,12 +21,10 @@ const router = Router();
 interface PreCheckData {
 	checkAmount: number;
 	storeId: number;
-	storeName: string; // 🔴 NEW: Название магазина
 	timestamp: string;
 }
 
 // Хранилище: ключ = storeId, значение = данные предчека
-// 🔴 NEW ARCHITECTURE: Заполняется агентами через POST /register-amount
 const preCheckStore = new Map<number, PreCheckData>();
 
 // ==================== GET /api/1c/check-amount ====================
@@ -53,28 +51,35 @@ router.get('/check-amount', async (req: Request, res: Response) => {
 			});
 		}
 
-		// 🔴 NEW ARCHITECTURE: Читаем из памяти (Agent сам отправляет данные через POST /register-amount)
-		const data = preCheckStore.get(storeId);
+		// ИНТЕГРАЦИЯ С АГЕНТОМ: Читаем сумму из агента (который читает из 1С)
+		const AGENT_URL = process.env.AGENT_URL || 'http://localhost:3333';
 
-		if (!data) {
-			// Данных нет - либо agent не запущен, либо еще не отправил
-			console.warn(`[1C API] No data from agent for store ${storeId}`);
-			return res.status(404).json({
-				error: 'No data from agent',
-				message: 'Агент еще не отправил данные. Проверьте что Agent запущен на кассе.',
+		try {
+			const agentResponse = await fetch(`${AGENT_URL}/get-amount`);
+
+			if (!agentResponse.ok) {
+				throw new Error('Agent not responding');
+			}
+
+			const agentData = await agentResponse.json() as { amount?: number; timestamp?: string };
+
+			console.log(`[1C API] Check amount from agent (store ${storeId}): ${agentData.amount}₽`);
+
+			return res.json({
+				checkAmount: agentData.amount || 0,
+				storeId,
+				timestamp: agentData.timestamp || new Date().toISOString()
+			});
+
+		} catch (agentError) {
+			// Если агент недоступен - возвращаем 0 (fallback)
+			console.warn('[1C API] Agent unavailable, returning 0:', agentError);
+			return res.json({
 				checkAmount: 0,
-				storeId
+				storeId,
+				timestamp: new Date().toISOString()
 			});
 		}
-
-		console.log(`[1C API] Check amount retrieved: ${data.checkAmount}₽ (store: ${data.storeName})`);
-
-		return res.json({
-			checkAmount: data.checkAmount,
-			storeId: data.storeId,
-			storeName: data.storeName,
-			timestamp: data.timestamp
-		});
 
 	} catch (error) {
 		console.error('[1C API] Error getting check amount:', error);
@@ -108,7 +113,6 @@ router.post('/set-check-amount', async (req: Request, res: Response) => {
 		preCheckStore.set(storeId, {
 			checkAmount: parseFloat(checkAmount),
 			storeId: parseInt(storeId),
-			storeName: `Store ${storeId}`, // Временное название (этот endpoint deprecated)
 			timestamp: new Date().toISOString()
 		});
 
@@ -122,76 +126,6 @@ router.post('/set-check-amount', async (req: Request, res: Response) => {
 
 	} catch (error) {
 		console.error('[1C API] Error setting check amount:', error);
-		return res.status(500).json({
-			error: 'Internal server error'
-		});
-	}
-});
-
-// ==================== POST /api/1c/register-amount ====================
-/**
- * 🔴 NEW: Agent регистрирует сумму чека (Reverse Polling Architecture)
- *
- * Вызывается агентом когда сумма в amount.json меняется.
- *
- * Body:
- * {
- *   "storeId": 1,
- *   "storeName": "Ашукино",
- *   "amount": 3681.00,
- *   "timestamp": "2025-11-07T12:00:00Z"
- * }
- *
- * Headers:
- * - x-store-api-key: string - API ключ магазина (для аутентификации)
- */
-router.post('/register-amount', async (req: Request, res: Response) => {
-	try {
-		const { storeId, storeName, amount, timestamp } = req.body;
-
-		if (!storeId || !storeName || amount === undefined) {
-			return res.status(400).json({
-				error: 'Missing required fields: storeId, storeName, amount'
-			});
-		}
-
-		// 🔴 Аутентификация: проверка API ключа магазина
-		const apiKey = req.headers['x-store-api-key'] as string;
-		const expectedKey = process.env[`STORE_${storeId}_API_KEY`];
-
-		if (!expectedKey) {
-			console.error(`[1C API] STORE_${storeId}_API_KEY not configured!`);
-			return res.status(500).json({
-				error: 'Server misconfiguration - API key not set for this store'
-			});
-		}
-
-		if (apiKey !== expectedKey) {
-			console.warn(`[1C API] Unauthorized register-amount attempt for store ${storeId}`);
-			return res.status(401).json({
-				error: 'Unauthorized - invalid API key'
-			});
-		}
-
-		// Сохраняем в память
-		preCheckStore.set(parseInt(storeId), {
-			checkAmount: parseFloat(amount),
-			storeId: parseInt(storeId),
-			storeName: storeName,
-			timestamp: timestamp || new Date().toISOString()
-		});
-
-		console.log(`[1C API] Amount registered: ${amount}₽ from ${storeName} (store ${storeId})`);
-
-		return res.json({
-			success: true,
-			checkAmount: parseFloat(amount),
-			storeId: parseInt(storeId),
-			storeName
-		});
-
-	} catch (error) {
-		console.error('[1C API] Error registering amount:', error);
 		return res.status(500).json({
 			error: 'Internal server error'
 		});
@@ -393,20 +327,20 @@ router.post('/confirm', async (req: Request, res: Response) => {
 			});
 
 			if (customer) {
-				// 🔴 FIX БАГ #1: Баланс УЖЕ обновлен в /cashier/earn или /cashier/redeem
-				// Здесь только обновляем статистику и синхронизацию
-				const newBalance = customer.current_balance;
+				const newBalance = transaction.type === 'redeem'
+					? customer.current_balance - transaction.discount_amount + transaction.points_amount
+					: customer.current_balance + transaction.points_amount;
 
 				await db.update(loyaltyUsers)
 					.set({
-						// current_balance НЕ обновляем - уже обновлен!
+						current_balance: newBalance,
 						total_purchases: customer.total_purchases + 1,
 						total_saved: customer.total_saved + transaction.discount_amount,
 						last_activity: new Date().toISOString()
 					})
 					.where(eq(loyaltyUsers.id, customer.id));
 
-				console.log(`[1C API] Transaction confirmed: ID=${transactionId}, balance=${newBalance}₽ (unchanged)`);
+				console.log(`[1C API] Transaction confirmed: ID=${transactionId}, new balance=${newBalance}₽`);
 
 				// 🔔 УВЕДОМЛЕНИЕ В TELEGRAM
 				if (customer.telegram_user_id) {

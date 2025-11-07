@@ -37,7 +37,7 @@ export const load: LayoutServerLoad = () => {
     expiry: {
       icon: '⏱️',
       title: 'Срок',
-      value: '90 дней'
+      value: '45 дней'
     },
     detailedRulesLink: '/profile',
     detailedRulesText: 'Подробные правила программы лояльности'

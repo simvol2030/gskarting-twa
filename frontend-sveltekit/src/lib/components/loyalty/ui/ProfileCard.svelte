@@ -13,11 +13,55 @@
   let displayUser = $state<User>(user);
   let isLoading = $state(true);
 
+  // State for error handling and retry
+  let registrationError = $state<string | null>(null);
+  let isRegistering = $state(false);
+  let retryCount = $state(0);
+  const MAX_RETRIES = 3;
+
   // Get user initials
   const getInitials = (name: string): string => {
     const parts = name.split(' ');
     return parts.map(p => p[0]).join('').toUpperCase().slice(0, 2);
   };
+
+  // Retry registration function
+  async function retryRegistration() {
+    if (retryCount >= MAX_RETRIES) {
+      registrationError = 'Превышено количество попыток. Перезапустите приложение.';
+      return;
+    }
+
+    retryCount++;
+    registrationError = null;
+    isRegistering = true;
+
+    const telegramUser = await waitForTelegramUser(5000);
+    if (!telegramUser) {
+      registrationError = `Не удалось загрузить данные Telegram. Попытка ${retryCount}/${MAX_RETRIES}`;
+      isRegistering = false;
+      return;
+    }
+
+    try {
+      console.log('[ProfileCard] 🔄 Retry: Calling initializeUser() with pre-fetched user...');
+      const result = await initializeUser(undefined, telegramUser);
+
+      if (result && result.success) {
+        displayUser = { ...displayUser, balance: result.user.current_balance };
+        registrationError = null;
+        retryCount = 0;  // Reset on success
+        console.log('[ProfileCard] ✅ Retry successful, balance:', result.user.current_balance);
+      } else {
+        registrationError = `Ошибка регистрации. Попытка ${retryCount}/${MAX_RETRIES}`;
+      }
+    } catch (error) {
+      registrationError = `Ошибка сервера. Попытка ${retryCount}/${MAX_RETRIES}`;
+      console.error('[ProfileCard] ❌ Retry failed:', error);
+    } finally {
+      isRegistering = false;
+    }
+  }
 
   // Initialize Telegram user on mount
   onMount(async () => {
@@ -30,7 +74,7 @@
     if (telegramUser) {
       console.log('[ProfileCard] Running in Telegram Web App mode');
 
-      // 🔥 STEP 1: Update UI IMMEDIATELY (synchronous) - like static version
+      // STEP 1: Update UI IMMEDIATELY (synchronous)
       const newName = `${telegramUser.first_name}${telegramUser.last_name ? ' ' + telegramUser.last_name : ''}`.trim();
       console.log('[ProfileCard] ⚡ INSTANT UPDATE: Setting name to:', newName);
 
@@ -38,27 +82,27 @@
         ...user,
         name: newName,
         cardNumber: formatTelegramCardNumber(telegramUser.id),
-        // Keep demo balance until API responds
+        balance: 0  // Show 0 until API confirms (prevents misleading demo balance)
       };
 
       isLoading = false;
 
-      // 🔥 STEP 2: Register user in background (asynchronous)
+      // STEP 2: Register user in background (with error handling)
+      isRegistering = true;
       try {
-        console.log('[ProfileCard] 📡 Background: Calling initializeUser()...');
-        const result = await initializeUser();
+        console.log('[ProfileCard] 📡 Background: Calling initializeUser() with pre-fetched user...');
+        const result = await initializeUser(undefined, telegramUser);
         console.log('[ProfileCard] 📡 Background: initializeUser() result:', result);
 
         if (result && result.success) {
-          // Update balance from API response
           console.log('[ProfileCard] 💰 Updating balance from API:', result.user.current_balance);
 
           displayUser = {
             ...displayUser,
             balance: result.user.current_balance,
-            // Keep other fields from demo user.json for now
-            // (totalPurchases, totalSaved, etc. will come from database later)
           };
+
+          registrationError = null;  // Clear error on success
 
           console.log('[ProfileCard] ✅ Telegram user registered:', {
             isNewUser: result.isNewUser,
@@ -67,16 +111,20 @@
             displayUserBalance: displayUser.balance
           });
         } else {
-          console.warn('[ProfileCard] ⚠️ API failed, but name is already shown');
+          // Show error to user
+          registrationError = 'Не удалось зарегистрировать аккаунт. Попробуйте перезапустить приложение.';
+          console.warn('[ProfileCard] ⚠️ API returned no result');
         }
       } catch (error) {
-        console.error('[ProfileCard] ❌ Background API failed, but name is already shown:', error);
-        // Name is already displayed from STEP 1, so user sees correct data
+        // Show error to user
+        registrationError = 'Ошибка подключения к серверу. Проверьте интернет и перезапустите приложение.';
+        console.error('[ProfileCard] ❌ Background API failed:', error);
+      } finally {
+        isRegistering = false;
       }
     } else {
       // Not in Telegram Web App - use demo user
       console.log('[ProfileCard] Demo mode: Not running in Telegram Web App');
-      console.log('[ProfileCard] Using demo user:', user.name);
       displayUser = user;
       isLoading = false;
     }
@@ -86,6 +134,25 @@
 </script>
 
 <div class="profile-card">
+  {#if registrationError}
+    <div class="error-banner">
+      <span class="error-icon">⚠️</span>
+      <span class="error-text">{registrationError}</span>
+      {#if retryCount < MAX_RETRIES}
+        <button class="retry-button" onclick={retryRegistration} disabled={isRegistering}>
+          {isRegistering ? 'Повтор...' : 'Повторить'}
+        </button>
+      {/if}
+    </div>
+  {/if}
+
+  {#if isRegistering}
+    <div class="registration-progress">
+      <span class="spinner"></span>
+      <span>Регистрация...</span>
+    </div>
+  {/if}
+
   <div class="profile-header">
     <div class="profile-avatar">
       {getInitials(displayUser.name)}
@@ -144,6 +211,75 @@
     100% {
       transform: translateX(100%) translateY(100%) rotate(45deg);
     }
+  }
+
+  .error-banner {
+    background: #fee;
+    border: 1px solid #fcc;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .error-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .error-text {
+    font-size: 14px;
+    color: #c00;
+    flex: 1;
+  }
+
+  .retry-button {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .retry-button:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  .retry-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .registration-progress {
+    background: #ffd;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #660;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #cc0;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .profile-header {
@@ -237,6 +373,15 @@
 
     .profile-stat-value {
       font-size: 28px;
+    }
+
+    .error-banner {
+      flex-wrap: wrap;
+    }
+
+    .retry-button {
+      width: 100%;
+      margin-top: 4px;
     }
   }
 </style>

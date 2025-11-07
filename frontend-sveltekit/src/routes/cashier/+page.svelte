@@ -44,7 +44,10 @@
 	// ===== Расчетные значения =====
 	let cashbackAmount = $derived(() => {
 		if (checkAmount === 0) return 0;
-		return Math.floor(checkAmount * data.storeConfig.cashbackPercent / 100);
+
+		// 🔴 FIX: При списании кешбэк от finalAmount, при накоплении от checkAmount
+		const baseAmount = isRedeemSelected ? finalAmount() : checkAmount;
+		return Math.floor(baseAmount * data.storeConfig.cashbackPercent / 100);
 	});
 
 	let maxRedeemPoints = $derived(() => {
@@ -87,24 +90,24 @@
 				customer = foundCustomer;
 				console.log('[CASHIER] Customer found:', customer);
 
-				// Получаем сумму чека от Agent'а (из amount.json от 1С)
+				// Получаем сумму чека через Backend API (который запрашивает у Agent)
 				try {
-					const agentResponse = await fetch('http://localhost:3333/get-amount');
-					if (agentResponse.ok) {
-						const agentData = await agentResponse.json();
-						checkAmount = agentData.amount || 0;
+					const response = await fetch(`/api/1c/check-amount?storeId=${data.storeId}`);
+					if (response.ok) {
+						const responseData = await response.json();
+						checkAmount = responseData.checkAmount || 0;
 						checkAmountInput = checkAmount.toString();
 
-						console.log('[CASHIER] Amount from Agent:', checkAmount);
+						console.log('[CASHIER] Amount from backend:', checkAmount);
 
 						// Сразу переходим к выбору "Списать/Копить" (минуя экран ввода суммы)
 						uiState = 'ready';
 					} else {
-						console.warn('[CASHIER] Agent не отвечает, переход к ручному вводу');
+						console.warn('[CASHIER] Backend/Agent не отвечает, переход к ручному вводу');
 						uiState = 'customer_found'; // Fallback: ручной ввод
 					}
 				} catch (err) {
-					console.error('[CASHIER] Ошибка получения суммы от Agent:', err);
+					console.error('[CASHIER] Ошибка получения суммы от backend:', err);
 					uiState = 'customer_found'; // Fallback: ручной ввод
 				}
 			} else {

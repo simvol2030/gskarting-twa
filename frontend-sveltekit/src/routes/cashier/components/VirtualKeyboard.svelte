@@ -135,9 +135,9 @@
 
 	.keyboard-container {
 		background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2332 100%);
-		border-radius: 20px;
-		padding: 24px;
-		max-width: 400px;
+		border-radius: 12px;
+		padding: 12px;
+		max-width: 240px;
 		width: 90%;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 		border: 2px solid var(--border);
@@ -159,12 +159,12 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 16px;
+		margin-bottom: 10px;
 	}
 
 	.keyboard-header h4 {
 		margin: 0;
-		font-size: 16px;
+		font-size: 13px;
 		color: var(--text-primary);
 		font-weight: 600;
 	}
@@ -189,34 +189,34 @@
 	.keyboard-display {
 		background: var(--bg-primary);
 		border: 2px solid var(--border);
-		border-radius: 12px;
-		padding: 16px;
-		margin-bottom: 20px;
+		border-radius: 8px;
+		padding: 10px;
+		margin-bottom: 10px;
 		text-align: center;
 	}
 
 	.display-value {
-		font-size: 32px;
+		font-size: 20px;
 		font-weight: 700;
 		font-family: monospace;
 		color: var(--accent-light);
-		letter-spacing: 8px;
+		letter-spacing: 3px;
 		text-shadow: 0 0 10px var(--glow-accent);
 	}
 
 	.keyboard-grid {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
-		gap: 12px;
+		gap: 6px;
 	}
 
 	.key-btn {
-		height: 64px;
+		height: 36px;
 		border: 2px solid var(--border);
-		border-radius: 12px;
+		border-radius: 8px;
 		background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2332 100%);
 		color: var(--text-primary);
-		font-size: 24px;
+		font-size: 16px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -275,7 +275,7 @@
 		grid-column: span 2;
 		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
 		border-color: var(--accent);
-		font-size: 20px;
+		font-size: 14px;
 		font-weight: 700;
 		box-shadow: 0 4px 16px var(--glow-accent);
 	}

@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { queries } from '../db/database';
 import { db } from '../db/client';
-import { loyaltyUsers, cashierTransactions, transactions } from '../db/schema';
-import { eq, sql } from 'drizzle-orm';
 import { validateId, validatePurchaseAmount, validatePointsToRedeem, validateTransactionMetadata } from '../utils/validation';
 
 const router = Router();
@@ -86,60 +84,52 @@ router.post('/earn', async (req, res) => {
 			});
 		}
 
-		// 7. Calculate points earned (4% cashback - user requirement)
-		const pointsEarned = Math.floor(purchaseAmount * 0.04);
+		// 7. Calculate points earned (5% cashback based on user requirement)
+		const pointsEarned = Math.floor(purchaseAmount * 0.05);
 
-		// 8. Execute operations in ATOMIC TRANSACTION (БАГ #3 FIX)
-		const result = await db.transaction(async (tx) => {
-			// 8a. Update customer balance atomically
-			const [updatedCustomer] = await tx.update(loyaltyUsers)
-				.set({
-					current_balance: sql`current_balance + ${pointsEarned}`,
-					last_activity: new Date().toISOString()
-				})
-				.where(eq(loyaltyUsers.id, customerIdNum))
-				.returning();
+		// 8. Execute operations (note: Drizzle SQLite doesn't support nested transactions)
+		// 8a. Update customer balance
+		const updatedCustomer = await queries.updateLoyaltyUserBalance(customerIdNum, pointsEarned);
+		if (!updatedCustomer) {
+			return res.status(500).json({
+				success: false,
+				error: 'Не удалось обновить баланс покупателя',
+				code: 'INTERNAL_ERROR'
+			});
+		}
 
-			if (!updatedCustomer) {
-				throw new Error('Failed to update customer balance');
-			}
-
-			// 8b. Update customer stats
-			await tx.update(loyaltyUsers)
-				.set({ total_purchases: customer.total_purchases + 1 })
-				.where(eq(loyaltyUsers.id, customerIdNum));
-
-			// 8c. Create cashier transaction record
-			const [cashierTx] = await tx.insert(cashierTransactions)
-				.values({
-					customer_id: customerIdNum,
-					store_id: storeIdNum,
-					type: 'earn',
-					purchase_amount: purchaseAmount,
-					points_amount: pointsEarned,
-					discount_amount: 0,
-					metadata: metadata ? JSON.stringify(metadata) : null,
-					synced_with_1c: false
-				})
-				.returning();
-
-			// 8d. Create global transaction record
-			await tx.insert(transactions)
-				.values({
-					loyalty_user_id: customerIdNum,
-					store_id: storeIdNum,
-					title: 'Начисление за покупку',
-					amount: pointsEarned,
-					type: 'earn',
-					spent: null,
-					store_name: store.name
-				});
-
-			return {
-				cashierTx,
-				newBalance: updatedCustomer.current_balance
-			};
+		// 8b. Update customer stats
+		await queries.updateLoyaltyUserStats(customerIdNum, {
+			total_purchases: customer.total_purchases + 1
 		});
+
+		// 8c. Create cashier transaction record
+		const cashierTx = await queries.createCashierTransaction({
+			customer_id: customerIdNum,
+			store_id: storeIdNum,
+			type: 'earn',
+			purchase_amount: purchaseAmount,
+			points_amount: pointsEarned,
+			discount_amount: 0,
+			metadata: metadata ? JSON.stringify(metadata) : null,
+			synced_with_1c: false
+		});
+
+		// 8d. Create global transaction record
+		await queries.createTransaction({
+			loyalty_user_id: customerIdNum,
+			store_id: storeIdNum,
+			title: 'Начисление за покупку',
+			amount: pointsEarned,
+			type: 'earn',
+			spent: null,
+			store_name: store.name
+		});
+
+		const result = {
+			cashierTx,
+			newBalance: updatedCustomer.current_balance
+		};
 
 		// 9. Log transaction
 		console.log('✅ Cashier earn transaction completed:', {
@@ -268,82 +258,56 @@ router.post('/redeem', async (req, res) => {
 			});
 		}
 
-		// 8. Calculate discount and cashback (КРИТИЧНО: начисление 4% от оставшейся суммы)
+		// 8. Calculate discount (1 point = 1 ruble)
 		const discountAmount = pointsToRedeem;
 		const finalAmount = purchaseAmount - discountAmount;
-		const cashbackEarned = Math.floor(finalAmount * 0.04); // 4% от finalAmount
 
-		// 9. Execute operations in ATOMIC TRANSACTION (БАГ #3 FIX)
-		const result = await db.transaction(async (tx) => {
-			// 9a. Update customer balance: -pointsToRedeem + cashbackEarned
-			const balanceDelta = -pointsToRedeem + cashbackEarned;
+		// 9. Execute operations
+		// 9a. Update customer balance (negative delta for spending)
+		const updatedCustomer = await queries.updateLoyaltyUserBalance(
+			customerIdNum,
+			-pointsToRedeem
+		);
+		if (!updatedCustomer) {
+			return res.status(500).json({
+				success: false,
+				error: 'Не удалось обновить баланс покупателя',
+				code: 'INTERNAL_ERROR'
+			});
+		}
 
-			const [updatedCustomer] = await tx.update(loyaltyUsers)
-				.set({
-					current_balance: sql`current_balance + ${balanceDelta}`,
-					last_activity: new Date().toISOString()
-				})
-				.where(eq(loyaltyUsers.id, customerIdNum))
-				.returning();
-
-			if (!updatedCustomer) {
-				throw new Error('Failed to update customer balance');
-			}
-
-			// 9b. Update customer stats (Проблема #8: total_purchases при redeem)
-			await tx.update(loyaltyUsers)
-				.set({
-					total_purchases: customer.total_purchases + 1,
-					total_saved: customer.total_saved + discountAmount
-				})
-				.where(eq(loyaltyUsers.id, customerIdNum));
-
-			// 9c. Create cashier transaction record
-			const [cashierTx] = await tx.insert(cashierTransactions)
-				.values({
-					customer_id: customerIdNum,
-					store_id: storeIdNum,
-					type: 'redeem',
-					purchase_amount: purchaseAmount,
-					points_amount: cashbackEarned, // Начисленные баллы (4% от finalAmount)
-					discount_amount: discountAmount,
-					metadata: metadata ? JSON.stringify(metadata) : null,
-					synced_with_1c: false
-				})
-				.returning();
-
-			// 9d. Create global transaction record (spend)
-			await tx.insert(transactions)
-				.values({
-					loyalty_user_id: customerIdNum,
-					store_id: storeIdNum,
-					title: 'Списание за покупку',
-					amount: pointsToRedeem,
-					type: 'spend',
-					spent: `${discountAmount} ₽`,
-					store_name: store.name
-				});
-
-			// 9e. Create global transaction record (earn cashback)
-			if (cashbackEarned > 0) {
-				await tx.insert(transactions)
-					.values({
-						loyalty_user_id: customerIdNum,
-						store_id: storeIdNum,
-						title: 'Начисление кешбэка (4% от оплаты)',
-						amount: cashbackEarned,
-						type: 'earn',
-						spent: null,
-						store_name: store.name
-					});
-			}
-
-			return {
-				cashierTx,
-				newBalance: updatedCustomer.current_balance,
-				cashbackEarned
-			};
+		// 9b. Update customer stats
+		await queries.updateLoyaltyUserStats(customerIdNum, {
+			total_saved: customer.total_saved + discountAmount
 		});
+
+		// 9c. Create cashier transaction record
+		const cashierTx = await queries.createCashierTransaction({
+			customer_id: customerIdNum,
+			store_id: storeIdNum,
+			type: 'redeem',
+			purchase_amount: purchaseAmount,
+			points_amount: pointsToRedeem,
+			discount_amount: discountAmount,
+			metadata: metadata ? JSON.stringify(metadata) : null,
+			synced_with_1c: false
+		});
+
+		// 9d. Create global transaction record
+		await queries.createTransaction({
+			loyalty_user_id: customerIdNum,
+			store_id: storeIdNum,
+			title: 'Списание за покупку',
+			amount: pointsToRedeem,
+			type: 'spend',
+			spent: `${discountAmount} ₽`,
+			store_name: store.name
+		});
+
+		const result = {
+			cashierTx,
+			newBalance: updatedCustomer.current_balance
+		};
 
 		// 10. Log transaction
 		console.log('✅ Cashier redeem transaction completed:', {
@@ -352,7 +316,6 @@ router.post('/redeem', async (req, res) => {
 			pointsRedeemed: pointsToRedeem,
 			discountAmount,
 			finalAmount,
-			cashbackEarned: result.cashbackEarned,
 			newBalance: result.newBalance
 		});
 
@@ -363,7 +326,6 @@ router.post('/redeem', async (req, res) => {
 				id: result.cashierTx.id,
 				customerId: customerIdNum,
 				pointsRedeemed: pointsToRedeem,
-				cashbackEarned: result.cashbackEarned, // 4% от оплаченной суммы
 				discountAmount,
 				finalAmount,
 				newBalance: result.newBalance,

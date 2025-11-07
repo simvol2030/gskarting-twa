@@ -68,7 +68,7 @@ export const load: PageServerLoad = () => {
         id: 'expiry',
         emoji: '⏱️',
         title: 'Срок действия',
-        description: 'Мурзи-коины действуют <strong>90 дней</strong> с момента начисления',
+        description: 'Мурзи-коины действуют <strong>45 дней</strong> с момента начисления',
         example: 'Не забудьте использовать бонусы вовремя!'
       },
       {

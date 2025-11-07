@@ -70,23 +70,37 @@ bot.command('start', async (ctx) => {
 	console.log(`📝 Новый пользователь: ${firstName} (ID: ${telegramUserId})`);
 
 	// Сообщение 1: Приветствие
-	await ctx.reply(WELCOME_MESSAGE_1);
+	if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
+		const keyboard = new InlineKeyboard()
+			.webApp('Мурзи-коины', WEB_APP_URL);
+		await ctx.reply(WELCOME_MESSAGE_1, {
+			reply_markup: keyboard
+		});
+	} else {
+		await ctx.reply(WELCOME_MESSAGE_1 + '\n\n💻 Локальный тест: ' + WEB_APP_URL);
+	}
 
 	// Задержка 1 секунда
 	await new Promise(resolve => setTimeout(resolve, 1000));
 
 	// Сообщение 2: Стартовый бонус
-	await ctx.reply(WELCOME_BONUS);
+	if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
+		const keyboard = new InlineKeyboard()
+			.webApp('Мурзи-коины', WEB_APP_URL);
+		await ctx.reply(WELCOME_BONUS, {
+			reply_markup: keyboard
+		});
+	} else {
+		await ctx.reply(WELCOME_BONUS + '\n\n💻 Локальный тест: ' + WEB_APP_URL);
+	}
 
 	// Задержка 1 секунда
 	await new Promise(resolve => setTimeout(resolve, 1000));
 
 	// Сообщение 3: Правила программы
-	// 🔴 FIX: Кнопка только для HTTPS (production)
 	if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
 		const keyboard = new InlineKeyboard()
-			.webApp('💳 Открыть карту лояльности', WEB_APP_URL);
-
+			.webApp('Мурзи-коины', WEB_APP_URL);
 		await ctx.reply(PROGRAM_RULES, {
 			reply_markup: keyboard
 		});
@@ -99,7 +113,7 @@ bot.command('start', async (ctx) => {
 // ===== HANDLER: /balance =====
 bot.command('balance', async (ctx) => {
 	const keyboard = new InlineKeyboard()
-		.webApp('💰 Баллы', WEB_APP_URL);
+		.webApp('Мурзи-коины', WEB_APP_URL);
 
 	await ctx.reply('Откройте карту лояльности чтобы увидеть ваш текущий баланс:', {
 		reply_markup: keyboard
@@ -114,7 +128,7 @@ bot.command('rules', async (ctx) => {
 // ===== HANDLER: Любой текст =====
 bot.on('message:text', async (ctx) => {
 	const keyboard = new InlineKeyboard()
-		.webApp('💳 Открыть карту', WEB_APP_URL);
+		.webApp('Мурзи-коины', WEB_APP_URL);
 
 	await ctx.reply(
 		'👋 Здравствуйте! Откройте вашу карту лояльности:',
@@ -190,7 +204,7 @@ app.post('/notify-transaction', async (req, res) => {
 		// 🔴 FIX: Кнопка только для HTTPS
 		if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
 			const keyboard = new InlineKeyboard()
-				.webApp('💰 Баллы', WEB_APP_URL);
+				.webApp('Мурзи-коины', WEB_APP_URL);
 
 			await bot.api.sendMessage(telegramUserId, message, {
 				reply_markup: keyboard
@@ -207,7 +221,7 @@ app.post('/notify-transaction', async (req, res) => {
 	} catch (error) {
 		console.error('❌ Ошибка отправки уведомления:', error);
 
-		if (error.error_code === 403) {
+		if (error && typeof error === "object" && "error_code" in error && (error as any).error_code === 403) {
 			// Пользователь заблокировал бота
 			return res.status(200).json({
 				success: false,

@@ -27,16 +27,21 @@ interface TelegramUserData {
 }
 
 export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
-  console.log('[API /telegram/init] 📥 Request received');
+  console.log('[API /telegram/init] 📥 ============ REQUEST START ============');
+  console.log('[API /telegram/init] 📥 Timestamp:', new Date().toISOString());
 
   try {
+    console.log('[API /telegram/init] 📋 Parsing request body...');
     const userData: TelegramUserData = await request.json();
-    console.log('[API /telegram/init] 📦 Received userData:', {
+    console.log('[API /telegram/init] ✅ Body parsed successfully');
+    console.log('[API /telegram/init] 📦 Received userData:', JSON.stringify({
       telegram_user_id: userData.telegram_user_id,
       first_name: userData.first_name,
+      last_name: userData.last_name,
+      username: userData.username,
       chat_id: userData.chat_id,
       store_id: userData.store_id
-    });
+    }, null, 2));
 
     // Validate required fields
     if (!userData.telegram_user_id || !userData.first_name || !userData.chat_id) {
@@ -208,6 +213,9 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
       });
       console.log('[API] 🍪 Cookie set for new user:', newUser.telegram_user_id);
 
+      console.log('[API /telegram/init] ✅ ============ SUCCESS (NEW USER) ============');
+      console.log('[API /telegram/init] ✅ Returning user data with balance:', newUser.current_balance);
+
       return json({
         success: true,
         isNewUser: true,
@@ -224,7 +232,11 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
       });
     }
   } catch (error) {
-    console.error('Error in /api/telegram/init:', error);
+    console.error('[API /telegram/init] ❌ ============ ERROR CAUGHT ============');
+    console.error('[API /telegram/init] ❌ Error type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('[API /telegram/init] ❌ Error message:', error instanceof Error ? error.message : String(error));
+    console.error('[API /telegram/init] ❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('[API /telegram/init] ❌ Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     return json(
       {
         success: false,

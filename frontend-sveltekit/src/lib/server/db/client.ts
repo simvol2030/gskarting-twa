@@ -25,12 +25,23 @@ const POSTGRES_CONNECTION_STRING =
  * Автоматически выбирает драйвер в зависимости от DATABASE_TYPE
  */
 function initializeDrizzle(): BetterSQLite3Database<typeof schema> {
-	// 🔴 TEMPORARY: Frontend БД отключена - всё через Backend API
-	// Это решает проблему Windows/WSL конфликта доступа к БД
-	console.log('⚠️ Frontend DB disabled - using Backend API only');
+	if (DATABASE_TYPE === 'postgres') {
+		console.log('🐘 Using PostgreSQL database');
+		const pool = new Pool({
+			connectionString: POSTGRES_CONNECTION_STRING
+		});
+		return drizzlePostgres(pool, { schema }) as any;
+	} else {
+		console.log('📦 Using SQLite database:', SQLITE_PATH);
+		const sqlite = new Database(SQLITE_PATH, {
+			verbose: process.env.NODE_ENV !== 'production' ? console.log : undefined
+		});
 
-	// Возвращаем mock объект (не используется в cashier)
-	return null as any;
+		// Включаем WAL режим для лучшей производительности
+		sqlite.pragma('journal_mode = WAL');
+
+		return drizzleSQLite(sqlite, { schema });
+	}
 }
 
 /**
