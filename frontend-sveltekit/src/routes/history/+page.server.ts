@@ -43,16 +43,16 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 	console.log('[history/+page.server.ts] Loading history for telegram_user_id:', telegramUserId);
 
-	// Calculate 30 days ago cutoff date
-	const thirtyDaysAgo = new Date();
-	thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-	const cutoffDate = thirtyDaysAgo.toISOString();
+	// Calculate 45 days ago cutoff date (matches loyalty points expiry)
+	const fortyFiveDaysAgo = new Date();
+	fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
+	const cutoffDate = fortyFiveDaysAgo.toISOString();
 
 	console.log('[history/+page.server.ts] Loading transactions since:', cutoffDate);
 
 	// FIX #1: JOIN with loyalty_users to get loyalty_user.id
 	// telegram_user_id (123456789) → loyalty_user.id (1, 2, 3...)
-	// FIX #6: Changed from .limit(50) to date-based filtering (30 days)
+	// FIX #6: Changed from .limit(50) to date-based filtering (45 days - matches loyalty points expiry)
 	const userTransactions = await db
 		.select({
 			id: transactions.id,

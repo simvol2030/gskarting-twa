@@ -1,14 +1,15 @@
 import { db } from '$lib/server/db/client';
-import { loyaltyUsers } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { loyaltyUsers, transactions } from '$lib/server/db/schema';
+import { eq, gte, and, count, sum, sql } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
 /**
  * Root layout data loader
  *
- * DATABASE VERSION (Phase 3 Update):
+ * DATABASE VERSION (Phase 3 Update - 45 Days):
  * - Loads demo user as fallback (for testing in browser)
- * - Loads REAL user stats (totalPurchases, totalSaved) from database if authenticated
+ * - Loads REAL user stats (totalPurchases, totalSaved) calculated from last 45 days of transactions
+ * - Matches loyalty points expiry period (45 days)
  * - ProfileCard component merges Telegram SDK data instantly
  */
 export const load: LayoutServerLoad = async ({ cookies }) => {
@@ -31,34 +32,55 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
     const telegramUserId = parseInt(telegramUserIdStr, 10);
 
     if (!isNaN(telegramUserId) && telegramUserId > 0) {
+      // Load user basic info
       const [loyaltyUser] = await db
         .select({
           id: loyaltyUsers.id,
           first_name: loyaltyUsers.first_name,
           last_name: loyaltyUsers.last_name,
           card_number: loyaltyUsers.card_number,
-          current_balance: loyaltyUsers.current_balance,
-          total_purchases: loyaltyUsers.total_purchases,
-          total_saved: loyaltyUsers.total_saved
+          current_balance: loyaltyUsers.current_balance
         })
         .from(loyaltyUsers)
         .where(eq(loyaltyUsers.telegram_user_id, telegramUserId))
         .limit(1);
 
       if (loyaltyUser) {
+        // Calculate 45 days ago cutoff (matches loyalty points expiry)
+        const fortyFiveDaysAgo = new Date();
+        fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
+        const cutoffDate = fortyFiveDaysAgo.toISOString();
+
+        // Calculate stats from last 45 days of transactions
+        // totalPurchases: count of 'earn' type transactions (each purchase earns points)
+        // totalSaved: sum of money saved by redeeming points (amount field for 'spend' type)
+        const [stats] = await db
+          .select({
+            purchaseCount: sql<number>`COUNT(CASE WHEN ${transactions.type} = 'earn' THEN 1 END)`,
+            totalSaved: sql<number>`COALESCE(SUM(CASE WHEN ${transactions.type} = 'spend' THEN ABS(${transactions.amount}) ELSE 0 END), 0)`
+          })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.loyalty_user_id, loyaltyUser.id),
+              gte(transactions.created_at, cutoffDate)
+            )
+          );
+
         user = {
           id: loyaltyUser.id,
           name: `${loyaltyUser.first_name} ${loyaltyUser.last_name || ''}`.trim(),
           cardNumber: loyaltyUser.card_number || '000000',
           balance: loyaltyUser.current_balance,
-          totalPurchases: loyaltyUser.total_purchases ?? 0,
-          totalSaved: loyaltyUser.total_saved ?? 0
+          totalPurchases: stats?.purchaseCount ?? 0,
+          totalSaved: stats?.totalSaved ?? 0
         };
         isDemoMode = false;
-        console.log('[+layout.server.ts] Loaded real user stats:', {
+        console.log('[+layout.server.ts] Loaded real user stats from last 45 days:', {
           telegram_user_id: telegramUserId,
           totalPurchases: user.totalPurchases,
-          totalSaved: user.totalSaved
+          totalSaved: user.totalSaved,
+          cutoffDate
         });
       }
     }
