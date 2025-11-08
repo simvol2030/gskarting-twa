@@ -15,6 +15,7 @@
 	let inputRef: HTMLInputElement;
 	let autoSearchTimer: number | null = null;
 	let isKeyboardOpen = $state(false);
+	let isFocused = $state(false);
 
 	export function focus() {
 		inputRef?.focus();
@@ -65,22 +66,36 @@
 			}, 1000) as unknown as number;
 		}
 	}
+
+	function handleFocus() {
+		isFocused = true;
+	}
+
+	function handleBlur() {
+		isFocused = false;
+	}
 </script>
 
 <div class="card">
 	<h2 class="mb-3 text-center">Сканируйте карту или введите номер</h2>
-	<input
-		bind:this={inputRef}
-		bind:value
-		class="input mb-2"
-		type="text"
-		inputmode="numeric"
-		pattern="[0-9]*"
-		placeholder="6-значный номер карты (например: 421856)"
-		onkeydown={(e) => e.key === 'Enter' && onSearch()}
-		oninput={handleInput}
-		disabled={isSearching}
-	/>
+
+	<!-- Input-кнопка с градиентом и переливанием -->
+	<div class="input-button-wrapper" class:focused={isFocused} class:has-value={value}>
+		<input
+			bind:this={inputRef}
+			bind:value
+			class="input-as-button"
+			type="text"
+			inputmode="numeric"
+			pattern="[0-9]*"
+			placeholder="👆 НАЖМИТЕ ДЛЯ ВВОДА"
+			onkeydown={(e) => e.key === 'Enter' && onSearch()}
+			oninput={handleInput}
+			onfocus={handleFocus}
+			onblur={handleBlur}
+			disabled={isSearching}
+		/>
+	</div>
 
 	<div class="button-group">
 		<button
@@ -114,14 +129,124 @@
 />
 
 <style>
-	/* Переопределяем цвет текста input для видимости */
-	:global(.input) {
-		color: #ffffff !important;
+	/* Input-кнопка с градиентом */
+	.input-button-wrapper {
+		position: relative;
+		height: 45px;
+		margin-bottom: 8px;
+		border-radius: 8px;
+		overflow: hidden;
+
+		/* Gradient background (оранжевый как ProfileCard в TWA) */
+		background: linear-gradient(135deg,
+			#ff6b00,      /* primary-orange */
+			#e65100,      /* primary-orange-dark */
+			#d32f2f       /* accent-red */
+		);
+
+		box-shadow: 0 4px 16px rgba(255, 107, 0, 0.4);
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 
-	:global(.input::placeholder) {
-		color: var(--text-secondary) !important;
-		opacity: 0.6;
+	/* Плавное переливание (shimmer) - всегда активно */
+	.input-button-wrapper::before {
+		content: '';
+		position: absolute;
+		top: -50%;
+		left: -50%;
+		width: 200%;
+		height: 200%;
+		background: linear-gradient(
+			45deg,
+			transparent 30%,
+			rgba(255, 255, 255, 0.15) 50%,
+			transparent 70%
+		);
+		animation: shimmer 3s infinite;
+		pointer-events: none;
+		z-index: 1;
+	}
+
+	@keyframes shimmer {
+		0% {
+			transform: translateX(-100%) translateY(-100%) rotate(45deg);
+		}
+		100% {
+			transform: translateX(100%) translateY(100%) rotate(45deg);
+		}
+	}
+
+	/* Мерцание раз в 5 секунд */
+	.input-button-wrapper::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: rgba(255, 255, 255, 0.1);
+		opacity: 0;
+		animation: pulse5s 5s infinite;
+		pointer-events: none;
+		z-index: 2;
+	}
+
+	@keyframes pulse5s {
+		0%, 90% {
+			opacity: 0;
+		}
+		95% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
+
+	/* При фокусе - усиливаем glow */
+	.input-button-wrapper.focused {
+		box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.3),
+		            0 6px 24px rgba(255, 107, 0, 0.5);
+		transform: scale(1.01);
+	}
+
+	/* Input field (прозрачный фон, текст поверх gradient) */
+	.input-as-button {
+		position: relative;
+		z-index: 3;
+		width: 100%;
+		height: 45px;
+		padding: 0 12px;
+		background: transparent;
+		border: 2px solid rgba(255, 255, 255, 0.25);
+		border-radius: 8px;
+
+		/* Текст */
+		font-size: 16px;
+		font-weight: 700;
+		letter-spacing: 3px;
+		text-align: center;
+		color: white;
+		text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+
+		transition: all 0.2s;
+	}
+
+	.input-as-button:focus {
+		outline: none;
+		background: rgba(0, 0, 0, 0.1);
+		border-color: rgba(255, 255, 255, 0.6);
+	}
+
+	.input-as-button::placeholder {
+		color: rgba(255, 255, 255, 0.85);
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 1px;
+		text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+	}
+
+	/* При вводе - показываем введённые цифры крупно */
+	.input-button-wrapper.has-value .input-as-button {
+		font-size: 20px;
+		letter-spacing: 6px;
 	}
 
 	.button-group {
