@@ -18,9 +18,9 @@ router.post('/login', async (req, res) => {
 		return res.status(400).json({ error: emailValidation.error });
 	}
 
-	const passwordValidation = validatePassword(password);
-	if (!passwordValidation.valid) {
-		return res.status(400).json({ error: passwordValidation.error });
+	// Basic password presence check (no complexity validation for login)
+	if (!password || typeof password !== 'string') {
+		return res.status(400).json({ error: 'Password is required' });
 	}
 
 	// Rate limiting check
