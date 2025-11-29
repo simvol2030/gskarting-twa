@@ -6,11 +6,6 @@
   }
 
   let { onMenuClick }: Props = $props();
-  let currentTheme = $state($theme);
-
-  $effect(() => {
-    currentTheme = $theme;
-  });
 </script>
 
 <header class="app-header">
@@ -25,7 +20,7 @@
 
   <div class="header-right">
     <button class="theme-toggle" onclick={toggleTheme} aria-label="Переключить тему">
-      <span class="theme-icon">{currentTheme === 'light' ? '🌙' : '☀️'}</span>
+      <span class="theme-icon">{$theme === 'light' ? '🌙' : '☀️'}</span>
     </button>
 
     <button class="hamburger-button" onclick={onMenuClick} aria-label="Открыть меню">

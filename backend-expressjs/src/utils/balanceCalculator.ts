@@ -1,20 +1,21 @@
 import { db } from '../db/client';
-import { transactions } from '../db/schema';
-import { eq, sql } from 'drizzle-orm';
-import { getPointsExpirationCutoffDate } from './retention';
+import { loyaltyUsers } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { getPointsExpirationCutoffDate, getRetentionDays } from './retention';
 
 /**
  * Calculate available (non-expired) balance for a customer
  *
- * This function calculates the customer's available balance by:
- * 1. Taking the current balance from loyalty_users table
- * 2. Subtracting points from 'earn' transactions older than 45 days that haven't been marked as expired yet
+ * NEW LOGIC (Start-5 Task-001):
+ * - Check user's last_activity against cutoff date (45 days)
+ * - If last_activity < cutoff → ALL points expired (return 0)
+ * - If last_activity >= cutoff → ALL points valid (return currentBalance)
  *
  * This provides real-time expiration checking even if the scheduled job hasn't run yet.
  *
  * @param customerId - Loyalty user ID
  * @param currentBalance - Customer's current balance from database
- * @returns Available balance (excluding expired points)
+ * @returns Available balance (0 if inactive, currentBalance if active)
  */
 export async function calculateAvailableBalance(
 	customerId: number,
@@ -25,57 +26,57 @@ export async function calculateAvailableBalance(
 	needsSync: boolean;
 }> {
 	try {
-		const cutoffIso = getPointsExpirationCutoffDate();
+		const cutoffIso = await getPointsExpirationCutoffDate();
 
-		// Find all 'earn' transactions that are expired but not yet marked
-		const expiredEarns = await db
-			.select({
-				id: transactions.id,
-				amount: transactions.amount,
-				created_at: transactions.created_at
-			})
-			.from(transactions)
-			.where(
-				sql`${transactions.loyalty_user_id} = ${customerId}
-					AND ${transactions.type} = 'earn'
-					AND ${transactions.created_at} < ${cutoffIso}
-					AND (${transactions.spent} IS NULL OR ${transactions.spent} != 'expired')`
-			);
+		// Get user's last activity
+		const user = await db.query.loyaltyUsers.findFirst({
+			where: eq(loyaltyUsers.id, customerId),
+			columns: { last_activity: true }
+		});
 
-		// Sum up expired points
-		const expiredPoints = expiredEarns.reduce((sum, tx) => sum + tx.amount, 0);
-
-		// Calculate available balance (cannot go negative)
-		const availableBalance = Math.max(0, currentBalance - expiredPoints);
-
-		// needsSync indicates that the scheduled job needs to run to update the database
-		const needsSync = expiredPoints > 0;
-
-		if (needsSync) {
-			console.log(
-				`[BALANCE CALC] Customer ${customerId}: current=${currentBalance}, expired=${expiredPoints}, available=${availableBalance} (needs sync)`
-			);
+		if (!user || !user.last_activity) {
+			// No activity record - return current balance
+			return { availableBalance: currentBalance, expiredPoints: 0, needsSync: false };
 		}
 
-		return {
-			availableBalance,
-			expiredPoints,
-			needsSync
-		};
-	} catch (error) {
-		console.error('[BALANCE CALC ERROR]', error);
-		// On error, return current balance to avoid blocking operations
+		// Check if user is inactive (last_activity < cutoff)
+		const lastActivityDate = new Date(user.last_activity);
+		const cutoffDate = new Date(cutoffIso);
+
+		if (lastActivityDate < cutoffDate) {
+			// User is inactive - all points should expire
+			console.log(
+				`[BALANCE CALC] User ${customerId} inactive since ${user.last_activity}, balance will expire`
+			);
+			return {
+				availableBalance: 0,
+				expiredPoints: currentBalance,
+				needsSync: true
+			};
+		}
+
+		// User is active - all points are valid
 		return {
 			availableBalance: currentBalance,
 			expiredPoints: 0,
 			needsSync: false
 		};
+	} catch (error) {
+		console.error('[BALANCE CALC ERROR]', error);
+		return { availableBalance: currentBalance, expiredPoints: 0, needsSync: false };
 	}
 }
 
 /**
- * Calculate total points that will expire for a customer
- * (diagnostic function)
+ * Calculate points approaching expiration for a customer
+ *
+ * NEW LOGIC (Start-5 Task-001):
+ * - Points don't expire per transaction anymore
+ * - Instead, check if user is approaching inactivity threshold
+ * - Returns warning levels based on days since last activity
+ *
+ * @param customerId - Loyalty user ID
+ * @returns Warning levels for approaching expiration
  */
 export async function getExpiringPointsSummary(customerId: number): Promise<{
 	expiringIn7Days: number;
@@ -83,79 +84,47 @@ export async function getExpiringPointsSummary(customerId: number): Promise<{
 	expiringIn30Days: number;
 	expiredNow: number;
 }> {
-	const now = new Date();
+	try {
+		// Get dynamic expiry days from settings
+		const expiryDays = await getRetentionDays();
 
-	const get7DaysAgo = () => {
-		const d = new Date(now);
-		d.setDate(d.getDate() - 38); // 45 - 7 = 38 days ago
-		return d.toISOString();
-	};
+		const user = await db.query.loyaltyUsers.findFirst({
+			where: eq(loyaltyUsers.id, customerId),
+			columns: { last_activity: true, current_balance: true }
+		});
 
-	const get14DaysAgo = () => {
-		const d = new Date(now);
-		d.setDate(d.getDate() - 31); // 45 - 14 = 31 days ago
-		return d.toISOString();
-	};
+		if (!user || !user.last_activity) {
+			return { expiringIn7Days: 0, expiringIn14Days: 0, expiringIn30Days: 0, expiredNow: 0 };
+		}
 
-	const get30DaysAgo = () => {
-		const d = new Date(now);
-		d.setDate(d.getDate() - 15); // 45 - 30 = 15 days ago
-		return d.toISOString();
-	};
+		const now = new Date();
+		const lastActivity = new Date(user.last_activity);
+		const daysSinceActivity = Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24));
 
-	const cutoffIso = getPointsExpirationCutoffDate();
+		// If already expired (> expiry_days)
+		if (daysSinceActivity >= expiryDays) {
+			return { expiringIn7Days: 0, expiringIn14Days: 0, expiringIn30Days: 0, expiredNow: user.current_balance };
+		}
 
-	// Expired now (older than 45 days)
-	const expiredNow = await db
-		.select({ amount: transactions.amount })
-		.from(transactions)
-		.where(
-			sql`${transactions.loyalty_user_id} = ${customerId}
-				AND ${transactions.type} = 'earn'
-				AND ${transactions.created_at} < ${cutoffIso}
-				AND (${transactions.spent} IS NULL OR ${transactions.spent} != 'expired')`
-		);
+		// If approaching expiration
+		const balance = user.current_balance;
 
-	// Expiring in 7 days
-	const expiring7 = await db
-		.select({ amount: transactions.amount })
-		.from(transactions)
-		.where(
-			sql`${transactions.loyalty_user_id} = ${customerId}
-				AND ${transactions.type} = 'earn'
-				AND ${transactions.created_at} >= ${cutoffIso}
-				AND ${transactions.created_at} < ${get7DaysAgo()}
-				AND (${transactions.spent} IS NULL OR ${transactions.spent} != 'expired')`
-		);
+		if (daysSinceActivity >= (expiryDays - 7)) {
+			return { expiringIn7Days: balance, expiringIn14Days: 0, expiringIn30Days: 0, expiredNow: 0 };
+		}
 
-	// Expiring in 14 days
-	const expiring14 = await db
-		.select({ amount: transactions.amount })
-		.from(transactions)
-		.where(
-			sql`${transactions.loyalty_user_id} = ${customerId}
-				AND ${transactions.type} = 'earn'
-				AND ${transactions.created_at} >= ${get7DaysAgo()}
-				AND ${transactions.created_at} < ${get14DaysAgo()}
-				AND (${transactions.spent} IS NULL OR ${transactions.spent} != 'expired')`
-		);
+		if (daysSinceActivity >= (expiryDays - 14)) {
+			return { expiringIn7Days: 0, expiringIn14Days: balance, expiringIn30Days: 0, expiredNow: 0 };
+		}
 
-	// Expiring in 30 days
-	const expiring30 = await db
-		.select({ amount: transactions.amount })
-		.from(transactions)
-		.where(
-			sql`${transactions.loyalty_user_id} = ${customerId}
-				AND ${transactions.type} = 'earn'
-				AND ${transactions.created_at} >= ${get14DaysAgo()}
-				AND ${transactions.created_at} < ${get30DaysAgo()}
-				AND (${transactions.spent} IS NULL OR ${transactions.spent} != 'expired')`
-		);
+		if (daysSinceActivity >= (expiryDays - 30)) {
+			return { expiringIn7Days: 0, expiringIn14Days: 0, expiringIn30Days: balance, expiredNow: 0 };
+		}
 
-	return {
-		expiredNow: expiredNow.reduce((sum, tx) => sum + tx.amount, 0),
-		expiringIn7Days: expiring7.reduce((sum, tx) => sum + tx.amount, 0),
-		expiringIn14Days: expiring14.reduce((sum, tx) => sum + tx.amount, 0),
-		expiringIn30Days: expiring30.reduce((sum, tx) => sum + tx.amount, 0)
-	};
+		// Not approaching expiration yet
+		return { expiringIn7Days: 0, expiringIn14Days: 0, expiringIn30Days: 0, expiredNow: 0 };
+	} catch (error) {
+		console.error('[EXPIRING SUMMARY ERROR]', error);
+		return { expiringIn7Days: 0, expiringIn14Days: 0, expiringIn30Days: 0, expiredNow: 0 };
+	}
 }

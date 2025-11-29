@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Recommendation } from '$lib/types/loyalty';
-  import { formatNumber } from '$lib/telegram';
 
   interface Props {
     recommendation: Recommendation;
@@ -16,10 +15,11 @@
 
   <div class="recommendation-content">
     <h4>{recommendation.name}</h4>
-    <p>{recommendation.description}</p>
+    <!-- CRITICAL FIX #2 (Sprint 3): Price removed - recommendations БЕЗ ЦЕНЫ -->
+    {#if recommendation.description}
+      <p class="recommendation-description">{recommendation.description}</p>
+    {/if}
   </div>
-
-  <div class="recommendation-price">{formatNumber(recommendation.price)} ₽</div>
 </div>
 
 <style>
@@ -75,25 +75,26 @@
 
   .recommendation-content {
     flex: 1;
+    min-width: 0;
   }
 
   .recommendation-content h4 {
     font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin: 0 0 4px 0;
   }
 
-  .recommendation-content p {
+  .recommendation-description {
     font-size: 13px;
     color: var(--text-secondary);
-    line-height: 1.3;
-  }
-
-  .recommendation-price {
-    font-weight: bold;
-    color: var(--primary-orange);
-    font-size: 15px;
+    line-height: 1.4;
+    margin: 0;
+    /* Limit to 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   @media (max-width: 480px) {
@@ -110,7 +111,7 @@
       font-size: 14px;
     }
 
-    .recommendation-content p {
+    .recommendation-description {
       font-size: 12px;
     }
   }

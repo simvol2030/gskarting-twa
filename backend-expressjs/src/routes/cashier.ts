@@ -5,6 +5,7 @@ import { loyaltyUsers, cashierTransactions, transactions } from '../db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { validateId, validatePurchaseAmount, validatePointsToRedeem, validateTransactionMetadata } from '../utils/validation';
 import { calculateAvailableBalance } from '../utils/balanceCalculator';
+import { getLoyaltySettings } from '../db/queries/loyaltySettings';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const router = Router();
 const recentTransactions = new Map<string, number>();
 const IDEMPOTENCY_TTL_MS = 10000; // 10 seconds
 
-function checkAndRecordTransaction(customerId: number, storeId: number, amount: number, type: 'earn' | 'redeem'): boolean {
+function checkAndRecordTransaction(customerId: number, storeId: number, amount: number, type: 'earn' | 'spend'): boolean {
 	const key = `${customerId}_${storeId}_${amount}_${type}`;
 	const now = Date.now();
 
@@ -126,9 +127,11 @@ router.post('/earn', async (req, res) => {
 			});
 		}
 
-		// 7. Calculate points earned (4% cashback with banker's rounding)
-		// Changed from Math.floor to Math.round for fairer cashback calculation
-		const pointsEarned = Math.round(purchaseAmount * 0.04);
+		// 7. Get loyalty settings and calculate points earned
+		// BUG-S1 FIX: Read earning_percent from settings instead of hardcoded 0.04
+		const loyaltySettings = await getLoyaltySettings();
+		const earningPercent = loyaltySettings.earning_percent / 100; // Convert 4.0 to 0.04
+		const pointsEarned = Math.round(purchaseAmount * earningPercent);
 
 		// 8. Execute operations in ATOMIC TRANSACTION (БАГ #3 FIX)
 		const result = await db.transaction(async (tx) => {
@@ -265,7 +268,7 @@ router.post('/redeem', async (req, res) => {
 		const storeIdNum = parseInt(storeId.toString());
 
 		// 🔴 FIX #4: Idempotency check - prevent duplicate redeem transactions
-		if (!checkAndRecordTransaction(customerIdNum, storeIdNum, pointsToRedeem, 'redeem')) {
+		if (!checkAndRecordTransaction(customerIdNum, storeIdNum, pointsToRedeem, 'spend')) {
 			console.warn(`[CASHIER REDEEM] Duplicate transaction detected: customer=${customerIdNum}, points=${pointsToRedeem}₽`);
 			return res.status(409).json({
 				success: false,
@@ -347,10 +350,13 @@ router.post('/redeem', async (req, res) => {
 			});
 		}
 
-		// 8. Calculate discount and cashback (КРИТИЧНО: начисление 4% от оставшейся суммы)
+		// 8. Get loyalty settings and calculate discount and cashback
+		// BUG-S1 FIX: Read earning_percent from settings instead of hardcoded 0.04
+		const loyaltySettings = await getLoyaltySettings();
+		const earningPercent = loyaltySettings.earning_percent / 100; // Convert 4.0 to 0.04
 		const discountAmount = pointsToRedeem;
 		const finalAmount = purchaseAmount - discountAmount;
-		const cashbackEarned = Math.round(finalAmount * 0.04); // 4% от finalAmount (banker's rounding)
+		const cashbackEarned = Math.round(finalAmount * earningPercent); // % from settings (banker's rounding)
 
 		// 9. Execute operations in ATOMIC TRANSACTION (БАГ #3 FIX)
 		const result = await db.transaction(async (tx) => {
@@ -391,7 +397,7 @@ router.post('/redeem', async (req, res) => {
 				.values({
 					customer_id: customerIdNum,
 					store_id: storeIdNum,
-					type: 'redeem',
+					type: 'spend',
 					purchase_amount: purchaseAmount,
 					points_amount: cashbackEarned, // Начисленные баллы (4% от finalAmount)
 					discount_amount: discountAmount,
@@ -418,7 +424,7 @@ router.post('/redeem', async (req, res) => {
 					.values({
 						loyalty_user_id: customerIdNum,
 						store_id: storeIdNum,
-						title: 'Начисление кешбэка (4% от оплаты)',
+						title: `Начисление кешбэка (${loyaltySettings.earning_percent}% от оплаты)`,
 						amount: cashbackEarned,
 						type: 'earn',
 						spent: null,

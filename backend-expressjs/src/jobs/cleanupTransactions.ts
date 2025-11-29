@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { transactions } from '../db/schema';
 import { lt, sql } from 'drizzle-orm';
-import { getCleanupCutoffDate, RETENTION_DAYS, CLEANUP_GRACE_PERIOD } from '../utils/retention';
+import { getCleanupCutoffDate, CLEANUP_GRACE_PERIOD } from '../utils/retention';
 
 /**
  * Cleanup old transactions (older than 46 days with grace period)
@@ -14,8 +14,8 @@ import { getCleanupCutoffDate, RETENTION_DAYS, CLEANUP_GRACE_PERIOD } from '../u
  */
 export async function cleanupOldTransactions(dryRun: boolean = false): Promise<number> {
 	try {
-		// Calculate cutoff date with grace period (prevents race condition)
-		const cutoffIso = getCleanupCutoffDate();
+		// Calculate cutoff date with grace period (prevents race condition, dynamic from settings)
+		const cutoffIso = await getCleanupCutoffDate();
 
 		console.log(`[CLEANUP] Cutoff date: ${cutoffIso} (dry-run: ${dryRun})`);
 

@@ -18,6 +18,7 @@ export interface Product {
 export interface Store {
   id: number;
   name: string;
+  city: string | null; // Sprint 4 Task 1.4: City name
   address: string;
   iconColor: string;
   phone: string;
@@ -31,12 +32,10 @@ export interface Offer {
   id: number;
   title: string;
   description: string;
-  icon: string;
-  iconColor: string;
+  image: string | null; // Sprint 2: URL to banner image
   deadline: string;
-  deadlineClass: string;
-  details: string;
-  conditions: string[];
+  isActive?: boolean;
+  showOnHome?: boolean;
 }
 
 export interface Transaction {
@@ -52,9 +51,9 @@ export interface Transaction {
 export interface Recommendation {
   id: number;
   name: string;
-  description: string;
-  price: number;
+  description: string | null; // Sprint 3: Can be null for old data
   image: string;
+  // CRITICAL FIX #2 (Sprint 3): price removed - recommendations display WITHOUT price
 }
 
 // ============================================

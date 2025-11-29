@@ -10,3 +10,4 @@ export * from './loyaltyUsers';
 export * from './stores';
 export * from './transactions';
 export * from './cashierTransactions';
+export * from './loyaltySettings';

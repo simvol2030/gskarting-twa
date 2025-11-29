@@ -9,6 +9,11 @@ import { Request, Response, NextFunction } from 'express';
  */
 export function securityHeaders(req: Request, res: Response, next: NextFunction) {
 	// Content Security Policy
+	// 🔒 FIX: Allow connect-src to localhost:5173 for admin panel CORS
+	const connectSrc = process.env.NODE_ENV === 'production'
+		? "'self' https://murzicoin.murzico.ru"
+		: "'self' http://localhost:5173 http://localhost:3015";
+
 	res.setHeader(
 		'Content-Security-Policy',
 		"default-src 'self'; " +
@@ -16,7 +21,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
 			"style-src 'self' 'unsafe-inline'; " +
 			"img-src 'self' data: https:; " +
 			"font-src 'self' data:; " +
-			"connect-src 'self'; " +
+			`connect-src ${connectSrc}; ` +
 			"frame-ancestors 'none';"
 	);
 

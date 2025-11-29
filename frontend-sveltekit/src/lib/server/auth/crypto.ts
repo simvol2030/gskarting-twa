@@ -26,10 +26,14 @@ export interface EncryptedData {
  * @returns Base64 encoded encrypted data with IV, auth tag, and salt
  */
 export function encrypt(data: any): string {
-	const secret = env.SESSION_SECRET || 'fallback-secret-change-in-production';
+	const secret = env.SESSION_SECRET?.trim() || 'fallback-secret-change-in-production';
 
 	if (!env.SESSION_SECRET) {
 		console.error('WARNING: SESSION_SECRET not set in environment. Using insecure fallback!');
+	} else {
+		// Debug: log secret hash for comparison with backend
+		const secretHash = createHash('md5').update(secret).digest('hex').substring(0, 8);
+		console.log(`[FRONTEND-CRYPTO] Encrypt with SECRET length: ${secret.length}, hash: ${secretHash}...`);
 	}
 
 	const salt = randomBytes(SALT_LENGTH);
@@ -62,7 +66,11 @@ export function encrypt(data: any): string {
  */
 export function decrypt(encryptedString: string): any | null {
 	try {
-		const secret = env.SESSION_SECRET || 'fallback-secret-change-in-production';
+		const secret = env.SESSION_SECRET?.trim() || 'fallback-secret-change-in-production';
+
+		// Debug: log secret hash for comparison
+		const secretHash = createHash('md5').update(secret).digest('hex').substring(0, 8);
+		console.log(`[FRONTEND-CRYPTO] Decrypt with SECRET length: ${secret.length}, hash: ${secretHash}...`);
 
 		// Decode the base64 JSON
 		const encryptedData: EncryptedData = JSON.parse(

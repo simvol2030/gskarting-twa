@@ -1,19 +1,19 @@
 import { db } from '../db/client';
 import { transactions, loyaltyUsers } from '../db/schema';
-import { lt, eq, sql, inArray } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getPointsExpirationCutoffDate } from '../utils/retention';
 
 /**
- * Expire points from transactions older than 45 days
+ * Expire points based on user inactivity (45 days)
  *
- * This function processes 'earn' transactions older than 45 days and deducts
- * those points from customer balances.
+ * NEW LOGIC (Start-5 Task-001):
+ * - If user's last_activity is older than 45 days → ALL points expire
+ * - If user had any activity within 45 days → NO points expire
+ * - Activity = any transaction (earn or spend)
  *
- * FIFO Logic:
- * - Points earned 45+ days ago expire first
- * - Only 'earn' type transactions are considered for expiration
- * - Customer balance is reduced by the sum of expired points
- * - Expired transactions are marked but not deleted (audit trail)
+ * Business Rule:
+ * "If a customer doesn't use the loyalty system for 45 days, their entire balance expires.
+ * If they make even one transaction within 45 days, all their points remain valid."
  *
  * @param dryRun - If true, only calculate without updating balances
  * @returns Object with stats about expired points
@@ -21,126 +21,80 @@ import { getPointsExpirationCutoffDate } from '../utils/retention';
 export async function expireOldPoints(dryRun: boolean = false): Promise<{
 	affectedCustomers: number;
 	totalPointsExpired: number;
-	transactions: number;
 }> {
 	try {
-		// Calculate cutoff date (exactly 45 days)
-		const cutoffIso = getPointsExpirationCutoffDate();
+		// Calculate cutoff date (dynamic from loyalty_settings.expiry_days)
+		const cutoffIso = await getPointsExpirationCutoffDate();
 
 		console.log(`[EXPIRE POINTS] Cutoff date: ${cutoffIso} (dry-run: ${dryRun})`);
 
-		// Find all 'earn' transactions older than cutoff that haven't been processed
-		const expiredTransactions = await db
+		// NEW: Find USERS who are inactive for 45+ days AND have balance > 0
+		// Note: Treat NULL last_activity as "very old" (should expire)
+		const inactiveUsers = await db
 			.select({
-				id: transactions.id,
-				loyalty_user_id: transactions.loyalty_user_id,
-				amount: transactions.amount,
-				created_at: transactions.created_at
+				id: loyaltyUsers.id,
+				current_balance: loyaltyUsers.current_balance,
+				last_activity: loyaltyUsers.last_activity
 			})
-			.from(transactions)
+			.from(loyaltyUsers)
 			.where(
-				sql`${transactions.type} = 'earn'
-					AND ${transactions.created_at} < ${cutoffIso}
-					AND (${transactions.spent} IS NULL OR ${transactions.spent} != 'expired')`
+				sql`(${loyaltyUsers.last_activity} IS NULL OR ${loyaltyUsers.last_activity} < ${cutoffIso})
+					AND ${loyaltyUsers.current_balance} > 0
+					AND ${loyaltyUsers.is_active} = 1`
 			);
 
-		if (expiredTransactions.length === 0) {
-			console.log('[EXPIRE POINTS] No transactions to expire');
-			return { affectedCustomers: 0, totalPointsExpired: 0, transactions: 0 };
+		if (inactiveUsers.length === 0) {
+			console.log('[EXPIRE POINTS] No inactive users with balance');
+			return { affectedCustomers: 0, totalPointsExpired: 0 };
 		}
 
-		// Group by customer
-		const expirationsByCustomer = new Map<number, number>();
-		for (const tx of expiredTransactions) {
-			const currentTotal = expirationsByCustomer.get(tx.loyalty_user_id) || 0;
-			expirationsByCustomer.set(tx.loyalty_user_id, currentTotal + tx.amount);
-		}
-
-		console.log(
-			`[EXPIRE POINTS] Found ${expiredTransactions.length} expired transactions from ${expirationsByCustomer.size} customers`
-		);
+		console.log(`[EXPIRE POINTS] Found ${inactiveUsers.length} inactive users`);
 
 		if (dryRun) {
-			let totalExpired = 0;
-			for (const [customerId, points] of expirationsByCustomer) {
-				console.log(`[DRY-RUN] Customer ${customerId} would lose ${points} points`);
-				totalExpired += points;
-			}
-			return {
-				affectedCustomers: expirationsByCustomer.size,
-				totalPointsExpired: totalExpired,
-				transactions: expiredTransactions.length
-			};
-		}
-
-		// ACTUAL EXPIRATION: Update customer balances and mark transactions
-		// FIX: Wrap in transaction to prevent data corruption if job fails mid-execution
-		const result = await db.transaction(async (tx) => {
-			let totalPointsExpired = 0;
-			const transactionIds = expiredTransactions.map((txn) => txn.id);
-
-			for (const [customerId, pointsToExpire] of expirationsByCustomer) {
-				// Get current customer balance
-				const customer = await tx.query.loyaltyUsers.findFirst({
-					where: eq(loyaltyUsers.id, customerId)
-				});
-
-				if (!customer) {
-					console.warn(`[EXPIRE POINTS] Customer ${customerId} not found, skipping`);
-					continue;
-				}
-
-				// Warn if pointsToExpire > current_balance (data corruption indicator)
-				if (pointsToExpire > customer.current_balance) {
-					console.warn(
-						`[EXPIRE POINTS] Customer ${customerId} has insufficient balance. ` +
-						`Current: ${customer.current_balance}, Expiring: ${pointsToExpire}. ` +
-						`This may indicate data corruption or partial refunds.`
-					);
-				}
-
-				// Calculate new balance (cannot go negative)
-				const newBalance = Math.max(0, customer.current_balance - pointsToExpire);
-				const actualExpired = customer.current_balance - newBalance;
-
-				// Update customer balance
-				await tx
-					.update(loyaltyUsers)
-					.set({
-						current_balance: newBalance,
-						last_activity: new Date().toISOString()
-					})
-					.where(eq(loyaltyUsers.id, customerId));
-
-				totalPointsExpired += actualExpired;
-
+			const total = inactiveUsers.reduce((sum, u) => sum + u.current_balance, 0);
+			for (const user of inactiveUsers) {
 				console.log(
-					`[EXPIRE POINTS] Customer ${customerId}: ${customer.current_balance} → ${newBalance} (expired: ${actualExpired})`
+					`[DRY-RUN] User ${user.id}: would expire ${user.current_balance} points (last active: ${user.last_activity})`
 				);
 			}
+			return { affectedCustomers: inactiveUsers.length, totalPointsExpired: total };
+		}
 
-			// Mark transactions as expired (for audit trail)
-			// FIX: Prevent SQL injection when array is empty
-			if (transactionIds.length > 0) {
+		// ACTUAL EXPIRATION
+		let totalExpired = 0;
+
+		await db.transaction(async (tx) => {
+			for (const user of inactiveUsers) {
+				const expiredAmount = user.current_balance;
+
+				// 1. Create expiry transaction record
+				await tx.insert(transactions).values({
+					loyalty_user_id: user.id,
+					title: 'Points expired (45 days inactivity)',
+					amount: expiredAmount,
+					type: 'spend',
+					spent: 'expired',
+					store_name: null,
+					store_id: null
+				});
+
+				// 2. Zero the balance
 				await tx
-					.update(transactions)
-					.set({ spent: 'expired' })
-					.where(inArray(transactions.id, transactionIds));
-			}
+					.update(loyaltyUsers)
+					.set({ current_balance: 0 })
+					.where(eq(loyaltyUsers.id, user.id));
 
-			return totalPointsExpired;
+				totalExpired += expiredAmount;
+
+				console.log(`[EXPIRE POINTS] User ${user.id}: ${expiredAmount} points expired`);
+			}
 		});
 
-		const totalPointsExpired = result;
-
-		console.log(
-			`[EXPIRE POINTS] Expired ${totalPointsExpired} points from ${expirationsByCustomer.size} customers`
-		);
+		console.log(`[EXPIRE POINTS] Total: ${totalExpired} points from ${inactiveUsers.length} users`);
 
 		return {
-			affectedCustomers: expirationsByCustomer.size,
-			totalPointsExpired,
-			transactions: expiredTransactions.length
+			affectedCustomers: inactiveUsers.length,
+			totalPointsExpired: totalExpired
 		};
 	} catch (error) {
 		console.error('[EXPIRE POINTS ERROR]', error);

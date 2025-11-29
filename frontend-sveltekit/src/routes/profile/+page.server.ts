@@ -1,16 +1,22 @@
 import type { PageServerLoad } from './$types';
+import { db } from '$lib/server/db/client';
+import { loyaltySettings } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
-export const load: PageServerLoad = () => {
+export const load: PageServerLoad = async () => {
+  // Fetch loyalty settings from DB
+  const [settings] = await db.select().from(loyaltySettings).where(eq(loyaltySettings.id, 1)).limit(1);
+
+  // Extract values with defaults
+  const earningPercent = settings?.earning_percent ?? 4;
+  const maxDiscountPercent = settings?.max_discount_percent ?? 20;
+  const expiryDays = settings?.expiry_days ?? 45;
+  const minRedemption = settings?.min_redemption_amount ?? 1;
+  const pointsName = settings?.points_name?.trim() || 'Мурзи-коины'; // Use || to catch empty strings
+
   // Profile menu items (static config)
+  // H-004 FIX: Removed "pets" item - not implemented in MVP
   const profileMenu = [
-    {
-      id: 'pets',
-      icon: '🐾',
-      iconColor: 'orange',
-      title: 'Мои питомцы',
-      description: 'Управление информацией о питомцах',
-      action: 'openPetsModal'
-    },
     {
       id: 'notifications',
       icon: '🔔',
@@ -45,7 +51,7 @@ export const load: PageServerLoad = () => {
     }
   ];
 
-  // Loyalty rules (static config)
+  // Loyalty rules (DYNAMIC from DB)
   const loyaltyRulesDetailed = {
     title: 'Правила программы лояльности',
     icon: '🎁',
@@ -54,22 +60,22 @@ export const load: PageServerLoad = () => {
         id: 'earning',
         emoji: '💰',
         title: 'Начисление бонусов',
-        description: 'Получайте <strong>4% от суммы покупки</strong> в виде Мурзи-коинов за каждую покупку',
-        example: 'Пример: покупка на 1000₽ = 40 Мурзи-коинов'
+        description: `Получайте <strong>${earningPercent}% от суммы покупки</strong> в виде ${pointsName} за каждую покупку`,
+        example: `Пример: покупка на 1000₽ = ${Math.round(1000 * earningPercent / 100)} ${pointsName}`
       },
       {
         id: 'payment',
         emoji: '🎯',
         title: 'Оплата бонусами',
-        description: 'Оплачивайте до <strong>20% от суммы чека</strong> накопленными Мурзи-коинами',
-        example: 'Чек на 500₽ → можно списать до 100 Мурзи-коинов'
+        description: `Оплачивайте до <strong>${maxDiscountPercent}% от суммы чека</strong> накопленными ${pointsName}`,
+        example: `Чек на 500₽ → можно списать до ${Math.round(500 * maxDiscountPercent / 100)} ${pointsName}`
       },
       {
         id: 'expiry',
         emoji: '⏱️',
         title: 'Срок действия',
-        description: 'Мурзи-коины действуют <strong>45 дней</strong> с момента начисления',
-        example: 'Не забудьте использовать бонусы вовремя!'
+        description: `${pointsName} действуют <strong>${expiryDays} дней</strong> с момента последней активности`,
+        example: 'Совершайте покупки регулярно, чтобы баллы не сгорели!'
       },
       {
         id: 'conditions',
@@ -77,14 +83,14 @@ export const load: PageServerLoad = () => {
         title: 'Важные условия',
         description: '',
         list: [
-          'Минимальная сумма для списания: <strong>100 Мурзи-коинов</strong>',
+          `Минимальная сумма для списания: <strong>${minRedemption} ${pointsName}</strong>`,
           'Бонусы не начисляются на <strong>акционные товары</strong>',
           'Начисление только при <strong>полной оплате деньгами</strong>',
           'Бонусы нельзя передать другому лицу'
         ]
       }
     ],
-    footer: '✨ Копите бонусы и экономьте на покупках для ваших питомцев!'
+    footer: `✨ Копите ${pointsName} и экономьте на покупках для ваших питомцев!`
   };
 
   return {

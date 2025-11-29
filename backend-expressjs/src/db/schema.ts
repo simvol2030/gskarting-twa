@@ -61,7 +61,11 @@ export const loyaltyUsers = sqliteTable('loyalty_users', {
 	last_activity: text('last_activity').default(sql`CURRENT_TIMESTAMP`),
 	chat_id: integer('chat_id').notNull(),
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
-});
+}, (table) => ({
+	// Sprint 5 Audit Cycle 1 Fix: Индексы для dashboard queries
+	registrationIdx: index('idx_loyalty_users_registration').on(table.registration_date),
+	storeIdIdx: index('idx_loyalty_users_store_id').on(table.store_id)
+}));
 
 /**
  * Stores table - магазины/точки продаж
@@ -69,6 +73,7 @@ export const loyaltyUsers = sqliteTable('loyalty_users', {
 export const stores = sqliteTable('stores', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
+	city: text('city'), // Населенный пункт (добавлено в миграции 0003)
 	address: text('address').notNull(),
 	phone: text('phone').notNull(),
 	hours: text('hours').notNull(),
@@ -100,7 +105,12 @@ export const transactions = sqliteTable('transactions', {
 	spent: text('spent'),
 	store_name: text('store_name'),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
-});
+}, (table) => ({
+	// Sprint 5 Audit Cycle 1 Fix: Индексы для dashboard queries
+	createdAtIdx: index('idx_transactions_created_at').on(table.created_at),
+	typeCreatedIdx: index('idx_transactions_type_created').on(table.type, table.created_at),
+	storeIdIdx: index('idx_transactions_store_id').on(table.store_id)
+}));
 
 /**
  * Cashier Transactions table - транзакции через кассу
@@ -117,7 +127,8 @@ export const cashierTransactions = sqliteTable('cashier_transactions', {
 		.references(() => stores.id, { onDelete: 'cascade' }),
 
 	// Transaction details
-	type: text('type', { enum: ['earn', 'redeem'] }).notNull(),
+	// 🔒 FIX: Standardized on 'spend' to match transactions table (was 'redeem')
+	type: text('type', { enum: ['earn', 'spend'] }).notNull(),
 	purchase_amount: real('purchase_amount').notNull(),
 	points_amount: integer('points_amount').notNull(),
 	discount_amount: real('discount_amount').notNull().default(0),
@@ -147,12 +158,20 @@ export const cashierTransactions = sqliteTable('cashier_transactions', {
 export const products = sqliteTable('products', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
+	description: text('description'), // Описание товара (добавлено в миграции 0003)
 	price: real('price').notNull(),
 	old_price: real('old_price'),
+	quantity_info: text('quantity_info'), // Информация о количестве/упаковке (добавлено в миграции 0003)
 	image: text('image').notNull(),
 	category: text('category').notNull(),
-	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
-});
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	show_on_home: integer('show_on_home', { mode: 'boolean' }).notNull().default(false), // Показывать в блоке "Топовые товары" (добавлено в миграции 0003)
+	is_recommendation: integer('is_recommendation', { mode: 'boolean' }).notNull().default(false) // Показывать в блоке "Рекомендации" без цены (добавлено в миграции 0003)
+}, (table) => ({
+	// HIGH FIX #5: Индексы для производительности запросов топовых товаров и рекомендаций
+	homePageIdx: index('idx_products_home_page').on(table.is_active, table.show_on_home),
+	recommendationsIdx: index('idx_products_recommendations').on(table.is_active, table.is_recommendation)
+}));
 
 /**
  * Offers table - акции и специальные предложения
@@ -161,14 +180,19 @@ export const offers = sqliteTable('offers', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	title: text('title').notNull(),
 	description: text('description').notNull(),
-	icon: text('icon').notNull(),
-	icon_color: text('icon_color').notNull(),
+	image: text('image'), // URL изображения баннера (добавлено в миграции 0003)
+	icon: text('icon').notNull(), // Старое поле (оставлено для совместимости)
+	icon_color: text('icon_color').notNull(), // Старое поле (оставлено для совместимости)
 	deadline: text('deadline').notNull(),
-	deadline_class: text('deadline_class').notNull(),
-	details: text('details').notNull(),
-	conditions: text('conditions').notNull(), // JSON array as string
-	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
-});
+	deadline_class: text('deadline_class').notNull(), // Старое поле (оставлено для совместимости)
+	details: text('details').notNull(), // Старое поле (оставлено для совместимости)
+	conditions: text('conditions').notNull(), // JSON array as string (старое поле, оставлено для совместимости)
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	show_on_home: integer('show_on_home', { mode: 'boolean' }).notNull().default(false) // Показывать на главной TWA (добавлено в миграции 0003)
+}, (table) => ({
+	// HIGH FIX #11: Composite index for home page query performance
+	homePageIdx: index('idx_offers_home_page').on(table.is_active, table.show_on_home)
+}));
 
 /**
  * Recommendations table - персональные рекомендации товаров
@@ -181,6 +205,24 @@ export const recommendations = sqliteTable('recommendations', {
 	price: real('price').notNull(),
 	image: text('image').notNull(),
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true)
+});
+
+/**
+ * Loyalty Settings table - настройки программы лояльности
+ * Singleton таблица (всегда 1 запись с id=1)
+ */
+export const loyaltySettings = sqliteTable('loyalty_settings', {
+	id: integer('id').primaryKey().$default(() => 1),
+	earning_percent: real('earning_percent').notNull().default(4.0), // Процент начисления (4%)
+	max_discount_percent: real('max_discount_percent').notNull().default(20.0), // Максимальная скидка баллами (20%)
+	expiry_days: integer('expiry_days').notNull().default(45), // Срок действия баллов (45 дней)
+	welcome_bonus: real('welcome_bonus').notNull().default(500.0), // Приветственный бонус
+	birthday_bonus: real('birthday_bonus').notNull().default(0.0), // Бонус на день рождения
+	min_redemption_amount: real('min_redemption_amount').notNull().default(1.0), // Минимальная сумма для списания
+	points_name: text('points_name').notNull().default('Мурзи-коины'), // Название баллов
+	support_email: text('support_email'), // Email поддержки
+	support_phone: text('support_phone'), // Телефон поддержки
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
 /**
@@ -254,3 +296,6 @@ export type NewOffer = typeof offers.$inferInsert;
 
 export type Recommendation = typeof recommendations.$inferSelect;
 export type NewRecommendation = typeof recommendations.$inferInsert;
+
+export type LoyaltySettings = typeof loyaltySettings.$inferSelect;
+export type NewLoyaltySettings = typeof loyaltySettings.$inferInsert;

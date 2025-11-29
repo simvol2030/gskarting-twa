@@ -9,14 +9,22 @@
 </script>
 
 <a href="/offers" class="offer-item">
-  <div class="list-item-content">
-    <div class="list-item-icon icon-{offer.iconColor}">
-      <span>{offer.icon}</span>
+  <!-- Image thumbnail (Sprint 2 NEW) -->
+  {#if offer.image}
+    <img src={offer.image} alt={offer.title} class="offer-thumbnail" />
+  {:else}
+    <!-- Fallback for old data -->
+    <div class="offer-thumbnail-placeholder">
+      <span class="placeholder-icon">🎁</span>
     </div>
-    <div class="list-item-text">
-      <h3>{offer.title}</h3>
-      <p>{offer.description}</p>
-      <div class="list-item-meta {offer.deadlineClass}">{offer.deadline}</div>
+  {/if}
+
+  <div class="offer-content">
+    <h3 class="offer-title">{offer.title}</h3>
+    <p class="offer-description">{offer.description}</p>
+    <div class="offer-deadline">
+      <span class="deadline-icon">⏱️</span>
+      <span class="deadline-text">До {offer.deadline}</span>
     </div>
   </div>
 </a>
@@ -25,7 +33,7 @@
   .offer-item {
     background: var(--card-bg);
     border-radius: 20px;
-    padding: 20px;
+    overflow: hidden;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
     cursor: pointer;
@@ -35,76 +43,69 @@
   }
 
   .offer-item:hover {
-    background: var(--card-hover);
-    transform: translateX(4px);
     box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
   }
 
-  .list-item-content {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+  .offer-thumbnail {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
   }
 
-  .list-item-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
+  .offer-thumbnail-placeholder {
+    width: 100%;
+    height: 140px;
+    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
-    box-shadow: var(--shadow);
-    flex-shrink: 0;
   }
 
-  .icon-green {
-    background: linear-gradient(135deg, var(--secondary-green), var(--secondary-green-dark));
+  .placeholder-icon {
+    font-size: 48px;
+    opacity: 0.8;
   }
 
-  .icon-orange {
-    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
+  .offer-content {
+    padding: 16px;
   }
 
-  .icon-blue {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-  }
-
-  .icon-purple {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  }
-
-  .icon-pink {
-    background: linear-gradient(135deg, #ec4899, #db2777);
-  }
-
-  .list-item-text {
-    flex: 1;
-  }
-
-  .list-item-text h3 {
+  .offer-title {
     font-weight: bold;
     color: var(--text-primary);
     font-size: 16px;
     letter-spacing: -0.025em;
-    margin-bottom: 4px;
+    margin: 0 0 6px 0;
   }
 
-  .list-item-text p {
+  .offer-description {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;
     line-height: 1.4;
+    margin: 0 0 10px 0;
+    /* Limit to 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
-  .list-item-meta {
-    color: var(--secondary-green);
-    font-weight: bold;
-    font-size: 13px;
-    margin-top: 6px;
+  .offer-deadline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: var(--bg-light);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
   }
 
-  .list-item-meta.orange {
-    color: var(--primary-orange);
+  .deadline-icon {
+    font-size: 14px;
   }
 </style>

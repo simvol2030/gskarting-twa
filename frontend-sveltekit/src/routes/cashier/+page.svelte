@@ -43,7 +43,7 @@
 
 	// ===== Расчетные значения =====
 	let cashbackAmount = $derived(() => {
-		if (checkAmount === 0) return 0;
+		if (checkAmount === 0 || !data.storeConfig) return 0;
 
 		// 🔴 FIX: При списании кешбэк от finalAmount, при накоплении от checkAmount
 		const baseAmount = isRedeemSelected ? finalAmount() : checkAmount;
@@ -51,7 +51,7 @@
 	});
 
 	let maxRedeemPoints = $derived(() => {
-		if (!customer || checkAmount === 0) return 0;
+		if (!customer || checkAmount === 0 || !data.storeConfig) return 0;
 		const maxByPercent = Math.floor(checkAmount * data.storeConfig.maxDiscountPercent / 100);
 		const maxByBalance = customer.balance;
 		return Math.min(maxByPercent, maxByBalance);
@@ -235,7 +235,7 @@
 	<!-- Header -->
 	<div class="header">
 		<div class="header-title">
-			💳 {data.storeConfig.storeName} • {data.storeConfig.location}
+			💳 {data.storeConfig?.storeName || 'Кассир'} • {data.storeConfig?.location || 'Загрузка...'}
 		</div>
 	</div>
 
@@ -273,7 +273,7 @@
 				<CustomerInfo {customer} />
 				<CheckSummary
 					{checkAmount}
-					cashbackPercent={data.storeConfig.cashbackPercent}
+					cashbackPercent={data.storeConfig?.cashbackPercent || 4}
 					cashbackAmount={cashbackAmount()}
 					finalAmount={finalAmount()}
 				/>

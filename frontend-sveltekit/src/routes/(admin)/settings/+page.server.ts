@@ -1,193 +1,53 @@
-import { fail, error } from '@sveltejs/kit';
-import type { Actions, PageServerLoad } from './$types';
-import { queries } from '$lib/server/db/database';
-import { requireRole } from '$lib/server/auth/session';
-import bcrypt from 'bcrypt';
-import { validateEmail, validatePassword, validateName, validateRole, validateId } from '$lib/server/validation';
+import type { PageServerLoad } from './$types';
+import { API_BASE_URL } from '$lib/config';
 
-export const load: PageServerLoad = async (event) => {
-	// Только super-admin может видеть настройки
-	try {
-		requireRole(event, ['super-admin']);
-	} catch {
-		throw error(403, 'Access denied. Super-admin only.');
+export const load: PageServerLoad = async ({ cookies }) => {
+	const sessionCookie = cookies.get('session');
+
+	if (!sessionCookie) {
+		throw new Error('Session expired. Please login again.');
 	}
 
-	const admins = await queries.getAllAdmins();
-	return { admins };
-};
-
-export const actions: Actions = {
-	create: async (event) => {
-		try {
-			requireRole(event, ['super-admin']);
-		} catch {
-			return fail(403, { error: 'Insufficient permissions' });
+	// Загрузить настройки лояльности из API
+	const loyaltyResponse = await fetch(`${API_BASE_URL}/admin/settings/loyalty`, {
+		headers: {
+			Cookie: `session=${sessionCookie}`
 		}
+	});
 
-		const formData = await event.request.formData();
-		const email = formData.get('email')?.toString();
-		const password = formData.get('password')?.toString();
-		const role = formData.get('role')?.toString();
-		const name = formData.get('name')?.toString();
+	const loyaltyJson = await loyaltyResponse.json();
 
-		// Validate inputs
-		const emailValidation = validateEmail(email);
-		if (!emailValidation.valid) {
-			return fail(400, { error: emailValidation.error });
-		}
-
-		const passwordValidation = validatePassword(password);
-		if (!passwordValidation.valid) {
-			return fail(400, { error: passwordValidation.error });
-		}
-
-		const roleValidation = validateRole(role);
-		if (!roleValidation.valid) {
-			return fail(400, { error: roleValidation.error });
-		}
-
-		const nameValidation = validateName(name);
-		if (!nameValidation.valid) {
-			return fail(400, { error: nameValidation.error });
-		}
-
-		try {
-			// Хешируем пароль
-			const hashedPassword = await bcrypt.hash(password!, 10);
-			await queries.createAdmin({
-				email: email!,
-				password: hashedPassword,
-				role: role! as 'super-admin' | 'editor' | 'viewer',
-				name: name!
-			});
-			return { success: true };
-		} catch (error: any) {
-			if (error.message && error.message.includes('UNIQUE constraint')) {
-				return fail(409, { error: 'Email already exists' });
-			}
-			return fail(500, { error: 'Failed to create admin' });
-		}
-	},
-
-	update: async (event) => {
-		try {
-			requireRole(event, ['super-admin']);
-		} catch {
-			return fail(403, { error: 'Insufficient permissions' });
-		}
-
-		const formData = await event.request.formData();
-		const id = formData.get('id')?.toString();
-		const email = formData.get('email')?.toString();
-		const role = formData.get('role')?.toString();
-		const name = formData.get('name')?.toString();
-
-		// Validate inputs
-		const idValidation = validateId(id);
-		if (!idValidation.valid) {
-			return fail(400, { error: idValidation.error });
-		}
-
-		const emailValidation = validateEmail(email);
-		if (!emailValidation.valid) {
-			return fail(400, { error: emailValidation.error });
-		}
-
-		const roleValidation = validateRole(role);
-		if (!roleValidation.valid) {
-			return fail(400, { error: roleValidation.error });
-		}
-
-		const nameValidation = validateName(name);
-		if (!nameValidation.valid) {
-			return fail(400, { error: nameValidation.error });
-		}
-
-		try {
-			const result = await queries.updateAdmin(parseInt(id!), {
-				email: email!,
-				role: role! as 'super-admin' | 'editor' | 'viewer',
-				name: name!
-			});
-			if (!result) {
-				return fail(404, { error: 'Admin not found' });
-			}
-			return { success: true };
-		} catch (error: any) {
-			if (error.message && error.message.includes('UNIQUE constraint')) {
-				return fail(409, { error: 'Email already exists' });
-			}
-			return fail(500, { error: 'Failed to update admin' });
-		}
-	},
-
-	changePassword: async (event) => {
-		try {
-			requireRole(event, ['super-admin']);
-		} catch {
-			return fail(403, { error: 'Insufficient permissions' });
-		}
-
-		const formData = await event.request.formData();
-		const id = formData.get('id')?.toString();
-		const password = formData.get('password')?.toString();
-
-		// Validate inputs
-		const idValidation = validateId(id);
-		if (!idValidation.valid) {
-			return fail(400, { error: idValidation.error });
-		}
-
-		const passwordValidation = validatePassword(password);
-		if (!passwordValidation.valid) {
-			return fail(400, { error: passwordValidation.error });
-		}
-
-		try {
-			const hashedPassword = await bcrypt.hash(password!, 10);
-			const result = await queries.updateAdminPassword(parseInt(id!), hashedPassword);
-			if (!result) {
-				return fail(404, { error: 'Admin not found' });
-			}
-			return { success: true };
-		} catch {
-			return fail(500, { error: 'Failed to change password' });
-		}
-	},
-
-	delete: async (event) => {
-		try {
-			requireRole(event, ['super-admin']);
-		} catch {
-			return fail(403, { error: 'Insufficient permissions' });
-		}
-
-		const formData = await event.request.formData();
-		const id = formData.get('id')?.toString();
-
-		// Validate ID
-		const idValidation = validateId(id);
-		if (!idValidation.valid) {
-			return fail(400, { error: idValidation.error });
-		}
-
-		// Проверяем, что это не последний super-admin
-		const allAdmins = await queries.getAllAdmins();
-		const superAdmins = allAdmins.filter((a) => a.role === 'super-admin');
-
-		if (superAdmins.length === 1 && superAdmins[0].id === parseInt(id!)) {
-			return fail(400, { error: 'Cannot delete the last super-admin' });
-		}
-
-		try {
-			const result = await queries.deleteAdmin(parseInt(id!));
-			if (!result) {
-				return fail(404, { error: 'Admin not found' });
-			}
-			return { success: true };
-		} catch {
-			return fail(500, { error: 'Failed to delete admin' });
-		}
+	if (!loyaltyJson.success) {
+		throw new Error(loyaltyJson.error || 'Failed to load loyalty settings');
 	}
+
+	const loyalty = loyaltyJson.data;
+
+	// Структура данных для формы
+	return {
+		settings: {
+			general: {
+				appName: 'Murzico Loyalty',
+				supportEmail: loyalty.supportEmail || '',
+				supportPhone: loyalty.supportPhone || ''
+			},
+			loyalty: {
+				earnRate: loyalty.earningPercent,
+				maxRedeemPercent: loyalty.maxDiscountPercent,
+				pointsExpiryDays: loyalty.expiryDays,
+				welcomeBonus: loyalty.welcomeBonus,
+				birthdayBonus: loyalty.birthdayBonus,
+				minRedemptionAmount: loyalty.minRedemptionAmount,
+				pointsName: loyalty.pointsName
+			},
+			notifications: {
+				emailEnabled: false,
+				smsEnabled: false,
+				pushEnabled: false,
+				notifyOnEarn: false,
+				notifyOnRedeem: false,
+				notifyOnExpiry: false
+			}
+		}
+	};
 };

@@ -19,7 +19,8 @@
 
   function handleClick() {
     if (item.action === 'alert') {
-      toastStore.show('Свяжитесь с нами: support@murzico.ru', 'info');
+      // M-001 FIX: Added phone number to support message
+      toastStore.show('Свяжитесь с нами: +7 (495) 123-45-67 или support@murzico.ru', 'info');
     } else if (item.action === 'openPetsModal') {
       modalStore.open('pets');
     } else if (item.action === 'openNotificationsModal') {

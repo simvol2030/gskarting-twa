@@ -66,6 +66,13 @@
       </div>
 
       <div class="store-info">
+        {#if store.city}
+          <div class="info-item">
+            <strong>Город:</strong>
+            <span>{store.city}</span>
+          </div>
+        {/if}
+
         <div class="info-item">
           <strong>Адрес:</strong>
           <span>{store.address}</span>
@@ -203,6 +210,8 @@
     font-size: 15px;
     color: var(--text-primary);
     font-weight: 500;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   .info-item a {

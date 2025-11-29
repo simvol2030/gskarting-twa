@@ -285,3 +285,170 @@ export function validateTransactionMetadata(metadata: any): ValidationResult {
 
 	return { valid: true };
 }
+
+/**
+ * Validate product data for admin panel (Sprint 3 Extended)
+ */
+export function validateProductData(data: any): { valid: boolean; errors: string[] } {
+	const errors: string[] = [];
+
+	if (typeof data.name !== 'string' || data.name.length < 3 || data.name.length > 200) {
+		errors.push('Product name must be 3-200 characters');
+	}
+
+	// CRITICAL FIX #1 (Sprint 3): Description validation
+	if (data.description !== null && data.description !== undefined) {
+		if (typeof data.description !== 'string' || data.description.length > 2000) {
+			errors.push('Description must be max 2000 characters');
+		}
+		// XSS protection
+		if (/<script|<iframe|javascript:|on\w+=/i.test(data.description)) {
+			errors.push('Description contains potentially unsafe HTML');
+		}
+	}
+
+	// CRITICAL FIX #1 (Sprint 3): Quantity info validation
+	if (data.quantityInfo !== null && data.quantityInfo !== undefined) {
+		if (typeof data.quantityInfo !== 'string' || data.quantityInfo.length > 100) {
+			errors.push('Quantity info must be max 100 characters');
+		}
+	}
+
+	const price = Number(data.price);
+	if (isNaN(price) || price < 0 || price > 1000000) {
+		errors.push('Price must be between 0 and 1,000,000');
+	}
+
+	if (data.oldPrice !== null && data.oldPrice !== undefined) {
+		const oldPrice = Number(data.oldPrice);
+		if (isNaN(oldPrice) || oldPrice < 0 || oldPrice > 1000000) {
+			errors.push('Old price must be between 0 and 1,000,000');
+		}
+		if (oldPrice <= price) {
+			errors.push('Old price must be greater than current price');
+		}
+	}
+
+	if (typeof data.category !== 'string' || data.category.length < 2 || data.category.length > 50) {
+		errors.push('Category must be 2-50 characters');
+	}
+
+	// CRITICAL FIX #1 (Sprint 3): Boolean flags validation
+	if (data.showOnHome !== undefined && typeof data.showOnHome !== 'boolean') {
+		errors.push('showOnHome must be a boolean');
+	}
+
+	if (data.isRecommendation !== undefined && typeof data.isRecommendation !== 'boolean') {
+		errors.push('isRecommendation must be a boolean');
+	}
+
+	return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Validate promotion data for admin panel (Sprint 2 refactored)
+ * Required fields: title, description, image, deadline
+ * Optional fields: isActive, showOnHome
+ */
+export function validatePromotionData(data: any): { valid: boolean; errors: string[] } {
+	const errors: string[] = [];
+
+	// Title validation
+	if (typeof data.title !== 'string' || data.title.length < 3 || data.title.length > 100) {
+		errors.push('Title must be 3-100 characters');
+	}
+
+	// Description validation
+	if (typeof data.description !== 'string' || data.description.length < 10 || data.description.length > 1000) {
+		errors.push('Description must be 10-1000 characters');
+	}
+
+	// Image validation (URL or path) - HIGH FIX #2 (Cycle 3): Allow null for old data compatibility
+	if (data.image !== null && data.image !== undefined) {
+		if (typeof data.image !== 'string' || data.image.length < 3 || data.image.length > 500) {
+			errors.push('Image URL must be 3-500 characters');
+		}
+
+		// XSS protection - block javascript: and data: schemes (CRITICAL FIX #1)
+		if (/^(javascript|data):/i.test(data.image.trim())) {
+			errors.push('Invalid image URL scheme. Use http:, https:, or file path only.');
+		}
+
+		// Additional XSS protection - block < and > characters
+		if (/<|>/.test(data.image)) {
+			errors.push('Image URL cannot contain < or > characters');
+		}
+	}
+
+	// Deadline validation (ISO date string or readable format)
+	if (typeof data.deadline !== 'string' || data.deadline.length < 3 || data.deadline.length > 50) {
+		errors.push('Deadline must be 3-50 characters');
+	}
+
+	// HIGH FIX #5: Validate date format
+	if (data.deadline) {
+		try {
+			const deadlineDate = new Date(data.deadline);
+			if (isNaN(deadlineDate.getTime())) {
+				errors.push('Deadline must be a valid date (YYYY-MM-DD or ISO format)');
+			}
+			// Note: Past dates allowed for editing existing promotions
+		} catch {
+			errors.push('Invalid deadline format');
+		}
+	}
+
+	// Optional: isActive validation
+	if (data.isActive !== undefined && typeof data.isActive !== 'boolean') {
+		errors.push('isActive must be a boolean');
+	}
+
+	// Optional: showOnHome validation
+	if (data.showOnHome !== undefined && typeof data.showOnHome !== 'boolean') {
+		errors.push('showOnHome must be a boolean');
+	}
+
+	return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Validate store data for admin panel
+ */
+export function validateStoreData(data: any): { valid: boolean; errors: string[] } {
+	const errors: string[] = [];
+
+	if (typeof data.name !== 'string' || data.name.length < 3 || data.name.length > 100) {
+		errors.push('Store name must be 3-100 characters');
+	}
+
+	// Sprint 4 Task 1.4: Add city validation (optional field)
+	if (data.city !== null && data.city !== undefined) {
+		if (typeof data.city !== 'string' || data.city.length > 100) {
+			errors.push('City must be max 100 characters');
+		}
+		if (/<script|javascript:/i.test(data.city)) {
+			errors.push('City contains forbidden content (XSS detected)');
+		}
+	}
+
+	if (typeof data.address !== 'string' || data.address.length < 10 || data.address.length > 300) {
+		errors.push('Address must be 10-300 characters');
+	}
+
+	if (typeof data.phone !== 'string' || !/^\+7\d{10}$/.test(data.phone)) {
+		errors.push('Phone must be in format +7XXXXXXXXXX');
+	}
+
+	if (data.coordinates) {
+		const lat = Number(data.coordinates.lat);
+		const lng = Number(data.coordinates.lng);
+		if (isNaN(lat) || lat < -90 || lat > 90) {
+			errors.push('Latitude must be between -90 and 90');
+		}
+		if (isNaN(lng) || lng < -180 || lng > 180) {
+			errors.push('Longitude must be between -180 and 180');
+		}
+	}
+
+	return { valid: errors.length === 0, errors };
+}

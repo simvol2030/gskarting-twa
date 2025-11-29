@@ -2,7 +2,6 @@
   import { onMount, setContext } from 'svelte';
   import { page } from '$app/stores';
   import { initTheme } from '$lib/stores/loyalty';
-  import { initTelegramWebApp } from '$lib/telegram';
   import Header from '$lib/components/loyalty/layout/Header.svelte';
   import BottomNav from '$lib/components/loyalty/layout/BottomNav.svelte';
   import MobileMenu from '$lib/components/loyalty/layout/MobileMenu.svelte';
@@ -15,8 +14,11 @@
 
   // Check if current route is loyalty app (not admin routes or cashier)
   const isLoyaltyApp = $derived(!$page.url.pathname.startsWith('/dashboard') &&
-                                !$page.url.pathname.startsWith('/users') &&
-                                !$page.url.pathname.startsWith('/posts') &&
+                                !$page.url.pathname.startsWith('/clients') &&
+                                !$page.url.pathname.startsWith('/promotions') &&
+                                !$page.url.pathname.startsWith('/products-admin') &&
+                                !$page.url.pathname.startsWith('/store-list') &&
+                                !$page.url.pathname.startsWith('/statistics') &&
                                 !$page.url.pathname.startsWith('/settings') &&
                                 !$page.url.pathname.startsWith('/login') &&
                                 !$page.url.pathname.startsWith('/logout') &&

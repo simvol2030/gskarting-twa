@@ -3,7 +3,7 @@ import { transactions, loyaltyUsers } from '$lib/server/db/schema';
 import { desc, eq, gte, and } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { EXAMPLE_TRANSACTIONS } from '$lib/data/loyalty/history_examples';
-import { getRetentionCutoffDate, RETENTION_DAYS } from '$lib/utils/retention';
+import { getRetentionCutoffDate, getRetentionDays } from '$lib/utils/retention';
 
 /**
  * Data loader for Transaction History page
@@ -44,10 +44,13 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 	console.log('[history/+page.server.ts] Loading history for telegram_user_id:', telegramUserId);
 
-	// Get centralized cutoff date (prevents race conditions)
-	const cutoffDate = getRetentionCutoffDate();
+	// Get centralized cutoff date and retention days (dynamic from settings)
+	const [cutoffDate, retentionDays] = await Promise.all([
+		getRetentionCutoffDate(),
+		getRetentionDays()
+	]);
 
-	console.log(`[history/+page.server.ts] Loading transactions since (last ${RETENTION_DAYS} days):`, cutoffDate);
+	console.log(`[history/+page.server.ts] Loading transactions since (last ${retentionDays} days):`, cutoffDate);
 
 	// FIX #1: JOIN with loyalty_users to get loyalty_user.id
 	// telegram_user_id (123456789) → loyalty_user.id (1, 2, 3...)

@@ -1,35 +1,43 @@
+import { db } from '$lib/server/db/client';
+import { products } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
-import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
-const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
+export const load: PageServerLoad = async ({ url }) => {
+	// Получаем параметры фильтрации из URL
+	const category = url.searchParams.get('category') || 'all';
+	const search = url.searchParams.get('search') || '';
 
-/**
- * Data loader for Products page - API VERSION
- * Fetches all active products from backend API
- */
-export const load: PageServerLoad = async ({ fetch }) => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/content/products`);
+	// Загружаем товары с фильтрацией
+	let query = db.select().from(products).where(eq(products.is_active, true));
 
-    if (!response.ok) {
-      console.error('[PRODUCTS PAGE] API error:', response.status, response.statusText);
-      // Return empty data on error instead of failing
-      return {
-        products: []
-      };
-    }
+	let allProducts = await query;
 
-    const data = await response.json();
+	// Фильтрация по категории (на клиенте, т.к. Drizzle ORM не поддерживает динамические where)
+	if (category !== 'all') {
+		allProducts = allProducts.filter((p) => p.category === category);
+	}
 
-    return {
-      products: data.products || []
-    };
+	// Фильтрация по поиску
+	if (search) {
+		const searchLower = search.toLowerCase();
+		allProducts = allProducts.filter((p) => p.name.toLowerCase().includes(searchLower));
+	}
 
-  } catch (error) {
-    console.error('[PRODUCTS PAGE] Failed to fetch products:', error);
-    // Return empty data on error instead of failing
-    return {
-      products: []
-    };
-  }
+	// Получаем уникальные категории для фильтра
+	const allProductsForCategories = await db
+		.select()
+		.from(products)
+		.where(eq(products.is_active, true));
+
+	const categories = [...new Set(allProductsForCategories.map((p) => p.category))].sort();
+
+	return {
+		products: allProducts,
+		categories,
+		filters: {
+			category,
+			search
+		}
+	};
 };

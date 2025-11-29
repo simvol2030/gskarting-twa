@@ -1,280 +1,344 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import type { PageData, ActionData } from './$types';
-	import CsrfToken from '$lib/components/CsrfToken.svelte';
+	import type { PageData } from './$types';
+	import { API_BASE_URL } from '$lib/config';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let { data }: { data: PageData } = $props();
 
-	let showCreateModal = $state(false);
-	let showEditModal = $state(false);
-	let showPasswordModal = $state(false);
-	let editAdmin = $state<any>(null);
-	let passwordAdminId = $state<number | null>(null);
-	let deleteId = $state<number | null>(null);
+	type Tab = 'general' | 'loyalty' | 'notifications';
+	let activeTab = $state<Tab>('general');
 
-	const roleLabels = {
-		'super-admin': 'Super Admin',
-		'editor': 'Editor',
-		'viewer': 'Viewer'
-	};
+	// Form states (initialized from data.settings)
+	let generalForm = $state({
+		appName: data.settings.general.appName,
+		supportEmail: data.settings.general.supportEmail,
+		supportPhone: data.settings.general.supportPhone
+	});
 
-	const roleBadgeColors = {
-		'super-admin': 'badge-red',
-		'editor': 'badge-blue',
-		'viewer': 'badge-gray'
-	};
+	let loyaltyForm = $state({
+		earnRate: data.settings.loyalty.earnRate,
+		maxRedeemPercent: data.settings.loyalty.maxRedeemPercent,
+		pointsExpiryDays: data.settings.loyalty.pointsExpiryDays,
+		welcomeBonus: data.settings.loyalty.welcomeBonus,
+		birthdayBonus: data.settings.loyalty.birthdayBonus,
+		minRedemptionAmount: data.settings.loyalty.minRedemptionAmount,
+		pointsName: data.settings.loyalty.pointsName
+	});
+
+	let saving = $state(false);
+	let saveMessage = $state('');
+
+	let notificationsForm = $state({
+		emailEnabled: data.settings.notifications.emailEnabled,
+		smsEnabled: data.settings.notifications.smsEnabled,
+		pushEnabled: data.settings.notifications.pushEnabled,
+		notifyOnEarn: data.settings.notifications.notifyOnEarn,
+		notifyOnRedeem: data.settings.notifications.notifyOnRedeem,
+		notifyOnExpiry: data.settings.notifications.notifyOnExpiry
+	});
+
+	function switchToGeneral() {
+		activeTab = 'general';
+	}
+
+	function switchToLoyalty() {
+		activeTab = 'loyalty';
+	}
+
+	function switchToNotifications() {
+		activeTab = 'notifications';
+	}
+
+	function resetGeneral() {
+		generalForm = {
+			appName: data.settings.general.appName,
+			supportEmail: data.settings.general.supportEmail,
+			supportPhone: data.settings.general.supportPhone
+		};
+	}
+
+	function resetLoyalty() {
+		loyaltyForm = {
+			earnRate: data.settings.loyalty.earnRate,
+			maxRedeemPercent: data.settings.loyalty.maxRedeemPercent,
+			pointsExpiryDays: data.settings.loyalty.pointsExpiryDays,
+			welcomeBonus: data.settings.loyalty.welcomeBonus,
+			birthdayBonus: data.settings.loyalty.birthdayBonus,
+			minRedemptionAmount: data.settings.loyalty.minRedemptionAmount,
+			pointsName: data.settings.loyalty.pointsName
+		};
+	}
+
+	function resetNotifications() {
+		notificationsForm = {
+			emailEnabled: data.settings.notifications.emailEnabled,
+			smsEnabled: data.settings.notifications.smsEnabled,
+			pushEnabled: data.settings.notifications.pushEnabled,
+			notifyOnEarn: data.settings.notifications.notifyOnEarn,
+			notifyOnRedeem: data.settings.notifications.notifyOnRedeem,
+			notifyOnExpiry: data.settings.notifications.notifyOnExpiry
+		};
+	}
+
+	async function saveSettings() {
+		if (saving) return;
+
+		saving = true;
+		saveMessage = '';
+
+		try {
+			if (activeTab === 'loyalty') {
+				const response = await fetch(`${API_BASE_URL}/admin/settings/loyalty`, {
+					method: 'PUT',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						earningPercent: loyaltyForm.earnRate,
+						maxDiscountPercent: loyaltyForm.maxRedeemPercent,
+						expiryDays: loyaltyForm.pointsExpiryDays,
+						welcomeBonus: loyaltyForm.welcomeBonus,
+						birthdayBonus: loyaltyForm.birthdayBonus,
+						minRedemptionAmount: loyaltyForm.minRedemptionAmount,
+						pointsName: loyaltyForm.pointsName,
+						supportEmail: generalForm.supportEmail,
+						supportPhone: generalForm.supportPhone
+					}),
+					credentials: 'include'
+				});
+
+				// 🔒 SECURITY: Check HTTP status before parsing JSON
+				if (!response.ok) {
+					if (response.status === 401) {
+						saveMessage = 'Сессия истекла. Войдите заново.';
+						setTimeout(() => window.location.href = '/login', 2000);
+						return;
+					}
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				// 🔒 SECURITY: Verify content type
+				const contentType = response.headers.get('content-type');
+				if (!contentType?.includes('application/json')) {
+					throw new Error('Сервер вернул некорректный ответ');
+				}
+
+				const result = await response.json();
+
+				if (result.success) {
+					saveMessage = 'Настройки успешно сохранены!';
+					setTimeout(() => saveMessage = '', 3000);
+				} else {
+					saveMessage = 'Ошибка: ' + result.error;
+				}
+			} else {
+				saveMessage = 'Сохранение других разделов пока не реализовано';
+			}
+		} catch (error) {
+			console.error('Save settings error:', error);
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				saveMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+			} else {
+				saveMessage = 'Ошибка сохранения: ' + (error as Error).message;
+			}
+		} finally {
+			saving = false;
+		}
+	}
 </script>
 
 <svelte:head>
-	<title>Settings - Admin Panel</title>
+	<title>Настройки - Loyalty Admin</title>
 </svelte:head>
 
 <div class="page">
 	<div class="page-header">
-		<div>
-			<h1>Settings</h1>
-			<p class="text-muted">Manage admin users and system settings</p>
-		</div>
-		<button class="btn-primary" onclick={() => (showCreateModal = true)}>
-			+ Add Admin
+		<h1>Настройки</h1>
+		<p class="text-muted">Управление параметрами программы лояльности</p>
+	</div>
+
+	<!-- Tabs -->
+	<div class="tabs">
+		<button class="tab" class:active={activeTab === 'general'} onclick={switchToGeneral}>
+			Общие
+		</button>
+		<button class="tab" class:active={activeTab === 'loyalty'} onclick={switchToLoyalty}>
+			Программа лояльности
+		</button>
+		<button
+			class="tab"
+			class:active={activeTab === 'notifications'}
+			onclick={switchToNotifications}
+		>
+			Уведомления
 		</button>
 	</div>
 
-	{#if form?.error}
-		<div class="alert alert-error">{form.error}</div>
-	{/if}
+	<!-- Tab Content -->
+	<div class="section">
+		{#if activeTab === 'general'}
+			<h2>Общие настройки</h2>
+			<form class="settings-form">
+				<div class="form-group">
+					<label for="appName">Название приложения</label>
+					<input type="text" id="appName" bind:value={generalForm.appName} />
+				</div>
 
-	{#if form?.success}
-		<div class="alert alert-success">Operation successful!</div>
-	{/if}
+				<div class="form-group">
+					<label for="supportEmail">Email поддержки</label>
+					<input type="email" id="supportEmail" bind:value={generalForm.supportEmail} />
+				</div>
 
-	<div class="card">
-		<div class="card-header">
-			<h2>Admin Users</h2>
-			<p class="text-muted">Manage admin accounts and their permissions</p>
-		</div>
+				<div class="form-group">
+					<label for="supportPhone">Телефон поддержки</label>
+					<input type="tel" id="supportPhone" bind:value={generalForm.supportPhone} />
+				</div>
 
-		<div class="table-container">
-			<table>
-				<thead>
-					<tr>
-						<th>ID</th>
-						<th>Name</th>
-						<th>Email</th>
-						<th>Role</th>
-						<th>Created</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.admins as admin}
-						<tr>
-							<td>{admin.id}</td>
-							<td>{admin.name}</td>
-							<td>{admin.email}</td>
-							<td>
-								<span class="badge {roleBadgeColors[admin.role]}">
-									{roleLabels[admin.role]}
-								</span>
-							</td>
-							<td class="text-muted">
-								{new Date(admin.created_at).toLocaleDateString()}
-							</td>
-							<td>
-								<div class="actions">
-									<button
-										class="btn-edit"
-										onclick={() => {
-											editAdmin = admin;
-											showEditModal = true;
-										}}
-									>
-										Edit
-									</button>
-									<button
-										class="btn-password"
-										onclick={() => (passwordAdminId = admin.id)}
-									>
-										Password
-									</button>
-									<button
-										class="btn-delete"
-										onclick={() => (deleteId = admin.id)}
-									>
-										Delete
-									</button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+				<div class="button-group">
+					<button type="button" class="btn btn-primary" onclick={saveSettings}>
+						Сохранить изменения
+					</button>
+					<button type="button" class="btn btn-secondary" onclick={resetGeneral}>Сбросить</button>
+				</div>
+			</form>
+		{:else if activeTab === 'loyalty'}
+			<h2>Программа лояльности</h2>
+			<form class="settings-form">
+				<div class="form-group">
+					<label for="earnRate">Процент начисления (%)</label>
+					<input type="number" id="earnRate" bind:value={loyaltyForm.earnRate} min="0.1" max="20" step="0.1" />
+					<small>Текущее значение: {loyaltyForm.earnRate}% (максимум 20%)</small>
+				</div>
+
+				<div class="form-group">
+					<label for="maxRedeemPercent">Максимальная скидка (%)</label>
+					<input
+						type="number"
+						id="maxRedeemPercent"
+						bind:value={loyaltyForm.maxRedeemPercent}
+						min="1"
+						max="50"
+						step="1"
+					/>
+					<small>Текущее значение: {loyaltyForm.maxRedeemPercent}% (максимум 50%)</small>
+				</div>
+
+				<div class="form-group">
+					<label for="pointsExpiryDays">Срок действия баллов (дней)</label>
+					<input
+						type="number"
+						id="pointsExpiryDays"
+						bind:value={loyaltyForm.pointsExpiryDays}
+						min="0"
+					/>
+					<small>Текущее значение: {loyaltyForm.pointsExpiryDays} дней</small>
+				</div>
+
+				<div class="form-group">
+					<label for="welcomeBonus">Приветственный бонус (баллы)</label>
+					<input type="number" id="welcomeBonus" bind:value={loyaltyForm.welcomeBonus} min="0" />
+					<small>Текущее значение: {loyaltyForm.welcomeBonus} баллов</small>
+				</div>
+
+				<div class="form-group">
+					<label for="birthdayBonus">Бонус в день рождения (баллы)</label>
+					<input type="number" id="birthdayBonus" bind:value={loyaltyForm.birthdayBonus} min="0" />
+					<small>Текущее значение: {loyaltyForm.birthdayBonus} баллов</small>
+				</div>
+
+				<div class="form-group">
+					<label for="minRedemptionAmount">Минимальная сумма для списания (баллы)</label>
+					<input
+						type="number"
+						id="minRedemptionAmount"
+						bind:value={loyaltyForm.minRedemptionAmount}
+						min="0"
+					/>
+					<small>Текущее значение: {loyaltyForm.minRedemptionAmount} баллов</small>
+				</div>
+
+				<div class="form-group">
+					<label for="pointsName">Название баллов</label>
+					<input
+						type="text"
+						id="pointsName"
+						bind:value={loyaltyForm.pointsName}
+						maxlength="50"
+					/>
+					<small>Отображается в TWA (например: "Мурзи-коины", "Бонусы")</small>
+				</div>
+
+				{#if saveMessage}
+					<div class="alert" class:success={saveMessage.includes('успешно')} class:error={saveMessage.includes('Ошибка')}>
+						{saveMessage}
+					</div>
+				{/if}
+
+				<div class="button-group">
+					<button type="button" class="btn btn-primary" onclick={saveSettings} disabled={saving}>
+						{saving ? 'Сохранение...' : 'Сохранить изменения'}
+					</button>
+					<button type="button" class="btn btn-secondary" onclick={resetLoyalty}>Сбросить</button>
+				</div>
+			</form>
+		{:else if activeTab === 'notifications'}
+			<h2>Уведомления</h2>
+			<form class="settings-form">
+				<div class="settings-section">
+					<h3>Каналы уведомлений</h3>
+					<div class="checkbox-group">
+						<label>
+							<input type="checkbox" bind:checked={notificationsForm.emailEnabled} />
+							Email уведомления
+						</label>
+					</div>
+					<div class="checkbox-group">
+						<label>
+							<input type="checkbox" bind:checked={notificationsForm.smsEnabled} />
+							SMS уведомления
+						</label>
+					</div>
+					<div class="checkbox-group">
+						<label>
+							<input type="checkbox" bind:checked={notificationsForm.pushEnabled} />
+							Push уведомления
+						</label>
+					</div>
+				</div>
+
+				<div class="settings-section">
+					<h3>События для уведомлений</h3>
+					<div class="checkbox-group">
+						<label>
+							<input type="checkbox" bind:checked={notificationsForm.notifyOnEarn} />
+							При начислении баллов
+						</label>
+					</div>
+					<div class="checkbox-group">
+						<label>
+							<input type="checkbox" bind:checked={notificationsForm.notifyOnRedeem} />
+							При списании баллов
+						</label>
+					</div>
+					<div class="checkbox-group">
+						<label>
+							<input type="checkbox" bind:checked={notificationsForm.notifyOnExpiry} />
+							Перед сгоранием баллов
+						</label>
+					</div>
+				</div>
+
+				<div class="button-group">
+					<button type="button" class="btn btn-primary" onclick={saveSettings}>
+						Сохранить изменения
+					</button>
+					<button type="button" class="btn btn-secondary" onclick={resetNotifications}>
+						Сбросить
+					</button>
+				</div>
+			</form>
+		{/if}
 	</div>
 </div>
-
-<!-- Create Modal -->
-{#if showCreateModal}
-	<div class="modal-overlay" onclick={() => (showCreateModal = false)}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
-			<h2>Create New Admin</h2>
-			<form method="POST" action="?/create" use:enhance={() => {
-				return async ({ update }) => {
-					await update();
-					if (!form?.error) {
-						showCreateModal = false;
-					}
-				};
-			}}>
-				<CsrfToken />
-				<div class="form-group">
-					<label for="name">Name</label>
-					<input type="text" id="name" name="name" required />
-				</div>
-
-				<div class="form-group">
-					<label for="email">Email</label>
-					<input type="email" id="email" name="email" required />
-				</div>
-
-				<div class="form-group">
-					<label for="password">Password</label>
-					<input type="password" id="password" name="password" minlength="12" required />
-					<p class="field-hint">Minimum 12 characters. Must include 3 of: lowercase, uppercase, digit, special character</p>
-				</div>
-
-				<div class="form-group">
-					<label for="role">Role</label>
-					<select id="role" name="role" required>
-						<option value="">Select role...</option>
-						<option value="super-admin">Super Admin - Full access</option>
-						<option value="editor">Editor - Can create/edit content</option>
-						<option value="viewer">Viewer - Read-only access</option>
-					</select>
-				</div>
-
-				<div class="modal-actions">
-					<button type="button" class="btn-secondary" onclick={() => (showCreateModal = false)}>
-						Cancel
-					</button>
-					<button type="submit" class="btn-primary">Create Admin</button>
-				</div>
-			</form>
-		</div>
-	</div>
-{/if}
-
-<!-- Edit Modal -->
-{#if showEditModal && editAdmin}
-	<div class="modal-overlay" onclick={() => (showEditModal = false)}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
-			<h2>Edit Admin</h2>
-			<form method="POST" action="?/update" use:enhance={() => {
-				return async ({ update }) => {
-					await update();
-					if (!form?.error) {
-						showEditModal = false;
-						editAdmin = null;
-					}
-				};
-			}}>
-				<CsrfToken />
-				<input type="hidden" name="id" value={editAdmin.id} />
-
-				<div class="form-group">
-					<label for="edit_name">Name</label>
-					<input type="text" id="edit_name" name="name" value={editAdmin.name} required />
-				</div>
-
-				<div class="form-group">
-					<label for="edit_email">Email</label>
-					<input type="email" id="edit_email" name="email" value={editAdmin.email} required />
-				</div>
-
-				<div class="form-group">
-					<label for="edit_role">Role</label>
-					<select id="edit_role" name="role" required>
-						<option value="super-admin" selected={editAdmin.role === 'super-admin'}>Super Admin - Full access</option>
-						<option value="editor" selected={editAdmin.role === 'editor'}>Editor - Can create/edit content</option>
-						<option value="viewer" selected={editAdmin.role === 'viewer'}>Viewer - Read-only access</option>
-					</select>
-				</div>
-
-				<div class="modal-actions">
-					<button type="button" class="btn-secondary" onclick={() => {
-						showEditModal = false;
-						editAdmin = null;
-					}}>
-						Cancel
-					</button>
-					<button type="submit" class="btn-primary">Update Admin</button>
-				</div>
-			</form>
-		</div>
-	</div>
-{/if}
-
-<!-- Change Password Modal -->
-{#if passwordAdminId !== null}
-	<div class="modal-overlay" onclick={() => (passwordAdminId = null)}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
-			<h2>Change Password</h2>
-			<p>Enter a new password for this admin user.</p>
-
-			<form method="POST" action="?/changePassword" use:enhance={() => {
-				return async ({ update }) => {
-					await update();
-					if (!form?.error) {
-						passwordAdminId = null;
-					}
-				};
-			}}>
-				<CsrfToken />
-				<input type="hidden" name="id" value={passwordAdminId} />
-
-				<div class="form-group">
-					<label for="new_password">New Password</label>
-					<input type="password" id="new_password" name="password" minlength="12" required />
-					<p class="field-hint">Minimum 12 characters. Must include 3 of: lowercase, uppercase, digit, special character</p>
-				</div>
-
-				<div class="modal-actions">
-					<button type="button" class="btn-secondary" onclick={() => (passwordAdminId = null)}>
-						Cancel
-					</button>
-					<button type="submit" class="btn-primary">Change Password</button>
-				</div>
-			</form>
-		</div>
-	</div>
-{/if}
-
-<!-- Delete Confirm Modal -->
-{#if deleteId !== null}
-	<div class="modal-overlay" onclick={() => (deleteId = null)}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
-			<h2>Delete Admin</h2>
-			<p>Are you sure you want to delete this admin? This action cannot be undone.</p>
-			<p class="warning-text">⚠️ Note: You cannot delete the last super-admin.</p>
-
-			<form method="POST" action="?/delete" use:enhance={() => {
-				return async ({ update }) => {
-					await update();
-					deleteId = null;
-				};
-			}}>
-				<CsrfToken />
-				<input type="hidden" name="id" value={deleteId} />
-				<div class="modal-actions">
-					<button type="button" class="btn-secondary" onclick={() => (deleteId = null)}>
-						Cancel
-					</button>
-					<button type="submit" class="btn-danger">Delete</button>
-				</div>
-			</form>
-		</div>
-	</div>
-{/if}
 
 <style>
 	.page {
@@ -282,9 +346,6 @@
 	}
 
 	.page-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
 		margin-bottom: 2rem;
 	}
 
@@ -292,40 +353,143 @@
 		margin: 0 0 0.5rem 0;
 		font-size: 2rem;
 		font-weight: 700;
-		color: #111827;
 	}
 
 	.text-muted {
 		color: #6b7280;
 		margin: 0;
-		font-size: 0.875rem;
 	}
 
-	.card {
+	/* Tabs */
+	.tabs {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+		border-bottom: 2px solid #e5e7eb;
+	}
+
+	.tab {
+		padding: 0.75rem 1.5rem;
+		background: transparent;
+		border: none;
+		border-bottom: 2px solid transparent;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #6b7280;
+		transition: all 0.2s;
+		margin-bottom: -2px;
+	}
+
+	.tab:hover {
+		color: #111827;
+		background: #f9fafb;
+	}
+
+	.tab.active {
+		color: #667eea;
+		border-bottom-color: #667eea;
+	}
+
+	/* Section */
+	.section {
 		background: white;
+		padding: 2rem;
 		border-radius: 0.75rem;
 		box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-		overflow: hidden;
 	}
 
-	.card-header {
-		padding: 1.5rem;
-		border-bottom: 1px solid #e5e7eb;
-	}
-
-	.card-header h2 {
-		margin: 0 0 0.5rem 0;
-		font-size: 1.25rem;
+	.section h2 {
+		margin: 0 0 1.5rem 0;
+		font-size: 1.5rem;
 		font-weight: 600;
-		color: #111827;
 	}
 
-	.btn-primary, .btn-secondary, .btn-danger, .btn-edit, .btn-password, .btn-delete {
-		padding: 0.625rem 1.25rem;
+	/* Form */
+	.settings-form {
+		max-width: 600px;
+	}
+
+	.form-group {
+		margin-bottom: 1.5rem;
+	}
+
+	.form-group label {
+		display: block;
+		margin-bottom: 0.5rem;
+		font-weight: 500;
+		font-size: 0.875rem;
+		color: #374151;
+	}
+
+	.form-group input[type='text'],
+	.form-group input[type='email'],
+	.form-group input[type='tel'],
+	.form-group input[type='number'] {
+		width: 100%;
+		padding: 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		transition: border-color 0.2s;
+	}
+
+	.form-group input:focus {
+		outline: none;
+		border-color: #667eea;
+		box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+	}
+
+	.form-group small {
+		display: block;
+		margin-top: 0.5rem;
+		font-size: 0.75rem;
+		color: #6b7280;
+	}
+
+	/* Settings sections */
+	.settings-section {
+		margin-bottom: 2rem;
+	}
+
+	.settings-section h3 {
+		margin: 0 0 1rem 0;
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: #374151;
+	}
+
+	.checkbox-group {
+		margin-bottom: 1rem;
+	}
+
+	.checkbox-group label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 400;
+		cursor: pointer;
+	}
+
+	.checkbox-group input[type='checkbox'] {
+		width: 1.25rem;
+		height: 1.25rem;
+		cursor: pointer;
+	}
+
+	/* Buttons */
+	.button-group {
+		display: flex;
+		gap: 1rem;
+		margin-top: 2rem;
+	}
+
+	.btn {
+		padding: 0.75rem 1.5rem;
 		border: none;
 		border-radius: 0.5rem;
-		font-weight: 600;
 		font-size: 0.875rem;
+		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
@@ -336,226 +500,57 @@
 	}
 
 	.btn-primary:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 	}
 
 	.btn-secondary {
-		background-color: #e5e7eb;
+		background: #f3f4f6;
 		color: #374151;
 	}
 
 	.btn-secondary:hover {
-		background-color: #d1d5db;
-	}
-
-	.btn-danger {
-		background-color: #ef4444;
-		color: white;
-	}
-
-	.btn-danger:hover {
-		background-color: #dc2626;
-	}
-
-	.btn-edit, .btn-password, .btn-delete {
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75rem;
-	}
-
-	.btn-edit {
-		background-color: #dbeafe;
-		color: #1e40af;
-	}
-
-	.btn-edit:hover {
-		background-color: #bfdbfe;
-	}
-
-	.btn-password {
-		background-color: #fef3c7;
-		color: #92400e;
-	}
-
-	.btn-password:hover {
-		background-color: #fde68a;
-	}
-
-	.btn-delete {
-		background-color: #fee2e2;
-		color: #991b1b;
-	}
-
-	.btn-delete:hover {
-		background-color: #fecaca;
-	}
-
-	.actions {
-		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
-
-	.table-container {
-		overflow-x: auto;
-	}
-
-	table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	thead {
-		background-color: #f9fafb;
-	}
-
-	th {
-		padding: 0.75rem 1rem;
-		text-align: left;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #6b7280;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	td {
-		padding: 1rem;
-		border-top: 1px solid #e5e7eb;
-		font-size: 0.875rem;
-	}
-
-	.badge {
-		display: inline-block;
-		padding: 0.25rem 0.75rem;
-		border-radius: 9999px;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.badge-red {
-		background-color: #fee2e2;
-		color: #991b1b;
-	}
-
-	.badge-blue {
-		background-color: #dbeafe;
-		color: #1e40af;
-	}
-
-	.badge-gray {
-		background-color: #f3f4f6;
-		color: #374151;
+		background: #e5e7eb;
 	}
 
 	.alert {
-		padding: 1rem;
-		border-radius: 0.5rem;
-		margin-bottom: 1.5rem;
-		font-size: 0.875rem;
-	}
-
-	.alert-error {
-		background-color: #fee2e2;
-		color: #991b1b;
-		border: 1px solid #fca5a5;
-	}
-
-	.alert-success {
-		background-color: #d1fae5;
-		color: #065f46;
-		border: 1px solid #6ee7b7;
-	}
-
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-	}
-
-	.modal {
-		background: white;
-		border-radius: 0.75rem;
-		padding: 2rem;
-		width: 90%;
-		max-width: 500px;
-		box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-		max-height: 90vh;
-		overflow-y: auto;
-	}
-
-	.modal h2 {
-		margin: 0 0 1rem 0;
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: #111827;
-	}
-
-	.modal p {
-		color: #6b7280;
-		margin-bottom: 1.5rem;
-		font-size: 0.875rem;
-	}
-
-	.warning-text {
-		color: #92400e;
-		background-color: #fef3c7;
-		padding: 0.75rem;
-		border-radius: 0.375rem;
+		padding: 12px 16px;
+		border-radius: 8px;
+		margin-bottom: 16px;
+		font-size: 14px;
 		font-weight: 500;
 	}
 
-	.form-group {
-		margin-bottom: 1.25rem;
+	.alert.success {
+		background: rgba(16, 185, 129, 0.1);
+		color: #059669;
+		border: 1px solid rgba(16, 185, 129, 0.3);
 	}
 
-	.form-group label {
-		display: block;
-		font-weight: 500;
-		color: #374151;
-		margin-bottom: 0.5rem;
-		font-size: 0.875rem;
-	}
-
-	.form-group input,
-	.form-group select {
-		width: 100%;
-		padding: 0.625rem 0.875rem;
-		border: 1px solid #d1d5db;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-	}
-
-	.form-group input:focus,
-	.form-group select:focus {
-		outline: none;
-		border-color: #667eea;
-		box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-	}
-
-	.field-hint {
-		margin: 0.5rem 0 0 0;
-		font-size: 0.75rem;
-		color: #6b7280;
-	}
-
-	.modal-actions {
-		display: flex;
-		gap: 0.75rem;
-		justify-content: flex-end;
-		margin-top: 1.5rem;
+	.alert.error {
+		background: rgba(239, 68, 68, 0.1);
+		color: #dc2626;
+		border: 1px solid rgba(239, 68, 68, 0.3);
 	}
 
 	@media (max-width: 768px) {
-		.actions {
+		.tabs {
+			overflow-x: auto;
+		}
+
+		.tab {
+			white-space: nowrap;
+		}
+
+		.section {
+			padding: 1.5rem;
+		}
+
+		.button-group {
 			flex-direction: column;
 		}
 
-		.actions button {
+		.btn {
 			width: 100%;
 		}
 	}

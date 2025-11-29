@@ -12,33 +12,37 @@
 
 <div class="offer-item">
   <button class="list-item" onclick={onToggle}>
-    <div class="list-item-content">
-      <div class="list-item-icon icon-{offer.iconColor}">
-        <span>{offer.icon}</span>
+    <!-- Image thumbnail (Sprint 2 NEW) -->
+    {#if offer.image}
+      <img src={offer.image} alt={offer.title} class="offer-thumbnail" />
+    {:else}
+      <!-- Fallback for old data -->
+      <div class="offer-thumbnail-placeholder">
+        <span class="placeholder-icon">🎁</span>
       </div>
-      <div class="list-item-text">
-        <h3>{offer.title}</h3>
-        <p>{offer.description}</p>
-        <div class="list-item-meta {offer.deadlineClass}">{offer.deadline}</div>
+    {/if}
+
+    <div class="offer-content">
+      <h3 class="offer-title">{offer.title}</h3>
+      <p class="offer-description-short">{offer.description.substring(0, 80)}...</p>
+      <div class="offer-deadline">
+        <span class="deadline-icon">⏱️</span>
+        <span class="deadline-text">До {offer.deadline}</span>
       </div>
-      <div class="expand-icon" class:rotated={expanded}>
-        <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
-        </svg>
-      </div>
+    </div>
+
+    <div class="expand-icon" class:rotated={expanded}>
+      <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+      </svg>
     </div>
   </button>
 
+  <!-- Expanded details section (Sprint 2 simplified) -->
   <div class="offer-details" class:expanded>
     <div class="offer-details-content">
       <h4>Подробности акции</h4>
-      <p class="offer-description">{offer.details}</p>
-      <h5>Условия:</h5>
-      <ul class="offer-conditions">
-        {#each offer.conditions as condition}
-          <li>{condition}</li>
-        {/each}
-      </ul>
+      <p class="offer-description-full">{offer.description}</p>
     </div>
   </div>
 </div>
@@ -51,98 +55,93 @@
   .list-item {
     background: var(--card-bg);
     border-radius: 20px;
-    padding: 20px;
+    padding: 0;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
     cursor: pointer;
     transition: all 0.3s ease;
     width: 100%;
     text-align: left;
+    overflow: hidden;
+    display: flex;
+    gap: 0;
   }
 
   .list-item:hover {
     background: var(--card-hover);
-    transform: translateX(4px);
     box-shadow: var(--shadow-lg);
   }
 
-  .list-item-content {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .list-item-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    box-shadow: var(--shadow);
+  .offer-thumbnail {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
     flex-shrink: 0;
   }
 
-  .icon-green {
-    background: linear-gradient(135deg, var(--secondary-green), var(--secondary-green-dark));
-  }
-
-  .icon-orange {
+  .offer-thumbnail-placeholder {
+    width: 120px;
+    height: 120px;
     background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
-  .icon-blue {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+  .placeholder-icon {
+    font-size: 40px;
+    opacity: 0.8;
   }
 
-  .icon-purple {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  }
-
-  .icon-pink {
-    background: linear-gradient(135deg, #ec4899, #db2777);
-  }
-
-  .list-item-text {
+  .offer-content {
     flex: 1;
+    padding: 16px;
+    min-width: 0;
   }
 
-  .list-item-text h3 {
+  .offer-title {
     font-weight: bold;
     color: var(--text-primary);
     font-size: 16px;
     letter-spacing: -0.025em;
-    margin-bottom: 4px;
+    margin: 0 0 6px 0;
   }
 
-  .list-item-text p {
+  .offer-description-short {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;
     line-height: 1.4;
+    margin: 0 0 8px 0;
   }
 
-  .list-item-meta {
-    color: var(--secondary-green);
-    font-weight: bold;
-    font-size: 13px;
-    margin-top: 6px;
+  .offer-deadline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: var(--bg-light);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
   }
 
-  .list-item-meta.orange {
-    color: var(--primary-orange);
+  .deadline-icon {
+    font-size: 14px;
   }
 
   .expand-icon {
-    width: 32px;
-    height: 32px;
+    width: 48px;
+    height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
     transition: transform 0.3s ease;
     flex-shrink: 0;
+    background: var(--bg-light);
   }
 
   .expand-icon.rotated {
@@ -161,55 +160,38 @@
 
   .offer-details-content {
     background: var(--bg-tertiary);
-    border-radius: 0 0 20px 20px;
     padding: 20px;
-    margin-top: -12px;
-    border: 1px solid var(--border-color);
-    border-top: none;
+    border-top: 1px solid var(--border-color);
   }
 
   .offer-details-content h4 {
     font-size: 16px;
     font-weight: bold;
     color: var(--text-primary);
-    margin-bottom: 12px;
+    margin: 0 0 12px 0;
   }
 
-  .offer-details-content h5 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-top: 16px;
-    margin-bottom: 8px;
-  }
-
-  .offer-description {
+  .offer-description-full {
     font-size: 14px;
     color: var(--text-secondary);
     line-height: 1.6;
-  }
-
-  .offer-conditions {
-    list-style: none;
-    padding: 0;
     margin: 0;
   }
 
-  .offer-conditions li {
-    font-size: 13px;
-    color: var(--text-secondary);
-    padding: 8px 12px;
-    background: var(--card-bg);
-    border-radius: 8px;
-    margin-bottom: 6px;
-    border-left: 3px solid var(--primary-orange);
-    line-height: 1.4;
-  }
+  @media (max-width: 480px) {
+    .list-item {
+      flex-direction: column;
+    }
 
-  .offer-conditions li:before {
-    content: '✓';
-    color: var(--secondary-green);
-    font-weight: bold;
-    margin-right: 8px;
+    .offer-thumbnail,
+    .offer-thumbnail-placeholder {
+      width: 100%;
+      height: 160px;
+    }
+
+    .expand-icon {
+      width: 100%;
+      height: 40px;
+    }
   }
 </style>

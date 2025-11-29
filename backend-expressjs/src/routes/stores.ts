@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db/client';
-import { stores } from '../db/schema';
+import { stores, loyaltySettings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 const router = Router();
@@ -48,13 +48,18 @@ router.get('/:id/config', async (req: Request, res: Response) => {
 			});
 		}
 
-		// Возвращаем конфигурацию
+		// FIX: Получаем настройки из loyaltySettings вместо хардкода
+		const settings = await db.query.loyaltySettings.findFirst();
+		const cashbackPercent = settings?.earning_percent ?? 4;
+		const maxDiscountPercent = settings?.max_discount_percent ?? 20;
+
+		// Возвращаем конфигурацию с реальными настройками
 		return res.json({
 			storeId: store.id,
 			storeName: store.name,
 			location: store.address || 'г. Москва',
-			cashbackPercent: 4,  // Фиксированная ставка
-			maxDiscountPercent: 20  // Фиксированная ставка
+			cashbackPercent,
+			maxDiscountPercent
 		});
 
 	} catch (error) {

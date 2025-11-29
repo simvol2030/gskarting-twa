@@ -27,11 +27,28 @@
     }
   });
 
+  function handleOverlayClick(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    onClose();
+  }
+
   function handleOverlayKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onClose();
     }
+  }
+
+  function handleCloseClick(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    onClose();
+  }
+
+  function handleNavClick(e: MouseEvent) {
+    e.stopPropagation();
+    onClose();
   }
 
   function handleEscapeKey(e: KeyboardEvent) {
@@ -46,7 +63,7 @@
 <div
   class="sidebar-overlay"
   class:active={open}
-  onclick={onClose}
+  onclick={handleOverlayClick}
   onkeydown={handleOverlayKeydown}
   role="button"
   tabindex="-1"
@@ -56,7 +73,7 @@
 <aside class="sidebar" class:active={open}>
   <div class="sidebar-header">
     <h2 class="sidebar-title">Меню</h2>
-    <button class="sidebar-close" onclick={onClose} aria-label="Закрыть меню">
+    <button class="sidebar-close" onclick={handleCloseClick} aria-label="Закрыть меню">
       <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
         <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
       </svg>
@@ -69,7 +86,7 @@
         href={item.href}
         class="sidebar-item"
         class:active={$page.url.pathname === item.href}
-        onclick={onClose}
+        onclick={handleNavClick}
       >
         <span class="sidebar-icon">{item.icon}</span>
         <span>{item.label}</span>

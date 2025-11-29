@@ -12,11 +12,17 @@
 	// Мобильное меню
 	let mobileMenuOpen = $state(false);
 
-	function toggleMobileMenu() {
+	function toggleMobileMenu(event?: Event) {
+		if (event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
 		mobileMenuOpen = !mobileMenuOpen;
 	}
 
 	function closeMobileMenu() {
+		// Убрали event.preventDefault() чтобы навигация работала при клике
+		// Теперь левый клик будет корректно переходить по ссылкам
 		mobileMenuOpen = false;
 	}
 </script>
@@ -34,7 +40,7 @@
 					<span class="icon">☰</span>
 				{/if}
 			</button>
-			<h1>Admin Panel</h1>
+			<h1>Loyalty Admin</h1>
 			<div class="user-badge">{data.user?.name?.charAt(0) || 'A'}</div>
 		</header>
 
@@ -45,7 +51,7 @@
 
 		<aside class="sidebar" class:mobile-open={mobileMenuOpen}>
 			<div class="sidebar-header">
-				<h2>Admin Panel</h2>
+				<h2>Loyalty Admin</h2>
 				<p class="user-role">{data.user?.role}</p>
 			</div>
 
@@ -54,18 +60,30 @@
 					<span class="icon">📊</span>
 					<span>Dashboard</span>
 				</a>
-				<a href="/users" class:active={$page.url.pathname.startsWith('/users')} onclick={closeMobileMenu}>
+				<a href="/clients" class:active={$page.url.pathname.startsWith('/clients')} onclick={closeMobileMenu}>
 					<span class="icon">👥</span>
-					<span>Users</span>
+					<span>Клиенты</span>
 				</a>
-				<a href="/posts" class:active={$page.url.pathname.startsWith('/posts')} onclick={closeMobileMenu}>
-					<span class="icon">📝</span>
-					<span>Posts</span>
+				<a href="/promotions" class:active={$page.url.pathname.startsWith('/promotions')} onclick={closeMobileMenu}>
+					<span class="icon">🎁</span>
+					<span>Акции</span>
+				</a>
+				<a href="/products-admin" class:active={$page.url.pathname.startsWith('/products-admin')} onclick={closeMobileMenu}>
+					<span class="icon">🛍️</span>
+					<span>Товары</span>
+				</a>
+				<a href="/store-list" class:active={$page.url.pathname.startsWith('/store-list')} onclick={closeMobileMenu}>
+					<span class="icon">🏪</span>
+					<span>Магазины</span>
+				</a>
+				<a href="/statistics" class:active={$page.url.pathname.startsWith('/statistics')} onclick={closeMobileMenu}>
+					<span class="icon">📈</span>
+					<span>Статистика</span>
 				</a>
 				{#if data.user?.role === 'super-admin'}
 					<a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeMobileMenu}>
 						<span class="icon">⚙️</span>
-						<span>Settings</span>
+						<span>Настройки</span>
 					</a>
 				{/if}
 			</nav>

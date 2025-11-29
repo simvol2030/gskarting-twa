@@ -1,26 +1,60 @@
 import type { PageServerLoad } from './$types';
-import { queries } from '$lib/server/db/database';
+import { API_BASE_URL } from '$lib/config';
 
-export const load: PageServerLoad = async () => {
-	// Получаем данные (queries теперь async)
-	const users = await queries.getAllUsers();
-	const posts = await queries.getAllPosts();
+/**
+ * Sprint 5 Task 4.1: Dashboard API Integration
+ * Replaced mock data with real API call to /api/admin/dashboard/stats
+ * FIX: Forward session cookie to backend
+ */
+export const load: PageServerLoad = async ({ fetch, cookies }) => {
+	// Get session cookie to forward to backend
+	const sessionCookie = cookies.get('session');
+	if (!sessionCookie) {
+		console.error('[Dashboard] No session cookie found');
+		return {
+			stats: { totalClients: 0, activeClients: 0, totalTransactions: 0, totalRevenue: 0, clientsGrowth: 0, transactionsGrowth: 0, revenueGrowth: 0 },
+			stores: []
+		};
+	}
 
-	// Вычисляем статистику
-	const usersCount = users.length;
-	const postsCount = posts.length;
-	const publishedCount = posts.filter((p) => p.published).length;
+	try {
+		const response = await fetch(`${API_BASE_URL}/admin/dashboard/stats`, {
+			headers: {
+				Cookie: `session=${sessionCookie}`
+			}
+		});
 
-	// Получаем недавние посты
-	const recentPosts = posts.slice(0, 5);
+		if (!response.ok) {
+			const errorText = await response.text();
+			console.error(`[Dashboard] Failed to fetch stats: ${response.status} ${errorText}`);
+			throw new Error(`Failed to fetch dashboard stats: ${response.status}`);
+		}
 
-	return {
-		stats: {
-			users: usersCount,
-			posts: postsCount,
-			published: publishedCount,
-			drafts: postsCount - publishedCount
-		},
-		recentPosts
-	};
+		const json = await response.json();
+
+		if (!json.success) {
+			console.error('[Dashboard] API returned error:', json.error);
+			throw new Error(json.error || 'Unknown error');
+		}
+
+		return {
+			stats: json.data.stats,
+			stores: json.data.stores
+		};
+	} catch (error: any) {
+		console.error('[Dashboard] Error loading data:', error);
+		// Return empty data on error to prevent page crash
+		return {
+			stats: {
+				totalClients: 0,
+				activeClients: 0,
+				totalTransactions: 0,
+				totalRevenue: 0,
+				clientsGrowth: 0,
+				transactionsGrowth: 0,
+				revenueGrowth: 0
+			},
+			stores: []
+		};
+	}
 };

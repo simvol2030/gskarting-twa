@@ -1,8 +1,8 @@
 import { db } from '$lib/server/db/client';
-import { loyaltyUsers, transactions } from '$lib/server/db/schema';
+import { loyaltyUsers, transactions, loyaltySettings } from '$lib/server/db/schema';
 import { eq, gte, and, count, sum, sql } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
-import { getRetentionCutoffDate, RETENTION_DAYS } from '$lib/utils/retention';
+import { getRetentionCutoffDate, getRetentionDays } from '$lib/utils/retention';
 
 /**
  * Root layout data loader
@@ -48,8 +48,11 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
         .limit(1);
 
       if (loyaltyUser) {
-        // Get centralized cutoff date (prevents race conditions)
-        const cutoffDate = getRetentionCutoffDate();
+        // Get centralized cutoff date and retention days (dynamic from settings)
+        const [cutoffDate, retentionDays] = await Promise.all([
+          getRetentionCutoffDate(),
+          getRetentionDays()
+        ]);
 
         // Calculate stats from last 45 days of transactions
         // totalPurchases: count of 'earn' type transactions (each purchase earns points)
@@ -76,33 +79,35 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
           totalSaved: stats?.totalSaved ?? 0
         };
         isDemoMode = false;
-        console.log(`[+layout.server.ts] Loaded real user stats (last ${RETENTION_DAYS} days):`, {
+        console.log(`[+layout.server.ts] Loaded real user stats (last ${retentionDays} days):`, {
           telegram_user_id: telegramUserId,
           totalPurchases: user.totalPurchases,
           totalSaved: user.totalSaved,
           cutoffDate,
-          retention_days: RETENTION_DAYS
+          retention_days: retentionDays
         });
       }
     }
   }
 
-  // Loyalty rules (static config)
+  // Loyalty rules (dynamic from DB - Задача 3.1)
+  const [settings] = await db.select().from(loyaltySettings).where(eq(loyaltySettings.id, 1)).limit(1);
+
   const loyaltyRules = {
     earning: {
       icon: '💰',
       title: 'Начисление',
-      value: '4% от покупки'
+      value: `${settings?.earning_percent || 4}% от покупки`
     },
     payment: {
       icon: '🎯',
       title: 'Оплата',
-      value: 'До 20% чека'
+      value: `До ${settings?.max_discount_percent || 20}% чека`
     },
     expiry: {
       icon: '⏱️',
       title: 'Срок',
-      value: '45 дней'
+      value: `${settings?.expiry_days || 45} дней`
     },
     detailedRulesLink: '/profile',
     detailedRulesText: 'Подробные правила программы лояльности'

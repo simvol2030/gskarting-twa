@@ -1,61 +1,394 @@
 <script lang="ts">
-  import Header from '$lib/components/loyalty/layout/Header.svelte';
-  import MobileMenu from '$lib/components/loyalty/layout/MobileMenu.svelte';
-  import ProductCard from '$lib/components/loyalty/ui/ProductCard.svelte';
+	import { goto } from '$app/navigation';
 
-  let { data } = $props();
-  let menuOpen = $state(false);
+	let { data } = $props();
 
-  function openMenu() {
-    menuOpen = true;
-  }
+	let searchValue = $state(data.filters.search);
+	let selectedCategory = $state(data.filters.category);
 
-  function closeMenu() {
-    menuOpen = false;
-  }
+	function handleSearch() {
+		const params = new URLSearchParams();
+		if (searchValue) params.set('search', searchValue);
+		if (selectedCategory !== 'all') params.set('category', selectedCategory);
+		goto(`/products?${params.toString()}`);
+	}
+
+	function handleCategoryChange(category: string) {
+		selectedCategory = category;
+		handleSearch();
+	}
+
+	function clearFilters() {
+		searchValue = '';
+		selectedCategory = 'all';
+		goto('/products');
+	}
 </script>
 
-<section class="section-content">
-  <h2 class="section-header">
-    <span>🛍️</span>
-    <span>Топовые товары</span>
-  </h2>
-  <div class="products-grid">
-    {#each data.products as product}
-      <ProductCard {product} />
-    {/each}
-  </div>
-</section>
+<svelte:head>
+	<title>Каталог товаров - Мурзико</title>
+</svelte:head>
+
+<div class="products-page">
+	<header class="page-header">
+		<h1>🛍️ Каталог товаров</h1>
+		<p class="subtitle">Найдите то, что нужно вашему питомцу</p>
+	</header>
+
+	<div class="filters-section">
+		<div class="search-bar">
+			<span class="search-icon">🔍</span>
+			<input
+				type="text"
+				placeholder="Поиск товаров..."
+				bind:value={searchValue}
+				onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+				class="search-input"
+			/>
+			{#if searchValue}
+				<button class="clear-search" onclick={() => { searchValue = ''; handleSearch(); }}>✕</button>
+			{/if}
+		</div>
+
+		<div class="categories-bar">
+			<button
+				class="category-btn"
+				class:active={selectedCategory === 'all'}
+				onclick={() => handleCategoryChange('all')}
+			>
+				Все
+			</button>
+			{#each data.categories as category}
+				<button
+					class="category-btn"
+					class:active={selectedCategory === category}
+					onclick={() => handleCategoryChange(category)}
+				>
+					{category}
+				</button>
+			{/each}
+		</div>
+
+		{#if searchValue || selectedCategory !== 'all'}
+			<button class="reset-filters" onclick={clearFilters}>
+				Сбросить фильтры
+			</button>
+		{/if}
+	</div>
+
+	<div class="products-grid">
+		{#each data.products as product}
+			<article class="product-card">
+				<div class="product-image-wrapper">
+					<img src={product.image} alt={product.name} class="product-image" />
+					{#if product.old_price}
+						<span class="discount-badge">
+							-{Math.round((1 - product.price / product.old_price) * 100)}%
+						</span>
+					{/if}
+				</div>
+
+				<div class="product-info">
+					<h3 class="product-name">{product.name}</h3>
+					<span class="product-category">{product.category}</span>
+
+					<div class="product-pricing">
+						{#if product.old_price}
+							<span class="old-price">{product.old_price.toLocaleString('ru-RU')} ₽</span>
+						{/if}
+						<span class="price">{product.price.toLocaleString('ru-RU')} ₽</span>
+					</div>
+				</div>
+			</article>
+		{/each}
+	</div>
+
+	{#if data.products.length === 0}
+		<div class="empty-state">
+			<span class="empty-icon">📦</span>
+			<h2>Товары не найдены</h2>
+			<p>Попробуйте изменить фильтры</p>
+			<button class="reset-btn" onclick={clearFilters}>Сбросить фильтры</button>
+		</div>
+	{/if}
+</div>
 
 <style>
-  .section-content {
-    padding: 20px 16px 24px;
-  }
+	.products-page {
+		padding: 0 16px 24px;
+		max-width: 480px;
+		margin: 0 auto;
+	}
 
-  .section-header {
-    font-size: 20px;
-    font-weight: bold;
-    color: var(--text-primary);
-    margin-bottom: 16px;
-    letter-spacing: -0.025em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+	.page-header {
+		text-align: center;
+		padding: 24px 0;
+	}
 
-  .products-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
+	.page-header h1 {
+		font-size: 28px;
+		font-weight: bold;
+		color: var(--text-primary);
+		margin: 0 0 8px 0;
+		letter-spacing: -0.025em;
+	}
 
-  @media (max-width: 480px) {
-    .section-content {
-      padding: 20px 12px 24px;
-    }
+	.subtitle {
+		font-size: 15px;
+		color: var(--text-secondary);
+		margin: 0;
+	}
 
-    .products-grid {
-      gap: 10px;
-    }
-  }
+	.filters-section {
+		margin-bottom: 24px;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.search-bar {
+		position: relative;
+		display: flex;
+		align-items: center;
+		background: var(--bg-light);
+		border-radius: 12px;
+		padding: 12px 16px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	}
+
+	.search-icon {
+		font-size: 18px;
+		margin-right: 10px;
+	}
+
+	.search-input {
+		flex: 1;
+		border: none;
+		background: transparent;
+		font-size: 15px;
+		color: var(--text-primary);
+		outline: none;
+	}
+
+	.search-input::placeholder {
+		color: var(--text-secondary);
+	}
+
+	.clear-search {
+		background: none;
+		border: none;
+		color: var(--text-secondary);
+		cursor: pointer;
+		font-size: 18px;
+		padding: 4px;
+		transition: color 0.2s ease;
+	}
+
+	.clear-search:hover {
+		color: var(--text-primary);
+	}
+
+	.categories-bar {
+		display: flex;
+		gap: 8px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+	}
+
+	.categories-bar::-webkit-scrollbar {
+		display: none;
+	}
+
+	.category-btn {
+		padding: 8px 16px;
+		border-radius: 20px;
+		border: 1px solid var(--border-color);
+		background: var(--bg-white);
+		color: var(--text-secondary);
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.category-btn:hover {
+		border-color: var(--primary-orange);
+		color: var(--primary-orange);
+	}
+
+	.category-btn.active {
+		background: var(--primary-orange);
+		color: white;
+		border-color: var(--primary-orange);
+	}
+
+	.reset-filters {
+		padding: 10px 16px;
+		border-radius: 10px;
+		border: none;
+		background: var(--bg-light);
+		color: var(--text-secondary);
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.reset-filters:hover {
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
+	}
+
+	.products-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 12px;
+	}
+
+	.product-card {
+		background: var(--card-bg);
+		border-radius: 12px;
+		overflow: hidden;
+		box-shadow: var(--shadow);
+		transition: all 0.3s ease;
+		cursor: pointer;
+	}
+
+	.product-card:hover {
+		box-shadow: var(--shadow-lg);
+		transform: translateY(-4px);
+	}
+
+	.product-image-wrapper {
+		position: relative;
+		width: 100%;
+		padding-top: 100%;
+		background: var(--bg-light);
+		overflow: hidden;
+	}
+
+	.product-image {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.discount-badge {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		background: var(--accent-red);
+		color: white;
+		padding: 4px 8px;
+		border-radius: 6px;
+		font-size: 12px;
+		font-weight: 700;
+	}
+
+	.product-info {
+		padding: 12px;
+	}
+
+	.product-name {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--text-primary);
+		margin: 0 0 4px 0;
+		line-height: 1.3;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+
+	.product-category {
+		font-size: 12px;
+		color: var(--text-secondary);
+		display: block;
+		margin-bottom: 8px;
+	}
+
+	.product-pricing {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+
+	.old-price {
+		font-size: 13px;
+		color: var(--text-secondary);
+		text-decoration: line-through;
+	}
+
+	.price {
+		font-size: 16px;
+		font-weight: 700;
+		color: var(--primary-orange);
+	}
+
+	.empty-state {
+		text-align: center;
+		padding: 64px 20px;
+	}
+
+	.empty-icon {
+		font-size: 64px;
+		display: block;
+		margin-bottom: 16px;
+		opacity: 0.5;
+	}
+
+	.empty-state h2 {
+		font-size: 20px;
+		font-weight: bold;
+		color: var(--text-primary);
+		margin: 0 0 8px 0;
+	}
+
+	.empty-state p {
+		font-size: 15px;
+		color: var(--text-secondary);
+		margin: 0 0 16px 0;
+	}
+
+	.reset-btn {
+		padding: 12px 24px;
+		border-radius: 10px;
+		border: none;
+		background: var(--primary-orange);
+		color: white;
+		font-size: 15px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.reset-btn:hover {
+		background: var(--primary-orange-dark);
+		transform: scale(1.02);
+	}
+
+	.reset-btn:active {
+		transform: scale(0.98);
+	}
+
+	@media (max-width: 480px) {
+		.products-grid {
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
+		}
+	}
+
+	@media (min-width: 481px) {
+		.products-grid {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
 </style>

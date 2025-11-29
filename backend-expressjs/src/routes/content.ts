@@ -7,8 +7,8 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db/client';
-import { recommendations, offers, products, stores } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { offers, products, stores } from '../db/schema';
+import { eq, and, isNotNull, ne, desc } from 'drizzle-orm';
 
 const router = Router();
 
@@ -25,39 +25,65 @@ const router = Router();
  */
 router.get('/home', async (req: Request, res: Response) => {
 	try {
-		// Fetch recommendations (active only)
-		const recommendationsList = await db
-			.select()
-			.from(recommendations)
-			.where(eq(recommendations.is_active, true))
-			.all();
-
-		// Fetch first 2 active offers
+		// Fetch first 2 active offers WITH show_on_home = true (Sprint 2)
+		// HIGH FIX #7: Filter out old promotions without image
+		// CRITICAL FIX #1 (Cycle 3): Use Drizzle operators instead of sql template
 		const offersList = await db
 			.select()
 			.from(offers)
-			.where(eq(offers.is_active, true))
+			.where(
+				and(
+					eq(offers.is_active, true),
+					eq(offers.show_on_home, true),
+					isNotNull(offers.image),
+					ne(offers.image, '')
+				)
+			)
 			.limit(2)
 			.all();
 
-		// Fetch first 6 active products
-		const productsList = await db
+		// Task 3.3: Fetch first 6 active products WITH show_on_home = true (Sprint 3)
+		// HIGH FIX #4: Exclude recommendations from top products
+		// HIGH FIX #6: Add explicit ordering (newest first)
+		const topProductsList = await db
 			.select()
 			.from(products)
-			.where(eq(products.is_active, true))
+			.where(
+				and(
+					eq(products.is_active, true),
+					eq(products.show_on_home, true),
+					eq(products.is_recommendation, false)
+				)
+			)
+			.orderBy(desc(products.id))
 			.limit(6)
 			.all();
 
-		// Transform offers to match frontend format
-		const transformedOffers = offersList.map(offer => ({
-			...offer,
-			conditions: JSON.parse(offer.conditions) // Parse JSON string to array
-		}));
+		// Task 3.4: Fetch recommendations WITHOUT PRICE (Sprint 3)
+		// HIGH FIX #7: Add explicit ordering (newest first)
+		const recommendationProductsList = await db
+			.select({
+				id: products.id,
+				name: products.name,
+				description: products.description,
+				image: products.image
+				// Do NOT select price, old_price, category (recommendations show no pricing)
+			})
+			.from(products)
+			.where(
+				and(
+					eq(products.is_active, true),
+					eq(products.is_recommendation, true)
+				)
+			)
+			.orderBy(desc(products.id))
+			.limit(4)
+			.all();
 
 		return res.json({
-			recommendations: recommendationsList,
-			monthOffers: transformedOffers,
-			topProducts: productsList
+			recommendations: recommendationProductsList, // Sprint 3: Changed from old recommendations table
+			monthOffers: offersList,
+			topProducts: topProductsList
 		});
 
 	} catch (error) {
@@ -86,14 +112,8 @@ router.get('/offers', async (req: Request, res: Response) => {
 			.where(eq(offers.is_active, true))
 			.all();
 
-		// Transform offers to match frontend format
-		const transformedOffers = offersList.map(offer => ({
-			...offer,
-			conditions: JSON.parse(offer.conditions) // Parse JSON string to array
-		}));
-
 		return res.json({
-			offers: transformedOffers
+			offers: offersList
 		});
 
 	} catch (error) {
@@ -152,10 +172,12 @@ router.get('/stores', async (req: Request, res: Response) => {
  */
 router.get('/products', async (req: Request, res: Response) => {
 	try {
+		// HIGH FIX #3: Add explicit ordering for deterministic results
 		const productsList = await db
 			.select()
 			.from(products)
 			.where(eq(products.is_active, true))
+			.orderBy(desc(products.id))
 			.all();
 
 		return res.json({

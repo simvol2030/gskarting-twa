@@ -1,8 +1,10 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db/client';
-import { loyaltyUsers, transactions } from '$lib/server/db/schema';
+import { loyaltyUsers, loyaltySettings } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+import { createWelcomeBonus } from '$lib/server/transactions/createWelcomeBonus';
+import { generateUniqueCardNumber } from '$lib/server/utils/cardNumber';
 
 /**
  * API Endpoint: POST /api/telegram/init
@@ -10,7 +12,7 @@ import type { RequestHandler } from './$types';
  * DATABASE VERSION:
  * Initializes Telegram user on first app launch:
  * 1. Checks if user exists in loyalty_users table
- * 2. If new user: awards 500 Murzikoyns welcome bonus
+ * 2. If new user: awards welcome bonus (from loyalty_settings)
  * 3. Tracks which store user registered from (CRITICAL for analytics)
  * 4. Creates transaction record for welcome bonus
  * 5. Triggers welcome message via /api/telegram/welcome
@@ -59,6 +61,19 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
       );
     }
 
+    // Fetch loyalty settings
+    const [settings] = await db.select().from(loyaltySettings).where(eq(loyaltySettings.id, 1)).limit(1);
+
+    // Validate and sanitize settings
+    let welcomeBonus = settings?.welcome_bonus ?? 500.0;
+    if (!Number.isFinite(welcomeBonus) || welcomeBonus < 0) {
+      console.error('[API /telegram/init] ⚠️ Invalid welcome_bonus in settings:', welcomeBonus, '- using default 500.0');
+      welcomeBonus = 500.0;
+    }
+
+    const pointsName = (settings?.points_name?.trim() || 'Murzikoyns');
+    console.log('[API /telegram/init] 📋 Settings loaded:', { welcomeBonus, pointsName });
+
     // Check if user already exists in database
     const existingUser = await db
       .select()
@@ -69,61 +84,44 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
     if (existingUser) {
       // Check if user hasn't claimed welcome bonus yet (legacy users or incomplete signup)
       if (!existingUser.first_login_bonus_claimed) {
-        console.log('[API] 🎯 LEGACY USER DETECTED! Awarding 500 Murzikoyns:', existingUser.telegram_user_id);
+        console.log(`[API] 🎯 LEGACY USER DETECTED! Awarding ${welcomeBonus} ${pointsName}:`, existingUser.telegram_user_id);
 
-        // Award bonus
-        const updatedUser = await db
-          .update(loyaltyUsers)
-          .set({
-            current_balance: existingUser.current_balance + 500.0,
-            first_login_bonus_claimed: true,
-            last_activity: new Date().toISOString()
-          })
-          .where(eq(loyaltyUsers.id, existingUser.id))
-          .returning()
-          .get();
+        // TASK-002 FIX: Use atomic transaction helper
+        const bonusResult = await createWelcomeBonus(
+          existingUser.id,
+          welcomeBonus,
+          existingUser.store_id,
+          pointsName
+        );
 
-        console.log('[API] ✅ Balance updated:', existingUser.current_balance, '→', updatedUser.current_balance);
+        console.log('[API] ✅ Welcome bonus awarded atomically:', existingUser.current_balance, '→', bonusResult.newBalance);
 
-        // Create transaction record
-        // FIX #6: Add explicit created_at
-        await db.insert(transactions).values({
-          loyalty_user_id: existingUser.id,
-          title: 'Приветственный бонус',
-          amount: 500.0,
-          type: 'earn',
-          store_id: existingUser.store_id,
-          store_name: null,
-          spent: null,
-          created_at: new Date().toISOString()
-        });
-
-        console.log('[API] 📝 Transaction created for legacy user bonus');
+        // AUDIT FIX: Bonus claim flag now set inside atomic transaction (no separate UPDATE needed)
 
         // 🔴 FIX: УДАЛЕНО дублирующееся приветствие
         // Приветствие отправляется только через bot /start
         console.log('[API] ℹ️ Welcome message will be sent via Telegram Bot /start command');
 
         // FIX #3: Set cookie on server (prevents race condition)
-        cookies.set('telegram_user_id', updatedUser.telegram_user_id.toString(), {
+        cookies.set('telegram_user_id', existingUser.telegram_user_id.toString(), {
           path: '/',
           maxAge: 60 * 60 * 24 * 30, // 30 days
           sameSite: 'strict',
           httpOnly: false // Needed for client-side access
         });
-        console.log('[API] 🍪 Cookie set: telegram_user_id=', updatedUser.telegram_user_id);
+        console.log('[API] 🍪 Cookie set: telegram_user_id=', existingUser.telegram_user_id);
 
         return json({
           success: true,
           isNewUser: true, // Treat as new user (first bonus)
           user: {
-            telegram_user_id: updatedUser.telegram_user_id,
-            first_name: updatedUser.first_name,
-            last_name: updatedUser.last_name,
-            username: updatedUser.username,
-            current_balance: updatedUser.current_balance,
-            store_id: updatedUser.store_id,
-            first_login_bonus_claimed: updatedUser.first_login_bonus_claimed
+            telegram_user_id: existingUser.telegram_user_id,
+            first_name: existingUser.first_name,
+            last_name: existingUser.last_name,
+            username: existingUser.username,
+            current_balance: bonusResult.newBalance, // TASK-002 FIX: Use atomic result
+            store_id: existingUser.store_id,
+            first_login_bonus_claimed: true // AUDIT FIX: Now set atomically in transaction
           },
           message: 'Welcome bonus awarded!'
         });
@@ -159,11 +157,11 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
         message: 'Welcome back!'
       });
     } else {
-      // New user - award 500 Murzikoyns welcome bonus
-      console.log('[API] 🆕 NEW USER DETECTED! Creating account for:', userData.telegram_user_id);
+      // New user - award welcome bonus dynamically
+      console.log(`[API] 🆕 NEW USER DETECTED! Creating account for: ${userData.telegram_user_id}`);
 
-      // Generate 6-digit card number from telegram_user_id (last 6 digits)
-      const cardNumber = userData.telegram_user_id.toString().slice(-6).padStart(6, '0');
+      // Generate unique 6-digit card number (try preferred, fallback to random if collision)
+      const cardNumber = await generateUniqueCardNumber(userData.telegram_user_id);
       console.log('[API] 📝 Generated card number:', cardNumber);
 
       const newUser = await db
@@ -175,30 +173,25 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
           last_name: userData.last_name,
           username: userData.username,
           language_code: userData.language_code || 'ru',
-          current_balance: 500.0, // Welcome bonus
+          current_balance: 0, // TASK-002 FIX: Start with 0, add bonus atomically
           store_id: userData.store_id,
-          first_login_bonus_claimed: true,
+          first_login_bonus_claimed: false, // AUDIT FIX (Cycle 2): Must be false so bonus can be awarded
           chat_id: userData.chat_id
         })
         .returning()
         .get();
 
-      console.log('[API] ✅ New user created with 500 Murzikoyns, card:', cardNumber);
+      console.log('[API] ✅ New user created, card:', cardNumber);
 
-      // Create transaction record for welcome bonus
-      // FIX #6: Add explicit created_at
-      await db.insert(transactions).values({
-        loyalty_user_id: newUser.id,
-        title: 'Приветственный бонус',
-        amount: 500.0,
-        type: 'earn',
-        store_id: userData.store_id,
-        store_name: null,
-        spent: null,
-        created_at: new Date().toISOString()
-      });
+      // TASK-002 FIX: Award welcome bonus with atomic transaction
+      const bonusResult = await createWelcomeBonus(
+        newUser.id,
+        welcomeBonus,
+        userData.store_id,
+        pointsName
+      );
 
-      console.log('[API] 📝 Transaction created for new user bonus');
+      console.log(`[API] 📝 Welcome bonus awarded atomically: 0 → ${bonusResult.newBalance} ${pointsName}`);
 
       // 🔴 FIX: УДАЛЕНО дублирующееся приветствие
       // Приветствие отправляется только через bot /start
@@ -214,7 +207,7 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
       console.log('[API] 🍪 Cookie set for new user:', newUser.telegram_user_id);
 
       console.log('[API /telegram/init] ✅ ============ SUCCESS (NEW USER) ============');
-      console.log('[API /telegram/init] ✅ Returning user data with balance:', newUser.current_balance);
+      console.log('[API /telegram/init] ✅ Returning user data with balance:', bonusResult.newBalance);
 
       return json({
         success: true,
@@ -224,11 +217,11 @@ export const POST: RequestHandler = async ({ request, fetch, cookies }) => {
           first_name: newUser.first_name,
           last_name: newUser.last_name,
           username: newUser.username,
-          current_balance: newUser.current_balance,
+          current_balance: bonusResult.newBalance, // TASK-002 FIX: Use atomic result
           store_id: newUser.store_id,
           first_login_bonus_claimed: newUser.first_login_bonus_claimed
         },
-        message: 'Welcome! 500 Murzikoyns awarded'
+        message: `Welcome! ${welcomeBonus} ${pointsName} awarded`
       });
     }
   } catch (error) {

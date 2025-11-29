@@ -1,12 +1,16 @@
 /**
  * Transactions API Routes
  * Endpoints для работы с транзакциями программы лояльности
+ *
+ * 🔴 SECURITY FIX (Start-5): Added expiry check, dynamic settings, race condition protection
  */
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db/client';
 import { transactions, loyaltyUsers, cashierTransactions, pendingDiscounts, stores } from '../db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
+import { calculateAvailableBalance } from '../utils/balanceCalculator';
+import { getLoyaltySettings } from '../db/queries/loyaltySettings';
 
 const router = Router();
 
@@ -172,11 +176,20 @@ router.post('/', async (req: Request, res: Response) => {
 			});
 		}
 
-		if (pointsToRedeem > 0 && customerRecord.current_balance < pointsToRedeem) {
+		// 🔴 SECURITY FIX (Start-5): Check available balance with expiry validation
+		const balanceCheck = await calculateAvailableBalance(customerRecord.id, customerRecord.current_balance);
+
+		// Use available balance (excluding expired points) for validation
+		const effectiveBalance = balanceCheck.availableBalance;
+
+		if (pointsToRedeem > 0 && effectiveBalance < pointsToRedeem) {
 			return res.status(400).json({
 				error: 'Insufficient balance',
 				required: pointsToRedeem,
-				available: customerRecord.current_balance
+				available: effectiveBalance,
+				message: balanceCheck.needsSync
+					? 'Часть баллов истекла из-за неактивности. Доступный баланс обновлён.'
+					: undefined
 			});
 		}
 
@@ -194,14 +207,39 @@ router.post('/', async (req: Request, res: Response) => {
 			});
 		}
 
+		// 🔴 SECURITY FIX (Start-5): Read earning_percent from settings (NOT trust frontend!)
+		const loyaltySettings = await getLoyaltySettings();
+		const earningPercent = loyaltySettings.earning_percent / 100; // Convert 4.0 to 0.04
+		const maxDiscountPercent = loyaltySettings.max_discount_percent / 100; // Convert 20.0 to 0.20
+
 		// Определяем тип операции
 		const isRedeem = pointsToRedeem > 0;
 		const discountAmount = pointsToRedeem;
 
+		// 🔴 SECURITY FIX: Validate max discount (20% rule)
+		const maxAllowedDiscount = checkAmount * maxDiscountPercent;
+		if (pointsToRedeem > maxAllowedDiscount) {
+			return res.status(400).json({
+				error: 'Max discount exceeded',
+				requested: pointsToRedeem,
+				maxAllowed: Math.floor(maxAllowedDiscount),
+				message: `Скидка не может превышать ${loyaltySettings.max_discount_percent}% от суммы чека`
+			});
+		}
+
+		// 🔴 SECURITY FIX: Recalculate cashback from settings (don't trust frontend value)
+		const actualFinalAmount = checkAmount - discountAmount;
+		const serverCalculatedCashback = Math.round(actualFinalAmount * earningPercent);
+
+		// Log if frontend sent different cashback (for debugging)
+		if (cashbackAmount !== serverCalculatedCashback) {
+			console.warn(`[TRANSACTIONS API] Cashback mismatch: frontend=${cashbackAmount}, server=${serverCalculatedCashback} (using server value)`);
+		}
+
 		// 🔴 FIX: ATOMIC TRANSACTION с полной бизнес-логикой (SYNC для SQLite!)
 		const result = db.transaction((tx) => {
 			// 1. Update customer balance atomically
-			const balanceDelta = -pointsToRedeem + cashbackAmount;
+			const balanceDelta = -pointsToRedeem + serverCalculatedCashback;
 
 			const updatedCustomer = tx.update(loyaltyUsers)
 				.set({
@@ -214,6 +252,15 @@ router.post('/', async (req: Request, res: Response) => {
 
 			if (!updatedCustomer) {
 				throw new Error('Failed to update customer balance');
+			}
+
+			// 🔴 SECURITY FIX (Start-5): Race condition protection
+			// Verify balance didn't go negative (catches concurrent redemptions)
+			if (updatedCustomer.current_balance < 0) {
+				throw new Error(
+					`Недостаточно баллов (обнаружена одновременная транзакция). ` +
+					`Доступно: ${updatedCustomer.current_balance + pointsToRedeem - serverCalculatedCashback} баллов`
+				);
 			}
 
 			// 2. Update customer stats
@@ -230,9 +277,9 @@ router.post('/', async (req: Request, res: Response) => {
 				.values({
 					customer_id: customer.id,
 					store_id: storeId,
-					type: isRedeem ? 'redeem' : 'earn',
+					type: isRedeem ? 'spend' : 'earn',
 					purchase_amount: checkAmount,
-					points_amount: cashbackAmount, // Начисленные баллы
+					points_amount: serverCalculatedCashback, // 🔴 FIX: Use server-calculated cashback
 					discount_amount: discountAmount,
 					metadata: null,
 					synced_with_1c: false
@@ -257,16 +304,16 @@ router.post('/', async (req: Request, res: Response) => {
 				}).returning().get();
 
 				// 4b. Earn record (кешбэк от оплаченной суммы)
-				if (cashbackAmount > 0) {
+				if (serverCalculatedCashback > 0) {
 					tx.insert(transactions).values({
 						loyalty_user_id: customer.id,
 						store_id: storeId,
-						title: 'Начисление кешбэка (4% от оплаты)',
-						amount: cashbackAmount,
+						title: `Начисление кешбэка (${loyaltySettings.earning_percent}% от оплаты)`, // 🔴 FIX: Dynamic %
+						amount: serverCalculatedCashback,
 						type: 'earn',
 						check_amount: checkAmount,
 						points_redeemed: 0,
-						cashback_earned: cashbackAmount,
+						cashback_earned: serverCalculatedCashback,
 						spent: null,
 						store_name: store?.name || null
 					}).run();
@@ -285,24 +332,24 @@ router.post('/', async (req: Request, res: Response) => {
 					expires_at: expiresAt
 				}).run();
 
-				console.log(`[TRANSACTIONS API] Redeem: -${pointsToRedeem}₽ +${cashbackAmount}₽, pending_discount created`);
+				console.log(`[TRANSACTIONS API] Redeem: -${pointsToRedeem}₽ +${serverCalculatedCashback}₽, pending_discount created`);
 
 			} else {
 				// 4d. Только earn record (накопление)
 				tx.insert(transactions).values({
 					loyalty_user_id: customer.id,
 					store_id: storeId,
-					title: 'Начисление за покупку',
-					amount: cashbackAmount,
+					title: `Начисление за покупку (${loyaltySettings.earning_percent}%)`, // 🔴 FIX: Dynamic %
+					amount: serverCalculatedCashback,
 					type: 'earn',
 					check_amount: checkAmount,
 					points_redeemed: 0,
-					cashback_earned: cashbackAmount,
+					cashback_earned: serverCalculatedCashback,
 					spent: null,
 					store_name: store?.name || null
 				}).run();
 
-				console.log(`[TRANSACTIONS API] Earn: +${cashbackAmount}₽`);
+				console.log(`[TRANSACTIONS API] Earn: +${serverCalculatedCashback}₽ (${loyaltySettings.earning_percent}%)`);
 			}
 
 			return {
@@ -315,6 +362,7 @@ router.post('/', async (req: Request, res: Response) => {
 		console.log(`  Balance: ${customerRecord.current_balance} → ${result.newBalance}`);
 
 		// Return formatted response (compatible with frontend)
+		// 🔴 FIX: Return server-calculated values, not frontend values
 		return res.json({
 			success: true,
 			transaction: {
@@ -323,15 +371,26 @@ router.post('/', async (req: Request, res: Response) => {
 				customerName: customer.name,
 				checkAmount,
 				pointsRedeemed: pointsToRedeem,
-				cashbackEarned: cashbackAmount,
-				finalAmount,
+				cashbackEarned: serverCalculatedCashback, // 🔴 FIX: Server value
+				finalAmount: actualFinalAmount, // 🔴 FIX: Server value
 				timestamp: result.cashierTx.created_at,
-				storeId
+				storeId,
+				newBalance: result.newBalance // 🔴 FIX: Add new balance for frontend
 			}
 		});
 
 	} catch (error) {
 		console.error('[TRANSACTIONS API] Error creating transaction:', error);
+
+		// 🔴 SECURITY FIX: Handle race condition error specifically
+		if (error instanceof Error && error.message.includes('Недостаточно баллов')) {
+			return res.status(400).json({
+				error: 'Insufficient balance',
+				message: error.message,
+				code: 'RACE_CONDITION_DETECTED'
+			});
+		}
+
 		return res.status(500).json({
 			error: 'Internal server error',
 			details: error instanceof Error ? error.message : String(error)

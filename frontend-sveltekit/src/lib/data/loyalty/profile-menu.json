@@ -1,13 +1,5 @@
 [
   {
-    "id": "pets",
-    "icon": "🐾",
-    "iconColor": "orange",
-    "title": "Мои питомцы",
-    "description": "Управление информацией о питомцах",
-    "action": "openPetsModal"
-  },
-  {
     "id": "notifications",
     "icon": "🔔",
     "iconColor": "blue",
