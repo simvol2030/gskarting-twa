@@ -52,11 +52,6 @@
 								{/if}
 							</div>
 						</div>
-						{#if store.closed}
-							<span class="status-badge closed">Закрыто</span>
-						{:else}
-							<span class="status-badge open">{store.status}</span>
-						{/if}
 					</div>
 
 					<div class="store-info">
@@ -74,11 +69,6 @@
 							<span class="info-icon">🕐</span>
 							<span class="info-text">{store.hours}</span>
 						</div>
-
-						<div class="info-row">
-							<span class="info-icon">📏</span>
-							<span class="info-text distance">{store.distance}</span>
-						</div>
 					</div>
 
 					<div class="store-features">
@@ -88,13 +78,13 @@
 					</div>
 
 					<a
-						href="https://maps.google.com/?q={store.coords_lat},{store.coords_lng}"
+						href="yandexnavi://build_route_on_map?lat_to={store.coords_lat}&lon_to={store.coords_lng}"
 						target="_blank"
 						rel="noopener noreferrer"
 						class="map-link"
 					>
 						<span>🗺️</span>
-						<span>Открыть на карте</span>
+						<span>Проложить маршрут</span>
 					</a>
 				</div>
 			</article>

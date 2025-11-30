@@ -23,7 +23,7 @@ export const load: PageServerLoad = async () => {
 		}
 		acc[img.store_id].push({
 			id: img.id,
-			url: `/uploads/stores/${img.filename}`
+			url: `/api/uploads/stores/${img.filename}`
 		});
 		return acc;
 	}, {} as Record<number, { id: number; url: string }[]>);
