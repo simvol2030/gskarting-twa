@@ -52,6 +52,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser()); // Parse cookies for session authentication
 
 // Static files - serve uploaded images
+// NOTE: Use /api/uploads path so nginx proxy correctly routes to Express in production
+app.use('/api/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Also keep /uploads for local development without nginx
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Request logging middleware

@@ -103,7 +103,7 @@ router.get('/:id/images', async (req: Request, res: Response) => {
 		return res.json({
 			images: images.map(img => ({
 				id: img.id,
-				url: `/uploads/stores/${img.filename}`
+				url: `/api/uploads/stores/${img.filename}`
 			}))
 		});
 

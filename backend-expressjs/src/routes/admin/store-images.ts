@@ -64,7 +64,7 @@ router.get('/:storeId/images', async (req, res) => {
 					filename: img.filename,
 					originalName: img.original_name,
 					sortOrder: img.sort_order,
-					url: `/uploads/stores/${img.filename}`
+					url: `/api/uploads/stores/${img.filename}`
 				}))
 			}
 		});
@@ -155,7 +155,7 @@ router.post(
 					filename: result[0].filename,
 					originalName: result[0].original_name,
 					sortOrder: result[0].sort_order,
-					url: `/uploads/stores/${result[0].filename}`
+					url: `/api/uploads/stores/${result[0].filename}`
 				});
 			}
 
@@ -210,7 +210,7 @@ router.put(
 						filename: img.filename,
 						originalName: img.original_name,
 						sortOrder: img.sort_order,
-						url: `/uploads/stores/${img.filename}`
+						url: `/api/uploads/stores/${img.filename}`
 					}))
 				}
 			});
