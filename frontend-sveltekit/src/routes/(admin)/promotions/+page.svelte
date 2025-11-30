@@ -94,7 +94,7 @@
 		await invalidateAll();
 	};
 
-	const activeCount = $derived(data.promotions.filter((p) => p.isActive).length);
+	const activeCount = $derived(data.promotions.filter((p: Promotion) => p.isActive).length);
 </script>
 
 <svelte:head>

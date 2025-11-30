@@ -15,10 +15,10 @@
 
 	let formData = $state<ProductFormData>({
 		name: '',
-		description: '',
+		description: undefined,
 		price: 0,
-		oldPrice: '',
-		quantityInfo: '',
+		oldPrice: undefined,
+		quantityInfo: undefined,
 		image: '',
 		category: categories[0] || '',
 		isActive: true,
@@ -46,10 +46,10 @@
 		if (isOpen && editingProduct) {
 			formData = {
 				name: editingProduct.name,
-				description: editingProduct.description ?? '',
+				description: editingProduct.description ?? undefined,
 				price: editingProduct.price,
-				oldPrice: editingProduct.oldPrice ?? '',
-				quantityInfo: editingProduct.quantityInfo ?? '',
+				oldPrice: editingProduct.oldPrice ?? undefined,
+				quantityInfo: editingProduct.quantityInfo ?? undefined,
 				image: editingProduct.image,
 				category: editingProduct.category,
 				isActive: editingProduct.isActive,
@@ -59,10 +59,10 @@
 		} else if (isOpen) {
 			formData = {
 				name: '',
-				description: '',
+				description: undefined,
 				price: 0,
-				oldPrice: '',
-				quantityInfo: '',
+				oldPrice: undefined,
+				quantityInfo: undefined,
 				image: '',
 				category: categories[0] || '',
 				isActive: true,

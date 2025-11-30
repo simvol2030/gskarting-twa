@@ -37,7 +37,7 @@
 
 	// BUG-C2 FIX: Helper to format points with correct sign based on transaction type
 	const formatPoints = (tx: ClientTransaction): string => {
-		const isSpend = tx.type === 'spend' || tx.type === 'redeem' || tx.type === 'manual_subtract';
+		const isSpend = tx.type === 'redeem' || tx.type === 'manual_subtract';
 		const absValue = Math.abs(tx.pointsChange);
 		if (isSpend) {
 			return `-${absValue}`;
@@ -47,7 +47,7 @@
 
 	// BUG-C2 FIX: Helper to determine if points should be styled as negative
 	const isNegativeTransaction = (tx: ClientTransaction): boolean => {
-		return tx.type === 'spend' || tx.type === 'redeem' || tx.type === 'manual_subtract';
+		return tx.type === 'redeem' || tx.type === 'manual_subtract';
 	};
 </script>
 

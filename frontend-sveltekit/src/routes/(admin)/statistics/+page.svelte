@@ -1,5 +1,32 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+
+	// Local interfaces for statistics page data
+	interface StatTransaction {
+		id: number;
+		date: string;
+		storeId: number;
+		clientId: number;
+		type: string;
+		amount: number;
+		points: number;
+		description: string;
+	}
+
+	interface StatStore {
+		id: number;
+		name: string;
+		active: boolean;
+		clients: number;
+		transactions: number;
+		revenue: number;
+	}
+
+	interface StatClient {
+		id: number;
+		name: string;
+	}
+
 	let { data }: { data: PageData } = $props();
 
 	// Selected store state
@@ -19,16 +46,16 @@
 		if (selectedStoreId === 0) {
 			return data.transactions;
 		}
-		return data.transactions.filter((t) => t.storeId === selectedStoreId);
+		return data.transactions.filter((t: StatTransaction) => t.storeId === selectedStoreId);
 	});
 
 	const selectedStore = $derived(() => {
 		if (selectedStoreId === 0) return null;
-		return data.stores.find((s) => s.id === selectedStoreId);
+		return data.stores.find((s: StatStore) => s.id === selectedStoreId);
 	});
 
 	const totalRevenue = $derived(() => {
-		return filteredTransactions().reduce((sum, t) => {
+		return filteredTransactions().reduce((sum: number, t: StatTransaction) => {
 			return t.type === 'purchase' ? sum + t.amount : sum;
 		}, 0);
 	});
@@ -38,13 +65,13 @@
 	});
 
 	const totalPointsEarned = $derived(() => {
-		return filteredTransactions().reduce((sum, t) => {
+		return filteredTransactions().reduce((sum: number, t: StatTransaction) => {
 			return t.type === 'earn' || t.type === 'purchase' ? sum + t.points : sum;
 		}, 0);
 	});
 
 	const totalPointsRedeemed = $derived(() => {
-		return filteredTransactions().reduce((sum, t) => {
+		return filteredTransactions().reduce((sum: number, t: StatTransaction) => {
 			return t.type === 'redeem' ? sum + t.points : sum;
 		}, 0);
 	});
@@ -70,12 +97,12 @@
 	}
 
 	function getClientName(clientId: number): string {
-		const client = data.clients.find((c) => c.id === clientId);
+		const client = data.clients.find((c: StatClient) => c.id === clientId);
 		return client?.name || 'Неизвестный';
 	}
 
 	function getStoreName(storeId: number): string {
-		const store = data.stores.find((s) => s.id === storeId);
+		const store = data.stores.find((s: StatStore) => s.id === storeId);
 		return store?.name || 'Неизвестный';
 	}
 

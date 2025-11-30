@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import type { Store } from '$lib/types/admin';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Input, Select, Badge, Button, Pagination } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/admin/clients/ConfirmModal.svelte';
@@ -79,14 +80,14 @@
 	// Получить название магазина по ID
 	const getStoreName = (storeId: number | null): string => {
 		if (!storeId) return '-';
-		const store = data.stores.find((s) => s.id === storeId);
+		const store = data.stores.find((s: Store) => s.id === storeId);
 		return store?.name || 'Неизвестно';
 	};
 
 	// Опции для фильтра магазинов
 	const storeOptions = $derived(() => [
 		{ value: 'all', label: 'Все магазины' },
-		...data.stores.map((s) => ({ value: s.id, label: s.name }))
+		...data.stores.map((s: Store) => ({ value: s.id, label: s.name }))
 	]);
 
 	// Перейти на детальную страницу
@@ -242,7 +243,7 @@
 
 									{#if canBlock}
 										<Button
-											variant={client.isActive ? 'danger' : 'success'}
+											variant={client.isActive ? 'danger' : 'primary'}
 											size="sm"
 											onclick={() => openBlockModal(client)}
 										>

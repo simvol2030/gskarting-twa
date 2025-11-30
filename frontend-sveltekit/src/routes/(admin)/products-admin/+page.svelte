@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Input, Select, Button, Badge, Card } from '$lib/components/ui';
-	import type { Product } from '$lib/types/admin';
+	import type { Product, ProductCategory } from '$lib/types/admin';
 	import { productsAPI } from '$lib/api/admin/products';
 	import ProductFormModal from '$lib/components/admin/products/ProductFormModal.svelte';
 
@@ -58,7 +58,7 @@
 
 	const categoryOptions = $derived(() => [
 		{ value: 'all', label: 'Все категории' },
-		...data.categories.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` }))
+		...data.categories.map((c: ProductCategory) => ({ value: c.name, label: `${c.name} (${c.count})` }))
 	]);
 
 	const formatCurrency = (num: number) =>
@@ -157,7 +157,7 @@
 <ProductFormModal
 	isOpen={formModalOpen}
 	editingProduct={editingProduct}
-	categories={data.categories.map(c => c.name)}
+	categories={data.categories.map((c: ProductCategory) => c.name)}
 	onClose={() => (formModalOpen = false)}
 	onSuccess={() => {
 		formModalOpen = false;

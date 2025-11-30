@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
-import { PUBLIC_BACKEND_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 
-const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = env.PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 /**
  * Data loader for Home page - API VERSION

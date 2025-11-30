@@ -5,13 +5,13 @@
 
 import { MOCK_STORES, MOCK_CUSTOMERS, type Store, type Customer, type Transaction } from '$lib/data/cashier-mocks';
 import { parseQRData } from '$lib/utils/qr-generator';
-import { PUBLIC_BACKEND_URL } from '$env/static/public';
 
 // ===== Режим работы (true = моки, false = реальный API) =====
 const USE_MOCKS = false; // ✅ ВСЕГДА REAL API
 
 // ===== Backend URL для server-side И client-side fetch =====
-const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
+// Environment variable accessed at runtime via import.meta.env
+const BACKEND_URL = import.meta.env.PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 // ===== Хранилище транзакций (для моков) =====
 const mockTransactions: Transaction[] = [];

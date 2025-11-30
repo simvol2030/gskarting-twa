@@ -108,7 +108,16 @@ export const productsAPI = {
 
 		const newProduct: Product = {
 			id: Date.now(),
-			...data
+			name: data.name,
+			description: data.description ?? null,
+			price: data.price,
+			oldPrice: data.oldPrice ?? null,
+			quantityInfo: data.quantityInfo ?? null,
+			image: data.image,
+			category: data.category,
+			isActive: data.isActive,
+			showOnHome: data.showOnHome,
+			isRecommendation: data.isRecommendation
 		};
 
 		mockProducts.push(newProduct);
@@ -124,7 +133,19 @@ export const productsAPI = {
 		const index = mockProducts.findIndex((p) => p.id === id);
 		if (index === -1) throw new Error('Товар не найден');
 
-		mockProducts[index] = { ...mockProducts[index], ...data };
+		mockProducts[index] = {
+			...mockProducts[index],
+			name: data.name,
+			description: data.description ?? null,
+			price: data.price,
+			oldPrice: data.oldPrice ?? null,
+			quantityInfo: data.quantityInfo ?? null,
+			image: data.image,
+			category: data.category,
+			isActive: data.isActive,
+			showOnHome: data.showOnHome,
+			isRecommendation: data.isRecommendation
+		};
 		return mockProducts[index];
 	},
 

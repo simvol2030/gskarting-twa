@@ -3,15 +3,7 @@
  * Handles user initialization, balance formatting, and TWA SDK integration
  */
 
-import type { TelegramWebApp } from '$lib/types/telegram';
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp: TelegramWebApp;
-    };
-  }
-}
+// Note: Window.Telegram interface is declared in app.d.ts
 
 export interface TelegramUser {
   id: number;

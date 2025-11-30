@@ -1,8 +1,8 @@
 import type { PageServerLoad } from './$types';
-import { PUBLIC_BACKEND_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 
 // Environment-aware backend URL (uses Windows Host IP for WSL)
-const BACKEND_URL = PUBLIC_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = env.PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 // AUDIT FIX (Cycle 2): Extract magic strings to constants
 const DEFAULT_LOCATION = 'Разработка';
