@@ -226,6 +226,23 @@ export const loyaltySettings = sqliteTable('loyalty_settings', {
 });
 
 /**
+ * Store Images table - изображения магазинов для слайдера в TWA
+ */
+export const storeImages = sqliteTable('store_images', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	store_id: integer('store_id')
+		.notNull()
+		.references(() => stores.id, { onDelete: 'cascade' }),
+	filename: text('filename').notNull(), // Имя файла в storage (WebP)
+	original_name: text('original_name').notNull(), // Оригинальное имя файла
+	sort_order: integer('sort_order').notNull().default(0), // Порядок сортировки для drag-and-drop
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	storeIdIdx: index('idx_store_images_store_id').on(table.store_id),
+	sortOrderIdx: index('idx_store_images_sort').on(table.store_id, table.sort_order)
+}));
+
+/**
  * Pending Discounts table - очередь скидок для агентов
  * Polling-based архитектура: агент сам забирает pending скидки
  */
@@ -299,3 +316,6 @@ export type NewRecommendation = typeof recommendations.$inferInsert;
 
 export type LoyaltySettings = typeof loyaltySettings.$inferSelect;
 export type NewLoyaltySettings = typeof loyaltySettings.$inferInsert;
+
+export type StoreImage = typeof storeImages.$inferSelect;
+export type NewStoreImage = typeof storeImages.$inferInsert;

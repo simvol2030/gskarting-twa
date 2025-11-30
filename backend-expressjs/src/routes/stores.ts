@@ -5,8 +5,8 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db/client';
-import { stores, loyaltySettings } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { stores, loyaltySettings, storeImages } from '../db/schema';
+import { eq, asc } from 'drizzle-orm';
 
 const router = Router();
 
@@ -64,6 +64,51 @@ router.get('/:id/config', async (req: Request, res: Response) => {
 
 	} catch (error) {
 		console.error('[STORES API] Error getting store config:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
+});
+
+// ==================== GET /api/stores/:id/images ====================
+/**
+ * Получить изображения магазина для слайдера (публичный endpoint)
+ *
+ * Params:
+ * - id: number - ID магазина
+ *
+ * Response:
+ * {
+ *   "images": [
+ *     { "id": 1, "url": "/uploads/stores/store_1_xxx.webp" }
+ *   ]
+ * }
+ */
+router.get('/:id/images', async (req: Request, res: Response) => {
+	try {
+		const storeId = parseInt(req.params.id);
+
+		if (!storeId || isNaN(storeId)) {
+			return res.status(400).json({
+				error: 'Invalid storeId parameter'
+			});
+		}
+
+		const images = await db
+			.select()
+			.from(storeImages)
+			.where(eq(storeImages.store_id, storeId))
+			.orderBy(asc(storeImages.sort_order));
+
+		return res.json({
+			images: images.map(img => ({
+				id: img.id,
+				url: `/uploads/stores/${img.filename}`
+			}))
+		});
+
+	} catch (error) {
+		console.error('[STORES API] Error getting store images:', error);
 		return res.status(500).json({
 			error: 'Internal server error'
 		});

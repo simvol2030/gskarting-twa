@@ -136,6 +136,23 @@ export const stores = sqliteTable('stores', {
 });
 
 /**
+ * Store Images - изображения магазинов для слайдера в TWA
+ */
+export const storeImages = sqliteTable('store_images', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	store_id: integer('store_id')
+		.notNull()
+		.references(() => stores.id, { onDelete: 'cascade' }),
+	filename: text('filename').notNull(),
+	original_name: text('original_name').notNull(),
+	sort_order: integer('sort_order').notNull().default(0),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	storeIdIdx: index('idx_store_images_store_id').on(table.store_id),
+	sortOrderIdx: index('idx_store_images_sort').on(table.store_id, table.sort_order)
+}));
+
+/**
  * Transactions - история операций (начисление/списание баллов)
  */
 export const transactions = sqliteTable('transactions', {
@@ -305,3 +322,6 @@ export type NewCashierTransaction = typeof cashierTransactions.$inferInsert;
 
 export type PendingDiscount = typeof pendingDiscounts.$inferSelect;
 export type NewPendingDiscount = typeof pendingDiscounts.$inferInsert;
+
+export type StoreImage = typeof storeImages.$inferSelect;
+export type NewStoreImage = typeof storeImages.$inferInsert;

@@ -290,6 +290,17 @@ export interface StoreStats {
 	averageCheck: number;
 }
 
+/**
+ * StoreImage - изображение магазина для галереи
+ */
+export interface StoreImage {
+	id: number;
+	filename: string;
+	originalName: string;
+	sortOrder: number;
+	url: string;
+}
+
 // ============================================
 // STATISTICS (Wave 2)
 // ============================================

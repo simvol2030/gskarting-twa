@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 import { initializeDatabase } from './db/database';
 import { securityHeaders } from './middleware/security';
 import { initScheduledJobs } from './jobs';
@@ -29,6 +30,7 @@ import adminStoresRouter from './routes/admin/stores';
 import adminStatisticsRouter from './routes/admin/statistics';
 import adminSettingsRouter from './routes/admin/settings';
 import adminDashboardRouter from './routes/admin/dashboard'; // Sprint 5 Task 4.1
+import adminStoreImagesRouter from './routes/admin/store-images';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -48,6 +50,9 @@ app.use(securityHeaders);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser()); // Parse cookies for session authentication
+
+// Static files - serve uploaded images
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -102,6 +107,7 @@ app.use('/api/admin/stores', adminStoresRouter);
 app.use('/api/admin/statistics', adminStatisticsRouter);
 app.use('/api/admin/settings', adminSettingsRouter);
 app.use('/api/admin/dashboard', adminDashboardRouter); // Sprint 5 Task 4.1
+app.use('/api/admin/stores', adminStoreImagesRouter); // Store images (nested under stores)
 
 // Обработка 404
 app.use((req, res) => {

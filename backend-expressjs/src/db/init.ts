@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { db } from './client';
+import { db, nativeClient } from './client';
 import { users, posts, admins } from './schema';
 import { count } from 'drizzle-orm';
 
@@ -8,6 +8,26 @@ import { count } from 'drizzle-orm';
  * Создаёт таблицы если их нет (выполняется автоматически Drizzle)
  */
 export async function initializeDatabase() {
+	// Create store_images table if it doesn't exist (for image gallery feature)
+	if (nativeClient) {
+		try {
+			nativeClient.exec(`
+				CREATE TABLE IF NOT EXISTS store_images (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+					filename TEXT NOT NULL,
+					original_name TEXT NOT NULL,
+					sort_order INTEGER NOT NULL DEFAULT 0,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_store_images_store_id ON store_images(store_id);
+				CREATE INDEX IF NOT EXISTS idx_store_images_sort ON store_images(store_id, sort_order);
+			`);
+			console.log('✅ Store images table initialized');
+		} catch (error) {
+			console.log('ℹ️ Store images table already exists or error:', error);
+		}
+	}
 	console.log('✅ Database tables initialized (managed by Drizzle ORM)');
 }
 

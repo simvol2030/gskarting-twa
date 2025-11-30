@@ -70,7 +70,7 @@
 		if (!formData.phone || !/^\+7\d{10}$/.test(formData.phone)) return false;
 		if (!formData.hours) return false;
 		// Sprint 4 Cycle 2 Fix: Optional city validation
-		if (formData.city !== null && formData.city.length > 100) return false;
+		if (formData.city && formData.city.length > 100) return false;
 		return true;
 	});
 

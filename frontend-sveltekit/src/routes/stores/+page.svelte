@@ -1,5 +1,11 @@
 <script lang="ts">
+	import ImageSlider from '$lib/components/ImageSlider.svelte';
+	import { API_BASE_URL } from '$lib/config';
+
 	let { data } = $props();
+
+	// Base URL for images (backend URL without /api)
+	const imageBaseUrl = API_BASE_URL.replace('/api', '');
 
 	// Safe JSON parse for features field
 	function parseFeatures(features: string | string[]): string[] {
@@ -28,13 +34,24 @@
 	<div class="stores-list">
 		{#each data.stores as store}
 			<article class="store-card" class:closed={store.closed}>
-				<div class="store-icon" style="background: {store.icon_color}">
-					<span class="icon-emoji">🏪</span>
-				</div>
+				<!-- Image Slider -->
+				{#if store.images && store.images.length > 0}
+					<ImageSlider images={store.images} baseUrl={imageBaseUrl} />
+				{/if}
 
 				<div class="store-content">
 					<div class="store-header">
-						<h2 class="store-name">{store.name}</h2>
+						<div class="store-title-row">
+							<div class="store-icon" style="background: {store.icon_color}">
+								<span class="icon-emoji">🏪</span>
+							</div>
+							<div>
+								<h2 class="store-name">{store.name}</h2>
+								{#if store.city}
+									<span class="store-city">{store.city}</span>
+								{/if}
+							</div>
+						</div>
 						{#if store.closed}
 							<span class="status-badge closed">Закрыто</span>
 						{:else}
@@ -128,11 +145,9 @@
 	.store-card {
 		background: var(--card-bg);
 		border-radius: 16px;
-		padding: 20px;
+		overflow: hidden;
 		box-shadow: var(--shadow);
 		transition: all 0.3s ease;
-		display: flex;
-		gap: 16px;
 	}
 
 	.store-card:hover {
@@ -144,10 +159,28 @@
 		opacity: 0.7;
 	}
 
+	.store-content {
+		padding: 16px 20px 20px;
+	}
+
+	.store-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 12px;
+	}
+
+	.store-title-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
 	.store-icon {
-		width: 60px;
-		height: 60px;
-		border-radius: 12px;
+		width: 48px;
+		height: 48px;
+		border-radius: 10px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -155,28 +188,20 @@
 	}
 
 	.icon-emoji {
-		font-size: 32px;
-	}
-
-	.store-content {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.store-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		margin-bottom: 12px;
+		font-size: 24px;
 	}
 
 	.store-name {
-		font-size: 20px;
+		font-size: 18px;
 		font-weight: bold;
 		color: var(--text-primary);
 		margin: 0;
 		letter-spacing: -0.025em;
+	}
+
+	.store-city {
+		font-size: 13px;
+		color: var(--text-secondary);
 	}
 
 	.status-badge {
@@ -187,6 +212,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.status-badge.open {
@@ -259,14 +285,16 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		padding: 8px 14px;
-		border-radius: 8px;
+		padding: 10px 16px;
+		border-radius: 10px;
 		background: var(--primary-orange);
 		color: white;
 		text-decoration: none;
 		font-size: 14px;
 		font-weight: 600;
 		transition: all 0.2s ease;
+		width: 100%;
+		justify-content: center;
 	}
 
 	.map-link:hover {
@@ -304,22 +332,13 @@
 	}
 
 	@media (max-width: 480px) {
-		.store-card {
-			flex-direction: column;
-		}
-
-		.store-icon {
-			width: 100%;
-			height: 80px;
-		}
-
-		.icon-emoji {
-			font-size: 40px;
-		}
-
 		.store-header {
 			flex-direction: column;
 			align-items: flex-start;
+		}
+
+		.status-badge {
+			align-self: flex-start;
 		}
 	}
 </style>
