@@ -33,10 +33,12 @@ export async function getStoreConfig(storeId: number): Promise<Store> {
 		}
 		return store;
 	} else {
-		// Реальный API - ВАЖНО: абсолютный URL для server-side fetch
-		const url = new URL(`/api/stores/${storeId}/config`, BACKEND_URL);
-		console.log('[getStoreConfig] Fetching:', url.toString());
-		const response = await fetch(url.toString());
+		// Реальный API - use absolute URL for server-side, relative for client-side
+		const url = BACKEND_URL
+			? new URL(`/api/stores/${storeId}/config`, BACKEND_URL).toString()
+			: `/api/stores/${storeId}/config`;
+		console.log('[getStoreConfig] Fetching:', url);
+		const response = await fetch(url);
 		if (!response.ok) {
 			const errorText = await response.text();
 			throw new Error(`Store config fetch failed: ${response.status} ${errorText}`);
@@ -65,14 +67,16 @@ export async function findCustomer(input: string, storeId: number): Promise<Cust
 		const customer = MOCK_CUSTOMERS.find(c => c.cardNumber === cardNumberClean);
 		return customer || null;
 	} else {
-		// Реальный API - абсолютный URL
-		const url = new URL(`/api/customers/search?card=${cardNumberClean}&storeId=${storeId}`, BACKEND_URL);
+		// Реальный API - use absolute URL for server-side, relative for client-side
+		const url = BACKEND_URL
+			? new URL(`/api/customers/search?card=${cardNumberClean}&storeId=${storeId}`, BACKEND_URL).toString()
+			: `/api/customers/search?card=${cardNumberClean}&storeId=${storeId}`;
 		console.log('[findCustomer] Input:', input);
 		console.log('[findCustomer] Parsed:', parsed);
 		console.log('[findCustomer] Card clean:', cardNumberClean);
-		console.log('[findCustomer] Fetching:', url.toString());
+		console.log('[findCustomer] Fetching:', url);
 
-		const response = await fetch(url.toString());
+		const response = await fetch(url);
 		console.log('[findCustomer] Response:', response.status, response.statusText);
 
 		if (!response.ok) {
@@ -131,10 +135,12 @@ export async function createTransaction(data: {
 
 		return { success: true, transaction };
 	} else {
-		// Реальный API - абсолютный URL
-		const url = new URL('/api/transactions', BACKEND_URL);
-		console.log('[createTransaction] Fetching:', url.toString());
-		const response = await fetch(url.toString(), {
+		// Реальный API - use absolute URL for server-side, relative for client-side
+		const url = BACKEND_URL
+			? new URL('/api/transactions', BACKEND_URL).toString()
+			: '/api/transactions';
+		console.log('[createTransaction] Fetching:', url);
+		const response = await fetch(url, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(data)
@@ -161,10 +167,12 @@ export async function getRecentTransactions(storeId: number, limit: number = 10)
 			.filter(t => t.storeId === storeId)
 			.slice(0, limit);
 	} else {
-		// Реальный API - абсолютный URL
-		const url = new URL(`/api/transactions/recent?storeId=${storeId}&limit=${limit}`, BACKEND_URL);
-		console.log('[getRecentTransactions] Fetching:', url.toString());
-		const response = await fetch(url.toString());
+		// Реальный API - use absolute URL for server-side, relative for client-side
+		const url = BACKEND_URL
+			? new URL(`/api/transactions/recent?storeId=${storeId}&limit=${limit}`, BACKEND_URL).toString()
+			: `/api/transactions/recent?storeId=${storeId}&limit=${limit}`;
+		console.log('[getRecentTransactions] Fetching:', url);
+		const response = await fetch(url);
 		if (!response.ok) {
 			console.error('[getRecentTransactions] Error:', response.status);
 			return [];
