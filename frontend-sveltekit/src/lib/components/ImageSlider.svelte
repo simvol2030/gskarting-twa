@@ -21,11 +21,13 @@
 		}
 	}
 
-	function prev() {
+	function prev(e?: Event) {
+		e?.stopPropagation();
 		goTo(currentIndex - 1);
 	}
 
-	function next() {
+	function next(e?: Event) {
+		e?.stopPropagation();
 		goTo(currentIndex + 1);
 	}
 
