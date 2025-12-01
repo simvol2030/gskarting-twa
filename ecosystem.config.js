@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'murzicoin-frontend',
-      cwd: '/opt/websites/murzicoin.murzico.ru/frontend-sveltekit',
+      cwd: '/opt/websites/murzicoin.murzico.ru/project-box-v3-orm/frontend-sveltekit',
       script: 'build/index.js',
       instances: 1,
       exec_mode: 'fork',
@@ -19,7 +19,7 @@ module.exports = {
     },
     {
       name: 'murzicoin-backend',
-      cwd: '/opt/websites/murzicoin.murzico.ru/backend-expressjs',
+      cwd: '/opt/websites/murzicoin.murzico.ru/project-box-v3-orm/backend-expressjs',
       script: 'dist/index.js',
       instances: 1,
       exec_mode: 'fork',
@@ -34,7 +34,7 @@ module.exports = {
     },
     {
       name: 'murzicoin-bot',
-      cwd: '/opt/websites/murzicoin.murzico.ru/telegram-bot',
+      cwd: '/opt/websites/murzicoin.murzico.ru/project-box-v3-orm/telegram-bot',
       script: 'dist/index.js',
       instances: 1,
       exec_mode: 'fork',
