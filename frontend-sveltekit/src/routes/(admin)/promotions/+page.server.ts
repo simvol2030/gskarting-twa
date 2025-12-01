@@ -10,7 +10,7 @@ const buildQuery = (params: Record<string, any>): string => {
 
 export const load: PageServerLoad = async ({ url, fetch, cookies }) => {
 	const search = url.searchParams.get('search') || '';
-	const status = (url.searchParams.get('status') || 'all') as 'all' | 'active' | 'inactive';
+	const status = (url.searchParams.get('status') || 'active') as 'all' | 'active' | 'inactive';
 	const deadlineClass = (url.searchParams.get('deadlineClass') || 'all') as
 		| 'all'
 		| 'urgent'

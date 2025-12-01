@@ -4,6 +4,10 @@
  */
 
 import { Router } from 'express';
+import multer from 'multer';
+import sharp from 'sharp';
+import path from 'path';
+import fs from 'fs';
 import { db } from '../../db/client';
 import { products } from '../../db/schema';
 import { eq, and, desc, like, sql } from 'drizzle-orm';
@@ -12,8 +16,78 @@ import { validateProductData } from '../../utils/validation';
 
 const router = Router();
 
+// Uploads directory
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'products');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+	fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Multer configuration - store in memory for processing
+const upload = multer({
+	storage: multer.memoryStorage(),
+	limits: {
+		fileSize: 5 * 1024 * 1024 // 5MB max
+	},
+	fileFilter: (req, file, cb) => {
+		const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+		if (allowedTypes.includes(file.mimetype)) {
+			cb(null, true);
+		} else {
+			cb(new Error('Разрешены только изображения (JPEG, PNG, WebP, GIF)'));
+		}
+	}
+});
+
 // 🔒 SECURITY: All admin routes require authentication
 router.use(authenticateSession);
+
+/**
+ * POST /api/admin/products/upload - Upload product image
+ * ONLY: super-admin, editor
+ */
+router.post('/upload', requireRole('super-admin', 'editor'), upload.single('image'), async (req, res) => {
+	try {
+		const file = req.file;
+
+		if (!file) {
+			return res.status(400).json({ success: false, error: 'Файл не загружен' });
+		}
+
+		// Generate unique filename
+		const timestamp = Date.now();
+		const randomSuffix = Math.random().toString(36).substring(2, 8);
+		const filename = `product_${timestamp}_${randomSuffix}.webp`;
+		const filepath = path.join(UPLOADS_DIR, filename);
+
+		// Process image with sharp:
+		// - Convert to WebP
+		// - Resize to max 800px width (keeping aspect ratio)
+		// - Quality 85%
+		await sharp(file.buffer)
+			.resize(800, 800, {
+				fit: 'inside',
+				withoutEnlargement: true
+			})
+			.webp({ quality: 85 })
+			.toFile(filepath);
+
+		// Return URL path for database storage
+		const imageUrl = `/api/uploads/products/${filename}`;
+
+		res.status(201).json({
+			success: true,
+			data: {
+				url: imageUrl,
+				filename: filename
+			}
+		});
+	} catch (error: any) {
+		console.error('Error uploading product image:', error);
+		res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+	}
+});
 
 /**
  * GET /api/admin/products - Список товаров

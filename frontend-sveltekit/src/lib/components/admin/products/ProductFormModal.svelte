@@ -91,7 +91,7 @@
 		}
 	};
 
-	const handleFileUpload = (e: Event) => {
+	const handleFileUpload = async (e: Event) => {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
@@ -109,23 +109,40 @@
 		}
 
 		error = null;
+		loading = true;
 
-		// Create preview
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			const result = e.target?.result as string;
-			imagePreview = result;
+		try {
+			// Create preview
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				imagePreview = e.target?.result as string;
+			};
+			reader.readAsDataURL(file);
 
-			// Sanitize filename (prevent path traversal)
-			const cleanName = file.name.replace(/\.\./g, '').replace(/[\/\\]/g, '');
-			const sanitizedName = cleanName.replace(/[^a-zA-Z0-9._-]/g, '_');
-			const timestamp = Date.now();
+			// Upload file to server
+			const formDataToUpload = new FormData();
+			formDataToUpload.append('image', file);
 
-			// TODO: Implement real server upload endpoint
-			// For now, use placeholder URL with fully sanitized name
-			formData.image = `/uploads/products/${timestamp}_${sanitizedName}`;
-		};
-		reader.readAsDataURL(file);
+			const response = await fetch('/api/admin/products/upload', {
+				method: 'POST',
+				body: formDataToUpload
+			});
+
+			const result = await response.json();
+
+			if (!result.success) {
+				throw new Error(result.error || 'Ошибка загрузки изображения');
+			}
+
+			// Save the server URL path to form data
+			formData.image = result.data.url;
+		} catch (err: any) {
+			error = err.message || 'Ошибка загрузки изображения';
+			imagePreview = null;
+			formData.image = '';
+		} finally {
+			loading = false;
+		}
 	};
 
 	const handleSubmit = async (e: Event) => {
