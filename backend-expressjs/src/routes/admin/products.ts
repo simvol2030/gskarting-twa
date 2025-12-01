@@ -166,13 +166,14 @@ router.get('/', async (req, res) => {
  */
 router.get('/categories', async (req, res) => {
 	try {
+		// Get all unique categories from ALL products (not just active ones)
+		// This ensures categories are available in forms even if all products in category are inactive
 		const categoriesResult = await db
 			.select({
 				name: products.category,
 				count: sql<number>`COUNT(*)`
 			})
 			.from(products)
-			.where(eq(products.is_active, true))
 			.groupBy(products.category)
 			.orderBy(products.category);
 
