@@ -119,12 +119,24 @@
 
 			<!-- Navigation Arrows -->
 			{#if images.length > 1}
-				<button class="nav-btn prev" onclick={prev} aria-label="Предыдущее фото">
+				<button
+					class="nav-btn prev"
+					onclick={prev}
+					onmousedown={(e) => e.stopPropagation()}
+					onmouseup={(e) => e.stopPropagation()}
+					aria-label="Предыдущее фото"
+				>
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M15 18l-6-6 6-6" />
 					</svg>
 				</button>
-				<button class="nav-btn next" onclick={next} aria-label="Следующее фото">
+				<button
+					class="nav-btn next"
+					onclick={next}
+					onmousedown={(e) => e.stopPropagation()}
+					onmouseup={(e) => e.stopPropagation()}
+					aria-label="Следующее фото"
+				>
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M9 18l6-6-6-6" />
 					</svg>
