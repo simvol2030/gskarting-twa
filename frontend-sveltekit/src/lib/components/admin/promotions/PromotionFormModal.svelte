@@ -54,8 +54,8 @@
 	const isFormValid = $derived(() => {
 		if (!formData.title || formData.title.length < 3) return false;
 		if (!formData.description || formData.description.length < 10) return false;
-		// HIGH FIX #2 (Cycle 2): Handle nullable image
-		if (!formData.image || formData.image.length < 3) return false;
+		// FIX #2: Image is optional - can be empty or valid URL
+		if (formData.image && formData.image.length > 0 && formData.image.length < 3) return false;
 		// H-002 FIX: Accept text deadline (e.g. "30 ноября", "Постоянная акция")
 		if (!formData.deadline || formData.deadline.length < 3) return false;
 
@@ -130,6 +130,17 @@
 			loading = false;
 		}
 	};
+
+	// FIX #3: Prevent modal from closing when Delete/Backspace is pressed
+	const handleKeyDown = (e: KeyboardEvent) => {
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			// Only prevent default if we're NOT in an input/textarea
+			const target = e.target as HTMLElement;
+			if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+				e.stopPropagation();
+			}
+		}
+	};
 </script>
 
 <Modal
@@ -138,7 +149,7 @@
 	title={editingPromotion ? 'Редактировать акцию' : 'Создать акцию'}
 	size="lg"
 >
-	<form onsubmit={handleSubmit}>
+	<form onsubmit={handleSubmit} onkeydown={handleKeyDown}>
 		<!-- Заголовок -->
 		<Input
 			label="Заголовок"

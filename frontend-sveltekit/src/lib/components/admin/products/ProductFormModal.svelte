@@ -78,7 +78,8 @@
 	const isFormValid = $derived(() => {
 		if (!formData.name || formData.name.length < 3) return false;
 		if (formData.price <= 0) return false;
-		if (!formData.image) return false;
+		// FIX #2: Image is optional - can be empty or valid URL
+		if (formData.image && formData.image.length > 0 && formData.image.length < 3) return false;
 		if (!formData.category) return false;
 		return true;
 	});
@@ -148,10 +149,21 @@
 			loading = false;
 		}
 	};
+
+	// FIX #3: Prevent modal from closing when Delete/Backspace is pressed
+	const handleKeyDown = (e: KeyboardEvent) => {
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			// Only prevent default if we're NOT in an input/textarea
+			const target = e.target as HTMLElement;
+			if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+				e.stopPropagation();
+			}
+		}
+	};
 </script>
 
 <Modal {isOpen} onClose={onClose} title={editingProduct ? 'Редактировать товар' : 'Создать товар'} size="lg">
-	<form onsubmit={handleSubmit}>
+	<form onsubmit={handleSubmit} onkeydown={handleKeyDown}>
 		<Input label="Название" bind:value={formData.name} minLength={3} maxLength={200} required />
 
 		<Textarea label="Описание" bind:value={formData.description} maxLength={1000} rows={3} />
