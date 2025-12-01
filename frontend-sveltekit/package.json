@@ -15,7 +15,10 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"deploy:check": "node ../scripts/check-env.js",
+		"deploy:build": "PUBLIC_BACKEND_URL=https://murzicoin.murzico.ru NODE_ENV=production npm run build",
+		"deploy:full": "bash ../deploy.sh"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",

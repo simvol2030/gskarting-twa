@@ -11,7 +11,7 @@ module.exports = {
         PORT: '3009',
         ORIGIN: 'https://murzicoin.murzico.ru',
         SESSION_SECRET: '/h3mrzqmVEweenR+NiQV5CUWkhAcpEccOw+jorAhPgA=',
-        PUBLIC_BACKEND_URL: 'http://localhost:3015'
+        PUBLIC_BACKEND_URL: 'https://murzicoin.murzico.ru'
       },
       error_file: '/opt/websites/murzicoin.murzico.ru/logs/frontend-error.log',
       out_file: '/opt/websites/murzicoin.murzico.ru/logs/frontend-out.log',
