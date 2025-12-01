@@ -34,7 +34,7 @@ module.exports = {
     },
     {
       name: 'murzicoin-bot',
-      cwd: '/opt/websites/murzicoin.murzico.ru/project-box-v3-orm/telegram-bot',
+      cwd: '/opt/websites/murzicoin.murzico.ru/telegram-bot',
       script: 'dist/index.js',
       instances: 1,
       exec_mode: 'fork',
