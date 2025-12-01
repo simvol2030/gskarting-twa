@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/public';
 
-const BACKEND_URL = env.PUBLIC_BACKEND_URL || 'http://localhost:3015';
+// Server-side proxy должен использовать ВНУТРЕННИЙ backend URL (не PUBLIC_BACKEND_URL!)
+// PUBLIC_BACKEND_URL = https://murzicoin.murzico.ru → создает infinite loop
+const BACKEND_URL = 'http://localhost:3015';
 
 /**
  * Proxy endpoint для получения суммы чека от агента
