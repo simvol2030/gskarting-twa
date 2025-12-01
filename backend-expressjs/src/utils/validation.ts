@@ -380,23 +380,11 @@ export function validatePromotionData(data: any): { valid: boolean; errors: stri
 		}
 	}
 
-	// Deadline validation (ISO date string or readable format)
+	// Deadline validation (free-form text: "Постоянная акция", "До конца месяца", "2025-12-31", etc.)
 	if (typeof data.deadline !== 'string' || data.deadline.length < 3 || data.deadline.length > 50) {
 		errors.push('Deadline must be 3-50 characters');
 	}
-
-	// HIGH FIX #5: Validate date format
-	if (data.deadline) {
-		try {
-			const deadlineDate = new Date(data.deadline);
-			if (isNaN(deadlineDate.getTime())) {
-				errors.push('Deadline must be a valid date (YYYY-MM-DD or ISO format)');
-			}
-			// Note: Past dates allowed for editing existing promotions
-		} catch {
-			errors.push('Invalid deadline format');
-		}
-	}
+	// No strict date format validation - allow flexible deadline text for better UX
 
 	// Optional: isActive validation
 	if (data.isActive !== undefined && typeof data.isActive !== 'boolean') {
