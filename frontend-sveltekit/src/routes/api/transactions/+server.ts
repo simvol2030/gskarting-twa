@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/public';
 
-const BACKEND_URL = env.PUBLIC_BACKEND_URL || 'http://localhost:3015';
+// Server-side proxy должен использовать ВНУТРЕННИЙ backend URL (не PUBLIC_BACKEND_URL!)
+const BACKEND_URL = 'http://localhost:3015';
 
 export const POST: RequestHandler = async ({ request, fetch }) => {
 	try {

@@ -90,8 +90,8 @@ const csrfProtection: Handle = async ({ event, resolve }) => {
 		// Логин endpoint - особый случай, там нет токена до первого GET
 		const isLoginEndpoint = event.url.pathname === '/login';
 
-		// Telegram endpoints освобождаем от CSRF (вызываются из Telegram WebView без cookies)
-		const csrfExemptPrefixes = ['/api/telegram/'];
+		// Telegram endpoints и 1C API освобождаем от CSRF (server-to-server, без cookies)
+		const csrfExemptPrefixes = ['/api/telegram/', '/api/1c/'];
 		const isTelegramEndpoint = csrfExemptPrefixes.some(prefix =>
 			event.url.pathname.startsWith(prefix)
 		);
