@@ -90,7 +90,8 @@ function validateAppearanceData(data: any): string | null {
 
 	// Validate RGBA color (for badge background)
 	if (data.loyaltyCardBadgeBg !== undefined) {
-		const rgbaPattern = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+))?\s*\)$/;
+		// BUG-2 FIX: Accept "1.0" format in alpha value (not just "1" or "0.x")
+		const rgbaPattern = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1(\.0+)?|0?\.\d+))?\s*\)$/;
 		if (!isValidHexColor(data.loyaltyCardBadgeBg) && !rgbaPattern.test(data.loyaltyCardBadgeBg)) {
 			return 'Неверный формат цвета для loyaltyCardBadgeBg. Используйте HEX (#RRGGBB) или RGBA';
 		}

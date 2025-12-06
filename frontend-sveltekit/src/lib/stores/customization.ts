@@ -139,7 +139,8 @@ export const colors = derived(customization, $c => $c.colors);
 export const darkTheme = derived(customization, $c => $c.darkTheme);
 export const bottomNavItems = derived(customization, $c => $c.navigation.bottomNav.filter(item => item.visible));
 export const sidebarMenuItems = derived(customization, $c => $c.navigation.sidebarMenu.filter(item => item.visible));
-export const loyaltyCardSettings = derived(customization, $c => $c.loyaltyCard);
+// BUG-3 FIX: Add fallback for loyaltyCard if undefined (defensive programming)
+export const loyaltyCardSettings = derived(customization, $c => $c.loyaltyCard || defaultCustomization.loyaltyCard);
 
 /**
  * Load customization settings from API
@@ -157,8 +158,21 @@ export async function loadCustomization(apiBaseUrl: string = '/api'): Promise<vo
 		const result = await response.json();
 
 		if (result.success && result.data) {
-			customization.set(result.data);
-			applyCustomStyles(result.data);
+			// BUG-1 FIX: Merge with defaults to handle missing fields (e.g., old API without loyaltyCard)
+			const mergedData: CustomizationData = {
+				...defaultCustomization,
+				...result.data,
+				// Deep merge nested objects
+				colors: { ...defaultCustomization.colors, ...(result.data.colors || {}) },
+				darkTheme: { ...defaultCustomization.darkTheme, ...(result.data.darkTheme || {}) },
+				navigation: {
+					bottomNav: result.data.navigation?.bottomNav || defaultCustomization.navigation.bottomNav,
+					sidebarMenu: result.data.navigation?.sidebarMenu || defaultCustomization.navigation.sidebarMenu
+				},
+				loyaltyCard: { ...defaultCustomization.loyaltyCard, ...(result.data.loyaltyCard || {}) }
+			};
+			customization.set(mergedData);
+			applyCustomStyles(mergedData);
 		}
 
 		customizationLoaded.set(true);
