@@ -88,6 +88,10 @@
 					<span class="icon">📈</span>
 					<span>Статистика</span>
 				</a>
+				<a href="/shop-settings" class:active={$page.url.pathname === '/shop-settings'} onclick={closeMobileMenu}>
+					<span class="icon">🛒</span>
+					<span>Настройки магазина</span>
+				</a>
 				{#if data.user?.role === 'super-admin'}
 					<a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeMobileMenu}>
 						<span class="icon">⚙️</span>

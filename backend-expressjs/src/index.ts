@@ -36,6 +36,7 @@ import adminDashboardRouter from './routes/admin/dashboard'; // Sprint 5 Task 4.
 import adminStoreImagesRouter from './routes/admin/store-images';
 import adminCategoriesRouter from './routes/admin/categories'; // Shop extension: Categories
 import adminOrdersRouter from './routes/admin/orders'; // Shop extension: Orders management
+import adminShopSettingsRouter from './routes/admin/shop-settings'; // Shop extension: Shop settings
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -121,6 +122,7 @@ app.use('/api/admin/dashboard', adminDashboardRouter); // Sprint 5 Task 4.1
 app.use('/api/admin/stores', adminStoreImagesRouter); // Store images (nested under stores)
 app.use('/api/admin/categories', adminCategoriesRouter); // Shop extension: Categories
 app.use('/api/admin/orders', adminOrdersRouter); // Shop extension: Orders management
+app.use('/api/admin/shop-settings', adminShopSettingsRouter); // Shop extension: Shop settings
 
 // Обработка 404
 app.use((req, res) => {
