@@ -2,6 +2,9 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { queries } from '../db/database';
+import { db } from '../db/client';
+import { transactions, loyaltyUsers } from '../db/schema';
+import { eq, desc } from 'drizzle-orm';
 import { checkRateLimit, resetRateLimit, getClientIP, RATE_LIMIT_CONFIGS } from '../utils/rate-limit';
 
 const router = Router();
@@ -124,6 +127,68 @@ router.get('/me', async (req, res) => {
  */
 router.post('/logout', (req, res) => {
 	res.json({ success: true, message: 'Logged out' });
+});
+
+/**
+ * GET /api/seller/transactions - получить последние транзакции продавца
+ * Requires seller JWT token
+ */
+router.get('/transactions', async (req, res) => {
+	const authHeader = req.headers['authorization'];
+	const token = authHeader && authHeader.split(' ')[1];
+
+	if (!token) {
+		return res.status(401).json({ error: 'Требуется токен доступа' });
+	}
+
+	try {
+		const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+		if (decoded.type !== 'seller') {
+			return res.status(403).json({ error: 'Неверный тип токена' });
+		}
+
+		const sellerId = decoded.id;
+		const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+		// Получаем последние транзакции этого продавца
+		const recentTransactions = await db
+			.select({
+				id: transactions.id,
+				customerId: loyaltyUsers.card_number,
+				customerName: loyaltyUsers.first_name,
+				customerLastName: loyaltyUsers.last_name,
+				amount: transactions.amount,
+				type: transactions.type,
+				title: transactions.title,
+				checkAmount: transactions.check_amount,
+				pointsRedeemed: transactions.points_redeemed,
+				cashbackEarned: transactions.cashback_earned,
+				createdAt: transactions.created_at
+			})
+			.from(transactions)
+			.innerJoin(loyaltyUsers, eq(transactions.loyalty_user_id, loyaltyUsers.id))
+			.where(eq(transactions.seller_id, sellerId))
+			.orderBy(desc(transactions.created_at))
+			.limit(limit);
+
+		// Формируем ответ
+		const formattedTransactions = recentTransactions.map(tx => ({
+			id: `TXN-${tx.id}`,
+			customer_name: `${tx.customerName} ${tx.customerLastName || ''}`.trim() || 'Клиент',
+			amount: tx.amount,
+			type: tx.type,
+			created_at: tx.createdAt,
+			check_amount: tx.checkAmount,
+			points_redeemed: tx.pointsRedeemed,
+			cashback_earned: tx.cashbackEarned
+		}));
+
+		res.json({ transactions: formattedTransactions });
+	} catch (error) {
+		console.error('Seller transactions error:', error);
+		res.status(403).json({ error: 'Неверный или истекший токен' });
+	}
 });
 
 export default router;

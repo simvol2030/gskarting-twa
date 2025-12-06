@@ -44,6 +44,7 @@
 				// Невалидный токен - удаляем
 				localStorage.removeItem('seller_token');
 				localStorage.removeItem('seller_name');
+				localStorage.removeItem('seller_id');
 				if (!page.url.pathname.includes('/seller/login')) {
 					goto('/seller/login');
 				}
@@ -52,6 +53,7 @@
 			console.error('Auth check error:', error);
 			localStorage.removeItem('seller_token');
 			localStorage.removeItem('seller_name');
+			localStorage.removeItem('seller_id');
 			if (!page.url.pathname.includes('/seller/login')) {
 				goto('/seller/login');
 			}
@@ -63,6 +65,7 @@
 	function handleLogout() {
 		localStorage.removeItem('seller_token');
 		localStorage.removeItem('seller_name');
+		localStorage.removeItem('seller_id');
 		isAuthenticated = false;
 		sellerName = '';
 		goto('/seller/login');

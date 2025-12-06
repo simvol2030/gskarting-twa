@@ -1,14 +1,24 @@
 import { db } from '../client';
 import { sellers } from '../schema';
 import { eq, desc } from 'drizzle-orm';
+import bcrypt from 'bcrypt';
 import type { NewSeller } from '../schema';
 
 /**
  * Получить продавца по PIN (для авторизации)
+ * Использует bcrypt.compare для сравнения хэшированных PIN-кодов
  */
 export async function getSellerByPin(pin: string) {
-	const result = await db.select().from(sellers).where(eq(sellers.pin, pin)).limit(1);
-	return result[0] || null;
+	const allSellers = await db.select().from(sellers);
+	for (const seller of allSellers) {
+		if (seller.is_active) {
+			const isMatch = await bcrypt.compare(pin, seller.pin);
+			if (isMatch) {
+				return seller;
+			}
+		}
+	}
+	return null;
 }
 
 /**
@@ -63,11 +73,18 @@ export async function deleteSeller(id: number) {
 
 /**
  * Проверить существует ли PIN (для валидации уникальности)
+ * Использует bcrypt.compare для сравнения хэшированных PIN-кодов
  */
-export async function isPinExists(pin: string, excludeId?: number) {
-	const result = await db.select({ id: sellers.id }).from(sellers).where(eq(sellers.pin, pin));
-	if (excludeId) {
-		return result.some(s => s.id !== excludeId);
+export async function isPinExists(pin: string, excludeId?: number): Promise<boolean> {
+	const allSellers = await db.select({ id: sellers.id, pin: sellers.pin }).from(sellers);
+	for (const seller of allSellers) {
+		if (excludeId && seller.id === excludeId) {
+			continue; // Пропускаем текущего продавца при обновлении
+		}
+		const isMatch = await bcrypt.compare(pin, seller.pin);
+		if (isMatch) {
+			return true;
+		}
 	}
-	return result.length > 0;
+	return false;
 }

@@ -59,7 +59,8 @@
 		isLoadingRecent = true;
 		try {
 			const token = localStorage.getItem('seller_token');
-			const response = await fetch('/api/transactions/recent?limit=5', {
+			// Используем seller-specific endpoint вместо store-based
+			const response = await fetch('/api/seller/transactions?limit=5', {
 				headers: {
 					'Authorization': `Bearer ${token}`
 				}

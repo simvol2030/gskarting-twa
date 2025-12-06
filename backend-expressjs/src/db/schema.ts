@@ -247,16 +247,16 @@ export const storeImages = sqliteTable('store_images', {
 /**
  * Sellers table - продавцы для PWA-приложения
  * Авторизация по PIN-коду
+ * Примечание: PIN хранится в bcrypt-хэше, индексация бесполезна
+ * (поиск идёт через bcrypt.compare, а не через индекс)
  */
 export const sellers = sqliteTable('sellers', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(), // Имя продавца (Анна, Мария)
-	pin: text('pin').notNull(), // 4-значный PIN (хэшированный)
+	pin: text('pin').notNull(), // 4-значный PIN (хэшированный bcrypt)
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
-}, (table) => ({
-	pinIdx: index('idx_sellers_pin').on(table.pin)
-}));
+});
 
 /**
  * Pending Discounts table - очередь скидок для агентов
