@@ -23,6 +23,7 @@ import contentRouter from './routes/content';
 import loyaltyRouter from './routes/api/loyalty';
 import catalogRouter from './routes/api/catalog'; // Shop extension: Public catalog
 import cartRouter from './routes/api/cart'; // Shop extension: Shopping cart
+import ordersRouter from './routes/api/orders'; // Shop extension: Orders
 
 // Admin routes
 import adminClientsRouter from './routes/admin/clients';
@@ -106,6 +107,7 @@ app.use('/api/content', contentRouter);
 app.use('/api/loyalty', loyaltyRouter); // Public loyalty settings endpoint
 app.use('/api/catalog', catalogRouter); // Public catalog (categories & products)
 app.use('/api/cart', cartRouter); // Shopping cart
+app.use('/api/orders', ordersRouter); // Orders
 
 // Admin API routes
 app.use('/api/admin/clients', adminClientsRouter);
