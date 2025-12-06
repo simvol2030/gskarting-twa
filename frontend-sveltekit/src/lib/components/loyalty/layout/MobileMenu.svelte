@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { browser } from '$app/environment';
+  import { sidebarMenuItems } from '$lib/stores/customization';
 
   interface Props {
     open: boolean;
@@ -8,15 +9,6 @@
   }
 
   let { open, onClose }: Props = $props();
-
-  const menuItems = [
-    { href: '/', icon: '📊', label: 'Главная' },
-    { href: '/products', icon: '🛍️', label: 'Товары' },
-    { href: '/offers', icon: '🎁', label: 'Акции' },
-    { href: '/stores', icon: '🏪', label: 'Магазины' },
-    { href: '/history', icon: '📜', label: 'История' },
-    { href: '/profile', icon: '👤', label: 'Профиль' }
-  ];
 
   $effect(() => {
     if (!browser) return;
@@ -81,16 +73,34 @@
   </div>
 
   <nav class="sidebar-nav">
-    {#each menuItems as item}
-      <a
-        href={item.href}
-        class="sidebar-item"
-        class:active={$page.url.pathname === item.href}
-        onclick={handleNavClick}
-      >
-        <span class="sidebar-icon">{item.icon}</span>
-        <span>{item.label}</span>
-      </a>
+    {#each $sidebarMenuItems as item}
+      {#if item.isExternal}
+        <a
+          href={item.href}
+          class="sidebar-item external"
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick={handleNavClick}
+        >
+          <span class="sidebar-icon">{item.icon}</span>
+          <span>{item.label}</span>
+          <svg class="external-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+      {:else}
+        <a
+          href={item.href}
+          class="sidebar-item"
+          class:active={$page.url.pathname === item.href}
+          onclick={handleNavClick}
+        >
+          <span class="sidebar-icon">{item.icon}</span>
+          <span>{item.label}</span>
+        </a>
+      {/if}
     {/each}
   </nav>
 </aside>
@@ -195,13 +205,23 @@
   }
 
   .sidebar-item.active {
-    background: rgba(255, 107, 0, 0.1);
+    background: color-mix(in srgb, var(--primary-orange) 10%, transparent);
     color: var(--primary-orange);
   }
 
   .sidebar-icon {
     font-size: 24px;
     color: var(--primary-orange);
+    flex-shrink: 0;
+  }
+
+  .sidebar-item.external {
+    justify-content: flex-start;
+  }
+
+  .external-icon {
+    margin-left: auto;
+    opacity: 0.5;
     flex-shrink: 0;
   }
 </style>

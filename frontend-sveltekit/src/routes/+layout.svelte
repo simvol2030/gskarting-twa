@@ -2,6 +2,7 @@
   import { onMount, setContext } from 'svelte';
   import { page } from '$app/stores';
   import { initTheme } from '$lib/stores/loyalty';
+  import { loadCustomization, appName, colors } from '$lib/stores/customization';
   import Header from '$lib/components/loyalty/layout/Header.svelte';
   import BottomNav from '$lib/components/loyalty/layout/BottomNav.svelte';
   import MobileMenu from '$lib/components/loyalty/layout/MobileMenu.svelte';
@@ -65,6 +66,11 @@
       console.log('[+layout] 🌐 window.Telegram at mount:', !!window.Telegram);
       console.log('[+layout] 📍 Current pathname:', $page.url.pathname);
 
+      // Load customization settings first (non-blocking)
+      loadCustomization().catch(err => {
+        console.warn('[+layout] ⚠️ Failed to load customization:', err);
+      });
+
       // Initialize theme
       initTheme();
 
@@ -108,9 +114,9 @@
 <svelte:head>
   <link rel="icon" href={favicon} />
   {#if isLoyaltyApp}
-    <title>Мурзико - Программа лояльности</title>
+    <title>{$appName} - Программа лояльности</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#ff6b00" />
+    <meta name="theme-color" content={$colors.primary} />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   {/if}
