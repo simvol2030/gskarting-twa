@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { User } from '$lib/types/loyalty';
   import { formatNumber, initializeUser, waitForTelegramUser, formatTelegramCardNumber } from '$lib/telegram';
+  import { loyaltyCardSettings } from '$lib/stores/customization';
 
   interface Props {
     user: User;
@@ -133,7 +134,19 @@
   });
 </script>
 
-<div class="profile-card">
+<div
+  class="profile-card"
+  class:no-shimmer={!$loyaltyCardSettings.showShimmer}
+  style="
+    --card-gradient-start: {$loyaltyCardSettings.gradientStart};
+    --card-gradient-end: {$loyaltyCardSettings.gradientEnd};
+    --card-text-color: {$loyaltyCardSettings.textColor};
+    --card-accent-color: {$loyaltyCardSettings.accentColor};
+    --card-badge-bg: {$loyaltyCardSettings.badgeBg};
+    --card-badge-text: {$loyaltyCardSettings.badgeText};
+    --card-border-radius: {$loyaltyCardSettings.borderRadius}px;
+  "
+>
   {#if registrationError}
     <div class="error-banner">
       <span class="error-icon">⚠️</span>
@@ -177,14 +190,15 @@
 
 <style>
   .profile-card {
-    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark), var(--accent-red));
-    border-radius: 20px;
+    background: linear-gradient(135deg, var(--card-gradient-start), var(--card-gradient-end));
+    border-radius: var(--card-border-radius);
     padding: 20px;
-    box-shadow: 0 25px 50px -12px rgba(255, 107, 0, 0.5);
+    box-shadow: 0 25px 50px -12px color-mix(in srgb, var(--card-gradient-start) 50%, transparent);
     border: 1px solid var(--border-color);
     margin-bottom: 16px;
     position: relative;
     overflow: hidden;
+    color: var(--card-text-color);
   }
 
   .profile-card::before {
@@ -202,6 +216,10 @@
     );
     animation: shimmer 3s infinite;
     pointer-events: none;
+  }
+
+  .profile-card.no-shimmer::before {
+    display: none;
   }
 
   @keyframes shimmer {
@@ -294,12 +312,12 @@
   .profile-avatar {
     width: 72px;
     height: 72px;
-    background: linear-gradient(135deg, var(--primary-orange), var(--accent-red));
+    background: var(--card-badge-bg);
     border-radius: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--card-badge-text);
     font-size: 24px;
     font-weight: bold;
     flex-shrink: 0;
@@ -312,12 +330,13 @@
   .profile-name {
     font-size: 20px;
     font-weight: bold;
-    color: white;
+    color: var(--card-text-color);
     margin-bottom: 4px;
   }
 
   .profile-status {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--card-accent-color);
+    opacity: 0.9;
     font-size: 14px;
   }
 
@@ -326,7 +345,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 20px;
     padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-top: 1px solid color-mix(in srgb, var(--card-text-color) 30%, transparent);
     position: relative;
     z-index: 1;
   }
@@ -339,19 +358,20 @@
     font-size: 32px;
     font-weight: bold;
     margin-bottom: 4px;
-    color: white;
+    color: var(--card-text-color);
   }
 
   .profile-stat-orange {
-    color: white;
+    color: var(--card-text-color);
   }
 
   .profile-stat-green {
-    color: white;
+    color: var(--card-text-color);
   }
 
   .profile-stat-label {
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--card-accent-color);
+    opacity: 0.85;
     font-size: 13px;
     font-weight: 500;
   }

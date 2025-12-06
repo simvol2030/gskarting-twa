@@ -71,7 +71,17 @@
 
 		// Navigation
 		bottomNavItems: [...data.settings.appearance.bottomNavItems] as NavItem[],
-		sidebarMenuItems: [...data.settings.appearance.sidebarMenuItems] as NavItem[]
+		sidebarMenuItems: [...data.settings.appearance.sidebarMenuItems] as NavItem[],
+
+		// Loyalty Card Widget
+		loyaltyCardGradientStart: data.settings.appearance.loyaltyCardGradientStart || '#ff6b00',
+		loyaltyCardGradientEnd: data.settings.appearance.loyaltyCardGradientEnd || '#dc2626',
+		loyaltyCardTextColor: data.settings.appearance.loyaltyCardTextColor || '#ffffff',
+		loyaltyCardAccentColor: data.settings.appearance.loyaltyCardAccentColor || '#ffffff',
+		loyaltyCardBadgeBg: data.settings.appearance.loyaltyCardBadgeBg || 'rgba(255,255,255,0.95)',
+		loyaltyCardBadgeText: data.settings.appearance.loyaltyCardBadgeText || '#e55d00',
+		loyaltyCardBorderRadius: data.settings.appearance.loyaltyCardBorderRadius ?? 24,
+		loyaltyCardShowShimmer: data.settings.appearance.loyaltyCardShowShimmer ?? true
 	});
 
 	// Preset icons for bottom nav
@@ -147,7 +157,15 @@
 			darkTextSecondary: data.settings.appearance.darkTextSecondary,
 			darkBorderColor: data.settings.appearance.darkBorderColor,
 			bottomNavItems: [...data.settings.appearance.bottomNavItems],
-			sidebarMenuItems: [...data.settings.appearance.sidebarMenuItems]
+			sidebarMenuItems: [...data.settings.appearance.sidebarMenuItems],
+			loyaltyCardGradientStart: data.settings.appearance.loyaltyCardGradientStart || '#ff6b00',
+			loyaltyCardGradientEnd: data.settings.appearance.loyaltyCardGradientEnd || '#dc2626',
+			loyaltyCardTextColor: data.settings.appearance.loyaltyCardTextColor || '#ffffff',
+			loyaltyCardAccentColor: data.settings.appearance.loyaltyCardAccentColor || '#ffffff',
+			loyaltyCardBadgeBg: data.settings.appearance.loyaltyCardBadgeBg || 'rgba(255,255,255,0.95)',
+			loyaltyCardBadgeText: data.settings.appearance.loyaltyCardBadgeText || '#e55d00',
+			loyaltyCardBorderRadius: data.settings.appearance.loyaltyCardBorderRadius ?? 24,
+			loyaltyCardShowShimmer: data.settings.appearance.loyaltyCardShowShimmer ?? true
 		};
 	}
 
@@ -306,7 +324,15 @@
 						darkTextSecondary: appearanceForm.darkTextSecondary,
 						darkBorderColor: appearanceForm.darkBorderColor,
 						bottomNavItems: appearanceForm.bottomNavItems,
-						sidebarMenuItems: appearanceForm.sidebarMenuItems
+						sidebarMenuItems: appearanceForm.sidebarMenuItems,
+						loyaltyCardGradientStart: appearanceForm.loyaltyCardGradientStart,
+						loyaltyCardGradientEnd: appearanceForm.loyaltyCardGradientEnd,
+						loyaltyCardTextColor: appearanceForm.loyaltyCardTextColor,
+						loyaltyCardAccentColor: appearanceForm.loyaltyCardAccentColor,
+						loyaltyCardBadgeBg: appearanceForm.loyaltyCardBadgeBg,
+						loyaltyCardBadgeText: appearanceForm.loyaltyCardBadgeText,
+						loyaltyCardBorderRadius: appearanceForm.loyaltyCardBorderRadius,
+						loyaltyCardShowShimmer: appearanceForm.loyaltyCardShowShimmer
 					}),
 					credentials: 'include'
 				});
@@ -725,6 +751,87 @@
 					<button type="button" class="btn btn-outline add-item-btn" onclick={addSidebarItem}>
 						+ Добавить пункт меню
 					</button>
+				</div>
+
+				<!-- Loyalty Card Widget -->
+				<div class="appearance-section">
+					<h3>Карточка баланса (виджет лояльности)</h3>
+					<p class="section-description">Настройте внешний вид карточки баланса на главной странице и в профиле</p>
+
+					<!-- Card Preview -->
+					<div class="loyalty-card-preview" style="
+						background: linear-gradient(135deg, {appearanceForm.loyaltyCardGradientStart}, {appearanceForm.loyaltyCardGradientEnd});
+						border-radius: {appearanceForm.loyaltyCardBorderRadius}px;
+						color: {appearanceForm.loyaltyCardTextColor};
+					">
+						<div class="preview-header">
+							<span class="preview-label" style="color: {appearanceForm.loyaltyCardAccentColor}">Баланс</span>
+							<span class="preview-badge" style="background: {appearanceForm.loyaltyCardBadgeBg}; color: {appearanceForm.loyaltyCardBadgeText}">+5%</span>
+						</div>
+						<div class="preview-balance">1,234</div>
+						<div class="preview-currency" style="color: {appearanceForm.loyaltyCardAccentColor}">бонусов</div>
+						{#if appearanceForm.loyaltyCardShowShimmer}
+							<div class="preview-shimmer"></div>
+						{/if}
+					</div>
+
+					<div class="color-grid">
+						<div class="color-picker-group">
+							<label>Градиент (начало)</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.loyaltyCardGradientStart} />
+								<input type="text" bind:value={appearanceForm.loyaltyCardGradientStart} class="color-text" />
+							</div>
+						</div>
+						<div class="color-picker-group">
+							<label>Градиент (конец)</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.loyaltyCardGradientEnd} />
+								<input type="text" bind:value={appearanceForm.loyaltyCardGradientEnd} class="color-text" />
+							</div>
+						</div>
+						<div class="color-picker-group">
+							<label>Цвет текста</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.loyaltyCardTextColor} />
+								<input type="text" bind:value={appearanceForm.loyaltyCardTextColor} class="color-text" />
+							</div>
+						</div>
+						<div class="color-picker-group">
+							<label>Цвет акцентов</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.loyaltyCardAccentColor} />
+								<input type="text" bind:value={appearanceForm.loyaltyCardAccentColor} class="color-text" />
+							</div>
+						</div>
+						<div class="color-picker-group">
+							<label>Фон бейджа</label>
+							<div class="color-input-wrapper">
+								<input type="text" bind:value={appearanceForm.loyaltyCardBadgeBg} class="color-text full-width" placeholder="rgba(255,255,255,0.95)" />
+							</div>
+							<small>HEX или RGBA формат</small>
+						</div>
+						<div class="color-picker-group">
+							<label>Текст бейджа</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.loyaltyCardBadgeText} />
+								<input type="text" bind:value={appearanceForm.loyaltyCardBadgeText} class="color-text" />
+							</div>
+						</div>
+					</div>
+
+					<div class="form-row loyalty-options">
+						<div class="form-group">
+							<label for="cardRadius">Скругление углов (px)</label>
+							<input type="number" id="cardRadius" bind:value={appearanceForm.loyaltyCardBorderRadius} min="0" max="50" />
+						</div>
+						<div class="form-group checkbox-inline">
+							<label>
+								<input type="checkbox" bind:checked={appearanceForm.loyaltyCardShowShimmer} />
+								Анимация блеска (shimmer)
+							</label>
+						</div>
+					</div>
 				</div>
 
 				<div class="button-group">
@@ -1172,6 +1279,103 @@
 		border: 1px solid rgba(239, 68, 68, 0.3);
 	}
 
+	/* Loyalty Card Preview */
+	.section-description {
+		color: #6b7280;
+		font-size: 0.875rem;
+		margin: -1rem 0 1.5rem 0;
+	}
+
+	.loyalty-card-preview {
+		position: relative;
+		padding: 1.5rem;
+		margin-bottom: 1.5rem;
+		max-width: 320px;
+		overflow: hidden;
+		box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+	}
+
+	.preview-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.5rem;
+	}
+
+	.preview-label {
+		font-size: 0.875rem;
+		font-weight: 500;
+		opacity: 0.9;
+	}
+
+	.preview-badge {
+		font-size: 0.75rem;
+		font-weight: 700;
+		padding: 0.25rem 0.5rem;
+		border-radius: 9999px;
+	}
+
+	.preview-balance {
+		font-size: 2.5rem;
+		font-weight: 800;
+		line-height: 1;
+	}
+
+	.preview-currency {
+		font-size: 0.875rem;
+		font-weight: 500;
+		opacity: 0.9;
+		margin-top: 0.25rem;
+	}
+
+	.preview-shimmer {
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 50%;
+		height: 100%;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(255, 255, 255, 0.2),
+			transparent
+		);
+		animation: shimmer 2s infinite;
+	}
+
+	@keyframes shimmer {
+		0% { left: -100%; }
+		100% { left: 200%; }
+	}
+
+	.color-text.full-width {
+		flex: 1;
+		width: 100%;
+	}
+
+	.loyalty-options {
+		margin-top: 1.5rem;
+		align-items: flex-end;
+	}
+
+	.checkbox-inline {
+		display: flex;
+		align-items: center;
+	}
+
+	.checkbox-inline label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		font-weight: 500;
+	}
+
+	.checkbox-inline input[type="checkbox"] {
+		width: 1.25rem;
+		height: 1.25rem;
+	}
+
 	@media (max-width: 768px) {
 		.section {
 			padding: 1.5rem;
@@ -1204,6 +1408,10 @@
 		.nav-item-label,
 		.nav-item-href {
 			min-width: 100%;
+		}
+
+		.loyalty-card-preview {
+			max-width: 100%;
 		}
 	}
 </style>

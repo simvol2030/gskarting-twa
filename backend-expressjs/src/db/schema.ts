@@ -372,6 +372,16 @@ export const appCustomization = sqliteTable('app_customization', {
 		{ id: 'profile', href: '/profile', label: 'Профиль', icon: '👤', visible: true, isExternal: false }
 	])),
 
+	// === ВИДЖЕТ ЛОЯЛЬНОСТИ (карточка баланса) ===
+	loyalty_card_gradient_start: text('loyalty_card_gradient_start').notNull().default('#ff6b00'),  // Начало градиента
+	loyalty_card_gradient_end: text('loyalty_card_gradient_end').notNull().default('#dc2626'),     // Конец градиента
+	loyalty_card_text_color: text('loyalty_card_text_color').notNull().default('#ffffff'),         // Цвет текста
+	loyalty_card_accent_color: text('loyalty_card_accent_color').notNull().default('#ffffff'),     // Цвет акцентов (бейдж, кнопки)
+	loyalty_card_badge_bg: text('loyalty_card_badge_bg').notNull().default('rgba(255,255,255,0.95)'), // Фон бейджа с именем
+	loyalty_card_badge_text: text('loyalty_card_badge_text').notNull().default('#e55d00'),         // Текст бейджа
+	loyalty_card_border_radius: integer('loyalty_card_border_radius').notNull().default(24),       // Скругление (px)
+	loyalty_card_show_shimmer: integer('loyalty_card_show_shimmer').notNull().default(1),          // Анимация shimmer (1/0)
+
 	// === МЕТА ===
 	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });

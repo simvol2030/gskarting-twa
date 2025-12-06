@@ -52,12 +52,44 @@ export async function initializeDatabase() {
 					dark_border_color TEXT NOT NULL DEFAULT '#2b3943',
 					bottom_nav_items TEXT NOT NULL DEFAULT '[{"id":"home","href":"/","label":"Главная","icon":"home","visible":true},{"id":"offers","href":"/offers","label":"Акции","icon":"tag","visible":true},{"id":"stores","href":"/stores","label":"Магазины","icon":"location","visible":true},{"id":"history","href":"/history","label":"Бонусы","icon":"coins","visible":true},{"id":"profile","href":"/profile","label":"Профиль","icon":"user","visible":true}]',
 					sidebar_menu_items TEXT NOT NULL DEFAULT '[{"id":"home","href":"/","label":"Главная","icon":"📊","visible":true,"isExternal":false},{"id":"products","href":"/products","label":"Товары","icon":"🛍️","visible":true,"isExternal":false},{"id":"offers","href":"/offers","label":"Акции","icon":"🎁","visible":true,"isExternal":false},{"id":"stores","href":"/stores","label":"Магазины","icon":"🏪","visible":true,"isExternal":false},{"id":"history","href":"/history","label":"История","icon":"📜","visible":true,"isExternal":false},{"id":"profile","href":"/profile","label":"Профиль","icon":"👤","visible":true,"isExternal":false}]',
+					loyalty_card_gradient_start TEXT NOT NULL DEFAULT '#ff6b00',
+					loyalty_card_gradient_end TEXT NOT NULL DEFAULT '#dc2626',
+					loyalty_card_text_color TEXT NOT NULL DEFAULT '#ffffff',
+					loyalty_card_accent_color TEXT NOT NULL DEFAULT '#ffffff',
+					loyalty_card_badge_bg TEXT NOT NULL DEFAULT 'rgba(255,255,255,0.95)',
+					loyalty_card_badge_text TEXT NOT NULL DEFAULT '#e55d00',
+					loyalty_card_border_radius INTEGER NOT NULL DEFAULT 24,
+					loyalty_card_show_shimmer INTEGER NOT NULL DEFAULT 1,
 					updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 					CHECK (id = 1)
 				);
 				INSERT OR IGNORE INTO app_customization (id) VALUES (1);
 			`);
 			console.log('✅ App customization table initialized');
+
+			// Add loyalty card columns if they don't exist (migration for existing DBs)
+			const columns = ['loyalty_card_gradient_start', 'loyalty_card_gradient_end', 'loyalty_card_text_color',
+				'loyalty_card_accent_color', 'loyalty_card_badge_bg', 'loyalty_card_badge_text',
+				'loyalty_card_border_radius', 'loyalty_card_show_shimmer'];
+			const defaults: Record<string, string> = {
+				loyalty_card_gradient_start: "'#ff6b00'",
+				loyalty_card_gradient_end: "'#dc2626'",
+				loyalty_card_text_color: "'#ffffff'",
+				loyalty_card_accent_color: "'#ffffff'",
+				loyalty_card_badge_bg: "'rgba(255,255,255,0.95)'",
+				loyalty_card_badge_text: "'#e55d00'",
+				loyalty_card_border_radius: '24',
+				loyalty_card_show_shimmer: '1'
+			};
+			for (const col of columns) {
+				try {
+					const isInt = col.includes('radius') || col.includes('shimmer');
+					nativeClient.exec(`ALTER TABLE app_customization ADD COLUMN ${col} ${isInt ? 'INTEGER' : 'TEXT'} NOT NULL DEFAULT ${defaults[col]}`);
+					console.log(`✅ Added column ${col} to app_customization`);
+				} catch (e) {
+					// Column already exists - ignore
+				}
+			}
 		} catch (error) {
 			console.log('ℹ️ App customization table already exists or error:', error);
 		}

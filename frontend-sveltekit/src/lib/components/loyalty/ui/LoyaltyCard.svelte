@@ -2,6 +2,7 @@
   import { getContext, onMount } from 'svelte';
   import type { User } from '$lib/types/loyalty';
   import { formatNumber, waitForTelegramUser, initializeUser, formatTelegramCardNumber } from '$lib/telegram';
+  import { loyaltyCardSettings } from '$lib/stores/customization';
 
   interface LoyaltyRule {
     icon: string;
@@ -95,7 +96,19 @@
   });
 </script>
 
-<div class="loyalty-card">
+<div
+  class="loyalty-card"
+  class:no-shimmer={!$loyaltyCardSettings.showShimmer}
+  style="
+    --card-gradient-start: {$loyaltyCardSettings.gradientStart};
+    --card-gradient-end: {$loyaltyCardSettings.gradientEnd};
+    --card-text-color: {$loyaltyCardSettings.textColor};
+    --card-accent-color: {$loyaltyCardSettings.accentColor};
+    --card-badge-bg: {$loyaltyCardSettings.badgeBg};
+    --card-badge-text: {$loyaltyCardSettings.badgeText};
+    --card-border-radius: {$loyaltyCardSettings.borderRadius}px;
+  "
+>
   <div class="card-header">
     <div class="card-info">
       <div class="user-badge">
@@ -154,14 +167,15 @@
 
 <style>
   .loyalty-card {
-    background: linear-gradient(135deg, var(--primary-orange), var(--primary-orange-dark), var(--accent-red));
-    border-radius: 24px;
+    background: linear-gradient(135deg, var(--card-gradient-start), var(--card-gradient-end));
+    border-radius: var(--card-border-radius);
     padding: 20px;
     margin: 16px;
-    box-shadow: 0 25px 50px -12px rgba(255, 107, 0, 0.5);
+    box-shadow: 0 25px 50px -12px color-mix(in srgb, var(--card-gradient-start) 50%, transparent);
     position: relative;
     animation: slideInDown 0.6s ease-out;
     overflow: hidden;
+    color: var(--card-text-color);
   }
 
   .loyalty-card::before {
@@ -179,6 +193,10 @@
     );
     animation: shimmer 3s infinite;
     pointer-events: none;
+  }
+
+  .loyalty-card.no-shimmer::before {
+    display: none;
   }
 
   @keyframes shimmer {
@@ -211,14 +229,14 @@
   }
 
   .card-info {
-    color: rgba(255, 255, 255, 0.85);
+    color: color-mix(in srgb, var(--card-text-color) 85%, transparent);
     font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.5px;
   }
 
   .user-badge {
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--card-badge-bg);
     backdrop-filter: blur(10px);
     border-radius: 12px;
     padding: 6px 14px;
@@ -227,14 +245,14 @@
   }
 
   .user-name {
-    color: var(--primary-orange-dark);
+    color: var(--card-badge-text);
     font-weight: bold;
     font-size: 16px;
     letter-spacing: -0.025em;
   }
 
   .card-number {
-    color: var(--primary-orange);
+    color: var(--card-gradient-start);
     font-size: 13px;
     font-weight: 600;
     margin-top: 2px;
@@ -242,7 +260,7 @@
   }
 
   .qr-button {
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--card-badge-bg);
     backdrop-filter: blur(10px);
     padding: 16px;
     border-radius: 16px;
@@ -276,13 +294,14 @@
   .balance-amount {
     font-size: 40px;
     font-weight: bold;
-    color: white;
+    color: var(--card-text-color);
     letter-spacing: -0.025em;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   }
 
   .balance-label {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--card-accent-color);
+    opacity: 0.9;
     font-size: 13px;
     font-weight: 500;
     margin-top: 2px;
@@ -294,7 +313,7 @@
     justify-content: space-between;
     margin-top: 16px;
     padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: 1px solid color-mix(in srgb, var(--card-text-color) 20%, transparent);
     position: relative;
     z-index: 1;
   }
@@ -318,7 +337,7 @@
 
   .loyalty-info-label {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.7);
+    color: color-mix(in srgb, var(--card-text-color) 70%, transparent);
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -326,7 +345,7 @@
 
   .loyalty-info-value {
     font-size: 13px;
-    color: white;
+    color: var(--card-text-color);
     font-weight: bold;
     margin-top: 2px;
   }
@@ -334,18 +353,18 @@
   .loyalty-info-divider {
     width: 1px;
     height: 40px;
-    background: rgba(255, 255, 255, 0.2);
+    background: color-mix(in srgb, var(--card-text-color) 20%, transparent);
   }
 
   .loyalty-rules-button {
     width: 100%;
     margin-top: 12px;
     padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.15);
+    background: color-mix(in srgb, var(--card-text-color) 15%, transparent);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid color-mix(in srgb, var(--card-text-color) 30%, transparent);
     border-radius: 12px;
-    color: white;
+    color: var(--card-text-color);
     font-size: 12px;
     font-weight: 600;
     display: flex;
@@ -359,7 +378,7 @@
   }
 
   .loyalty-rules-button:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: color-mix(in srgb, var(--card-text-color) 25%, transparent);
     transform: translateY(-2px);
   }
 

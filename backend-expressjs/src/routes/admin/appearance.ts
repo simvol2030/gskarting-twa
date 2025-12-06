@@ -83,8 +83,33 @@ function validateAppearanceData(data: any): string | null {
 		'primaryColor', 'primaryColorDark', 'primaryColorLight',
 		'secondaryColor', 'secondaryColorDark', 'accentColor',
 		'darkBgPrimary', 'darkBgSecondary', 'darkBgTertiary',
-		'darkPrimaryColor', 'darkTextPrimary', 'darkTextSecondary', 'darkBorderColor'
+		'darkPrimaryColor', 'darkTextPrimary', 'darkTextSecondary', 'darkBorderColor',
+		'loyaltyCardGradientStart', 'loyaltyCardGradientEnd', 'loyaltyCardTextColor',
+		'loyaltyCardAccentColor', 'loyaltyCardBadgeText'
 	];
+
+	// Validate RGBA color (for badge background)
+	if (data.loyaltyCardBadgeBg !== undefined) {
+		const rgbaPattern = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+))?\s*\)$/;
+		if (!isValidHexColor(data.loyaltyCardBadgeBg) && !rgbaPattern.test(data.loyaltyCardBadgeBg)) {
+			return 'Неверный формат цвета для loyaltyCardBadgeBg. Используйте HEX (#RRGGBB) или RGBA';
+		}
+	}
+
+	// Validate loyalty card border radius
+	if (data.loyaltyCardBorderRadius !== undefined) {
+		const radius = Number(data.loyaltyCardBorderRadius);
+		if (isNaN(radius) || radius < 0 || radius > 50) {
+			return 'Радиус скругления карты лояльности должен быть от 0 до 50';
+		}
+	}
+
+	// Validate loyalty card shimmer toggle
+	if (data.loyaltyCardShowShimmer !== undefined) {
+		if (typeof data.loyaltyCardShowShimmer !== 'boolean' && data.loyaltyCardShowShimmer !== 0 && data.loyaltyCardShowShimmer !== 1) {
+			return 'loyaltyCardShowShimmer должен быть boolean';
+		}
+	}
 
 	for (const field of colorFields) {
 		if (data[field] !== undefined) {
@@ -200,6 +225,16 @@ router.get('/', async (req, res) => {
 				bottomNavItems: JSON.parse(s.bottom_nav_items),
 				sidebarMenuItems: JSON.parse(s.sidebar_menu_items),
 
+				// Loyalty Card Widget
+				loyaltyCardGradientStart: s.loyalty_card_gradient_start,
+				loyaltyCardGradientEnd: s.loyalty_card_gradient_end,
+				loyaltyCardTextColor: s.loyalty_card_text_color,
+				loyaltyCardAccentColor: s.loyalty_card_accent_color,
+				loyaltyCardBadgeBg: s.loyalty_card_badge_bg,
+				loyaltyCardBadgeText: s.loyalty_card_badge_text,
+				loyaltyCardBorderRadius: s.loyalty_card_border_radius,
+				loyaltyCardShowShimmer: Boolean(s.loyalty_card_show_shimmer),
+
 				// Meta
 				updatedAt: s.updated_at
 			}
@@ -270,6 +305,16 @@ router.put('/', requireRole('super-admin', 'editor'), async (req, res) => {
 				: JSON.stringify(data.sidebarMenuItems);
 		}
 
+		// Loyalty Card Widget
+		if (data.loyaltyCardGradientStart !== undefined) updates.loyalty_card_gradient_start = data.loyaltyCardGradientStart;
+		if (data.loyaltyCardGradientEnd !== undefined) updates.loyalty_card_gradient_end = data.loyaltyCardGradientEnd;
+		if (data.loyaltyCardTextColor !== undefined) updates.loyalty_card_text_color = data.loyaltyCardTextColor;
+		if (data.loyaltyCardAccentColor !== undefined) updates.loyalty_card_accent_color = data.loyaltyCardAccentColor;
+		if (data.loyaltyCardBadgeBg !== undefined) updates.loyalty_card_badge_bg = data.loyaltyCardBadgeBg;
+		if (data.loyaltyCardBadgeText !== undefined) updates.loyalty_card_badge_text = data.loyaltyCardBadgeText;
+		if (data.loyaltyCardBorderRadius !== undefined) updates.loyalty_card_border_radius = Number(data.loyaltyCardBorderRadius);
+		if (data.loyaltyCardShowShimmer !== undefined) updates.loyalty_card_show_shimmer = data.loyaltyCardShowShimmer ? 1 : 0;
+
 		// Update settings
 		await db.update(appCustomization).set(updates).where(eq(appCustomization.id, 1));
 
@@ -307,6 +352,14 @@ router.put('/', requireRole('super-admin', 'editor'), async (req, res) => {
 				darkBorderColor: s.dark_border_color,
 				bottomNavItems: JSON.parse(s.bottom_nav_items),
 				sidebarMenuItems: JSON.parse(s.sidebar_menu_items),
+				loyaltyCardGradientStart: s.loyalty_card_gradient_start,
+				loyaltyCardGradientEnd: s.loyalty_card_gradient_end,
+				loyaltyCardTextColor: s.loyalty_card_text_color,
+				loyaltyCardAccentColor: s.loyalty_card_accent_color,
+				loyaltyCardBadgeBg: s.loyalty_card_badge_bg,
+				loyaltyCardBadgeText: s.loyalty_card_badge_text,
+				loyaltyCardBorderRadius: s.loyalty_card_border_radius,
+				loyaltyCardShowShimmer: Boolean(s.loyalty_card_show_shimmer),
 				updatedAt: s.updated_at
 			}
 		});

@@ -36,6 +36,17 @@ export interface CustomizationDarkTheme {
 	borderColor: string;
 }
 
+export interface LoyaltyCardSettings {
+	gradientStart: string;
+	gradientEnd: string;
+	textColor: string;
+	accentColor: string;
+	badgeBg: string;
+	badgeText: string;
+	borderRadius: number;
+	showShimmer: boolean;
+}
+
 export interface CustomizationData {
 	appName: string;
 	appSlogan: string;
@@ -47,6 +58,7 @@ export interface CustomizationData {
 		bottomNav: NavItem[];
 		sidebarMenu: NavItem[];
 	};
+	loyaltyCard: LoyaltyCardSettings;
 }
 
 // Default values (fallback if API is not available)
@@ -88,6 +100,16 @@ const defaultCustomization: CustomizationData = {
 			{ id: 'history', href: '/history', label: 'История', icon: '📜', visible: true, isExternal: false },
 			{ id: 'profile', href: '/profile', label: 'Профиль', icon: '👤', visible: true, isExternal: false }
 		]
+	},
+	loyaltyCard: {
+		gradientStart: '#ff6b00',
+		gradientEnd: '#dc2626',
+		textColor: '#ffffff',
+		accentColor: '#ffffff',
+		badgeBg: 'rgba(255,255,255,0.95)',
+		badgeText: '#e55d00',
+		borderRadius: 24,
+		showShimmer: true
 	}
 };
 
@@ -117,6 +139,7 @@ export const colors = derived(customization, $c => $c.colors);
 export const darkTheme = derived(customization, $c => $c.darkTheme);
 export const bottomNavItems = derived(customization, $c => $c.navigation.bottomNav.filter(item => item.visible));
 export const sidebarMenuItems = derived(customization, $c => $c.navigation.sidebarMenu.filter(item => item.visible));
+export const loyaltyCardSettings = derived(customization, $c => $c.loyaltyCard);
 
 /**
  * Load customization settings from API
