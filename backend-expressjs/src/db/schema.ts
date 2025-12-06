@@ -419,6 +419,15 @@ export const triggerTemplates = sqliteTable('trigger_templates', {
 	// State
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 	auto_send: integer('auto_send', { mode: 'boolean' }).notNull().default(false),
+
+	// Timestamps
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	activeIdx: index('idx_triggers_active').on(table.is_active),
+	eventIdx: index('idx_triggers_event').on(table.event_type, table.is_active)
+}));
+
 // =====================================================
 // SHOP / E-COMMERCE TABLES
 // =====================================================
@@ -480,8 +489,11 @@ export const orders = sqliteTable('orders', {
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
-	activeIdx: index('idx_triggers_active').on(table.is_active),
-	eventIdx: index('idx_triggers_event').on(table.event_type, table.is_active)
+	numberIdx: index('idx_orders_number').on(table.order_number),
+	userIdx: index('idx_orders_user').on(table.user_id),
+	statusIdx: index('idx_orders_status').on(table.status),
+	createdIdx: index('idx_orders_created').on(table.created_at),
+	storeIdx: index('idx_orders_store').on(table.store_id)
 }));
 
 /**
