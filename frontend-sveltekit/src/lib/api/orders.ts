@@ -103,6 +103,29 @@ export interface OrderDetails {
 	}[];
 }
 
+export interface UserOrderHistoryItem {
+	id: number;
+	orderNumber: string;
+	status: string;
+	statusLabel: string;
+	customerName: string;
+	customerPhone: string;
+	deliveryType: string;
+	deliveryAddress: string | null;
+	store: {
+		name: string;
+		address: string;
+	} | null;
+	totals: {
+		subtotal: number;
+		deliveryCost: number;
+		discount: number;
+		total: number;
+	};
+	notes: string | null;
+	createdAt: string;
+}
+
 export const ordersAPI = {
 	/**
 	 * Get shop settings for checkout
@@ -147,5 +170,24 @@ export const ordersAPI = {
 		}
 
 		return data.data;
+	},
+
+	/**
+	 * Get current user's order history
+	 * Requires user to be logged in (telegram_user_id cookie)
+	 */
+	async getMyOrders(): Promise<UserOrderHistoryItem[]> {
+		const response = await fetchWithCredentials(`${API_BASE}/my`);
+
+		const data = await response.json();
+
+		if (!response.ok) {
+			if (response.status === 401) {
+				throw new Error('NOT_AUTHENTICATED');
+			}
+			throw new Error(data.error || 'Failed to fetch orders');
+		}
+
+		return data.data.orders;
 	}
 };

@@ -13,10 +13,29 @@ import {
 	cartItems,
 	products,
 	shopSettings,
-	stores
+	stores,
+	loyaltyUsers
 } from '../../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { notifyNewOrder } from '../../services/notifications';
+
+// Helper: Get telegram user ID from cookies
+function getTelegramUserId(req: any): number | null {
+	const id = req.cookies?.telegram_user_id;
+	if (!id) return null;
+	const parsed = parseInt(id);
+	return isNaN(parsed) ? null : parsed;
+}
+
+// Helper: Get loyalty user ID by telegram_user_id
+async function getLoyaltyUserId(telegramUserId: number): Promise<number | null> {
+	const [user] = await db
+		.select({ id: loyaltyUsers.id })
+		.from(loyaltyUsers)
+		.where(eq(loyaltyUsers.telegram_user_id, telegramUserId))
+		.limit(1);
+	return user?.id || null;
+}
 
 const router = Router();
 
@@ -199,11 +218,19 @@ router.post('/', async (req, res) => {
 			}
 		}
 
+		// Get user_id if logged in via Telegram
+		let userId: number | null = null;
+		const telegramUserId = getTelegramUserId(req);
+		if (telegramUserId) {
+			userId = await getLoyaltyUserId(telegramUserId);
+		}
+
 		// Create order
 		const [newOrder] = await db
 			.insert(orders)
 			.values({
 				order_number: orderNumber,
+				user_id: userId, // Link to loyalty user if logged in
 				status: 'new',
 				customer_name: customerName,
 				customer_phone: customerPhone,
@@ -443,6 +470,108 @@ router.get('/settings/shop', async (req, res) => {
 		});
 	} catch (error: any) {
 		console.error('Error fetching shop settings:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * GET /api/orders/my - Get current user's order history
+ * Requires telegram_user_id cookie
+ */
+router.get('/my', async (req, res) => {
+	try {
+		const telegramUserId = getTelegramUserId(req);
+
+		if (!telegramUserId) {
+			return res.status(401).json({
+				success: false,
+				error: 'Not authenticated'
+			});
+		}
+
+		// Get loyalty user ID
+		const userId = await getLoyaltyUserId(telegramUserId);
+
+		if (!userId) {
+			return res.status(404).json({
+				success: false,
+				error: 'User not found'
+			});
+		}
+
+		// Get user's orders
+		const userOrders = await db
+			.select({
+				id: orders.id,
+				orderNumber: orders.order_number,
+				status: orders.status,
+				customerName: orders.customer_name,
+				customerPhone: orders.customer_phone,
+				deliveryType: orders.delivery_type,
+				deliveryAddress: orders.delivery_address,
+				storeId: orders.store_id,
+				subtotal: orders.subtotal,
+				deliveryCost: orders.delivery_cost,
+				discountAmount: orders.discount_amount,
+				total: orders.total,
+				notes: orders.notes,
+				createdAt: orders.created_at
+			})
+			.from(orders)
+			.where(eq(orders.user_id, userId))
+			.orderBy(desc(orders.created_at))
+			.limit(50);
+
+		// Get store info for pickup orders
+		const storeIds = [...new Set(userOrders.filter(o => o.storeId).map(o => o.storeId))];
+		const storesMap = new Map<number, { name: string; address: string }>();
+
+		if (storeIds.length > 0) {
+			const storesData = await db
+				.select({ id: stores.id, name: stores.name, address: stores.address })
+				.from(stores);
+
+			for (const store of storesData) {
+				storesMap.set(store.id, { name: store.name, address: store.address });
+			}
+		}
+
+		// Status labels for display
+		const statusLabels: Record<string, string> = {
+			new: 'Новый',
+			confirmed: 'Подтверждён',
+			processing: 'В обработке',
+			shipped: 'Отправлен',
+			delivered: 'Доставлен',
+			cancelled: 'Отменён'
+		};
+
+		res.json({
+			success: true,
+			data: {
+				orders: userOrders.map(order => ({
+					id: order.id,
+					orderNumber: order.orderNumber,
+					status: order.status,
+					statusLabel: statusLabels[order.status] || order.status,
+					customerName: order.customerName,
+					customerPhone: order.customerPhone,
+					deliveryType: order.deliveryType,
+					deliveryAddress: order.deliveryAddress,
+					store: order.storeId ? storesMap.get(order.storeId) : null,
+					totals: {
+						subtotal: toRubles(order.subtotal),
+						deliveryCost: toRubles(order.deliveryCost),
+						discount: toRubles(order.discountAmount),
+						total: toRubles(order.total)
+					},
+					notes: order.notes,
+					createdAt: order.createdAt
+				}))
+			}
+		});
+	} catch (error: any) {
+		console.error('Error fetching user orders:', error);
 		res.status(500).json({ success: false, error: 'Internal server error' });
 	}
 });

@@ -18,6 +18,15 @@ export const load: PageServerLoad = async () => {
   // H-004 FIX: Removed "pets" item - not implemented in MVP
   const profileMenu = [
     {
+      id: 'orders',
+      icon: '📦',
+      iconColor: 'orange',
+      title: 'Мои заказы',
+      description: 'История заказов магазина',
+      action: 'link',
+      href: '/orders'
+    },
+    {
       id: 'notifications',
       icon: '🔔',
       iconColor: 'blue',
