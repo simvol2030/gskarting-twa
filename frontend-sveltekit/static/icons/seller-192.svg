@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" fill="#0f172a" rx="24"/>
+  <circle cx="96" cy="70" r="35" fill="#10b981"/>
+  <path d="M40 160 C40 120, 70 100, 96 100 C122 100, 152 120, 152 160" fill="#10b981"/>
+  <text x="96" y="185" text-anchor="middle" fill="#f8fafc" font-family="Arial" font-size="14" font-weight="bold">SELLER</text>
+</svg>
