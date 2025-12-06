@@ -4,6 +4,7 @@ import { expireOldPoints } from './expirePoints';
 import { checkScheduledCampaigns } from './checkScheduledCampaigns';
 import { processBirthdayTrigger } from './processBirthdayTrigger';
 import { processInactiveTrigger } from './processInactiveTrigger';
+import { cleanupPendingDiscounts } from './cleanupPendingDiscounts';
 
 /**
  * Initialize all scheduled jobs
@@ -14,6 +15,7 @@ import { processInactiveTrigger } from './processInactiveTrigger';
  * - Scheduled campaigns check (every minute)
  * - Birthday trigger (daily at 9:00 AM Moscow / 6:00 AM UTC)
  * - Inactive customers trigger (daily at 10:00 AM Moscow / 7:00 AM UTC)
+ * - Pending discounts cleanup (hourly) - MEDIUM-4 FIX
  *
  * In development mode, jobs run in dry-run mode (no actual changes)
  */
@@ -144,10 +146,34 @@ export function initScheduledJobs() {
 		timezone: 'UTC'
 	});
 
+	// MEDIUM-4 FIX: Cleanup pending discounts hourly
+	// Runs every hour at minute 15
+	cron.schedule('15 * * * *', async () => {
+		console.log('[CRON] Starting pending discounts cleanup job...');
+		console.log(`[CRON] Current time: ${new Date().toISOString()}`);
+
+		try {
+			const result = await cleanupPendingDiscounts(isDevelopment);
+			const total = result.expiredDeleted + result.appliedDeleted + result.failedDeleted + result.activeChecksDeleted;
+
+			if (isDevelopment) {
+				console.log(`[CRON] Pending discounts cleanup completed (DRY-RUN). Would delete: ${total} records`);
+			} else {
+				console.log(`[CRON] Pending discounts cleanup completed. Deleted: expired=${result.expiredDeleted}, applied=${result.appliedDeleted}, failed=${result.failedDeleted}, activeChecks=${result.activeChecksDeleted}`);
+			}
+		} catch (error) {
+			console.error('[CRON] Pending discounts cleanup failed:', error);
+			// Don't throw - let cron continue running
+		}
+	}, {
+		timezone: 'UTC'
+	});
+
 	console.log('[CRON] Scheduled jobs initialized');
 	console.log('[CRON] Points expiration: Daily at 2:00 AM UTC');
 	console.log('[CRON] Transaction cleanup: Daily at 3:00 AM UTC');
 	console.log('[CRON] Scheduled campaigns check: Every minute');
 	console.log('[CRON] Birthday trigger: Daily at 9:00 AM Moscow (6:00 UTC)');
 	console.log('[CRON] Inactive customers trigger: Daily at 10:00 AM Moscow (7:00 UTC)');
+	console.log('[CRON] Pending discounts cleanup: Hourly at :15');
 }

@@ -1,11 +1,14 @@
 /**
  * API layer для интерфейса кассира
  * Легко переключается с моков на реальный backend
+ *
+ * MEDIUM-1 FIX: Добавлена retry логика для надёжности
  */
 
 import { MOCK_STORES, MOCK_CUSTOMERS, type Store, type Customer, type Transaction } from '$lib/data/cashier-mocks';
 import { parseQRData } from '$lib/utils/qr-generator';
 import { PUBLIC_BACKEND_URL } from '$env/static/public';
+import { fetchWithRetry } from '$lib/utils/retry';
 
 // ===== Режим работы (true = моки, false = реальный API) =====
 const USE_MOCKS = false; // ✅ ВСЕГДА REAL API
@@ -141,20 +144,36 @@ export async function createTransaction(data: {
 			? new URL('/api/transactions', BACKEND_URL).toString()
 			: '/api/transactions';
 		console.log('[createTransaction] Fetching:', url);
-		const response = await fetch(url, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(data)
-		});
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			console.error('[createTransaction] Error:', response.status, errorText);
-			return { success: false, error: 'Ошибка при создании транзакции' };
+		try {
+			// MEDIUM-1 FIX: Используем retry для надёжности при нестабильной сети
+			const response = await fetchWithRetry(url, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(data)
+			}, {
+				maxRetries: 3,
+				baseDelayMs: 1000
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				console.error('[createTransaction] Error:', response.status, errorData);
+				return {
+					success: false,
+					error: errorData.message || errorData.error || 'Ошибка при создании транзакции'
+				};
+			}
+
+			const result = await response.json();
+			return { success: true, transaction: result.transaction };
+		} catch (error) {
+			console.error('[createTransaction] Network error after retries:', error);
+			return {
+				success: false,
+				error: 'Ошибка сети. Проверьте подключение и попробуйте снова.'
+			};
 		}
-
-		const transaction = await response.json();
-		return { success: true, transaction };
 	}
 }
 

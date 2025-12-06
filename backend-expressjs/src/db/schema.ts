@@ -418,6 +418,26 @@ export const triggerLogs = sqliteTable('trigger_logs', {
 	createdIdx: index('idx_trigger_logs_created').on(table.created_at)
 }));
 
+/**
+ * Active Checks table - временное хранилище сумм предчека от агентов
+ * Персистентная замена для in-memory preCheckStore (BUG-4 FIX)
+ * TTL: 60 секунд (автоматически очищается)
+ */
+export const activeChecks = sqliteTable('active_checks', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	store_id: integer('store_id')
+		.notNull()
+		.unique()
+		.references(() => stores.id, { onDelete: 'cascade' }),
+	store_name: text('store_name').notNull(),
+	check_amount: real('check_amount').notNull(),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	expires_at: text('expires_at').notNull()
+}, (table) => ({
+	storeIdx: index('idx_active_checks_store').on(table.store_id),
+	expiresIdx: index('idx_active_checks_expires').on(table.expires_at)
+}));
+
 // TypeScript типы, выведенные из схемы
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -542,3 +562,6 @@ export type NewCampaignImage = typeof campaignImages.$inferInsert;
 
 export type TriggerLog = typeof triggerLogs.$inferSelect;
 export type NewTriggerLog = typeof triggerLogs.$inferInsert;
+
+export type ActiveCheck = typeof activeChecks.$inferSelect;
+export type NewActiveCheck = typeof activeChecks.$inferInsert;

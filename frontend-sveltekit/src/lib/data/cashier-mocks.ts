@@ -11,10 +11,12 @@ export interface Store {
 }
 
 export interface Customer {
+	id: number;         // ID пользователя в БД (обязательно для транзакций)
 	cardNumber: string; // 6-значный номер (без пробелов)
 	name: string;
 	balance: number;
 	phone?: string;
+	createdAt?: string; // Дата регистрации
 }
 
 export interface Transaction {
@@ -72,30 +74,35 @@ export const MOCK_STORES: Record<number, Store> = {
 // ===== Тестовые клиенты =====
 export const MOCK_CUSTOMERS: Customer[] = [
 	{
+		id: 1,
 		cardNumber: '421856',
 		name: 'Сергей Мурзин',
 		balance: 8456,
 		phone: '+7 (999) 123-45-67'
 	},
 	{
+		id: 2,
 		cardNumber: '234567',
 		name: 'Анна Петрова',
 		balance: 3210,
 		phone: '+7 (999) 234-56-78'
 	},
 	{
+		id: 3,
 		cardNumber: '345678',
 		name: 'Иван Сидоров',
 		balance: 12500,
 		phone: '+7 (999) 345-67-89'
 	},
 	{
+		id: 4,
 		cardNumber: '456789',
 		name: 'Мария Кузнецова',
 		balance: 560,
 		phone: '+7 (999) 456-78-90'
 	},
 	{
+		id: 5,
 		cardNumber: '567890',
 		name: 'Дмитрий Волков',
 		balance: 18200,

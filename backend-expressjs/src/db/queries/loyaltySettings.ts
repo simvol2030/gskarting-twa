@@ -21,10 +21,11 @@ const DEFAULT_SETTINGS: LoyaltySettings = {
 /**
  * Get loyalty settings (always returns id=1 row or default)
  * This function is cached for performance - settings rarely change
+ * MEDIUM-2 FIX: Reduced TTL from 60s to 30s for faster propagation
  */
 let cachedSettings: LoyaltySettings | null = null;
 let cacheTimestamp = 0;
-const CACHE_TTL_MS = 60000; // 1 minute cache
+const CACHE_TTL_MS = 30000; // 30 seconds cache (MEDIUM-2 FIX: was 60s)
 
 export async function getLoyaltySettings(): Promise<LoyaltySettings> {
 	const now = Date.now();
