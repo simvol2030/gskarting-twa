@@ -84,6 +84,10 @@
 					<span class="icon">🏪</span>
 					<span>Магазины</span>
 				</a>
+				<a href="/sellers" class:active={$page.url.pathname.startsWith('/sellers')} onclick={closeMobileMenu}>
+					<span class="icon">👤</span>
+					<span>Продавцы</span>
+				</a>
 				<a href="/statistics" class:active={$page.url.pathname.startsWith('/statistics')} onclick={closeMobileMenu}>
 					<span class="icon">📈</span>
 					<span>Статистика</span>

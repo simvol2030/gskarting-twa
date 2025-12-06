@@ -97,6 +97,7 @@ export const transactions = sqliteTable('transactions', {
 		.notNull()
 		.references(() => loyaltyUsers.id, { onDelete: 'cascade' }),
 	store_id: integer('store_id').references(() => stores.id, { onDelete: 'set null' }),
+	seller_id: integer('seller_id'), // ID продавца, который провёл транзакцию (PWA)
 	title: text('title').notNull(),
 	amount: real('amount').notNull(),
 	type: text('type', { enum: ['earn', 'spend'] }).notNull(),
@@ -105,12 +106,14 @@ export const transactions = sqliteTable('transactions', {
 	cashback_earned: real('cashback_earned'), // Начислено баллов
 	spent: text('spent'),
 	store_name: text('store_name'),
+	seller_name: text('seller_name'), // Имя продавца (денормализовано для отчётов)
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
 	// Sprint 5 Audit Cycle 1 Fix: Индексы для dashboard queries
 	createdAtIdx: index('idx_transactions_created_at').on(table.created_at),
 	typeCreatedIdx: index('idx_transactions_type_created').on(table.type, table.created_at),
-	storeIdIdx: index('idx_transactions_store_id').on(table.store_id)
+	storeIdIdx: index('idx_transactions_store_id').on(table.store_id),
+	sellerIdIdx: index('idx_transactions_seller_id').on(table.seller_id)
 }));
 
 /**
@@ -242,6 +245,20 @@ export const storeImages = sqliteTable('store_images', {
 	storeIdIdx: index('idx_store_images_store_id').on(table.store_id),
 	sortOrderIdx: index('idx_store_images_sort').on(table.store_id, table.sort_order)
 }));
+
+/**
+ * Sellers table - продавцы для PWA-приложения
+ * Авторизация по PIN-коду
+ * Примечание: PIN хранится в bcrypt-хэше, индексация бесполезна
+ * (поиск идёт через bcrypt.compare, а не через индекс)
+ */
+export const sellers = sqliteTable('sellers', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull(), // Имя продавца (Анна, Мария)
+	pin: text('pin').notNull(), // 4-значный PIN (хэшированный bcrypt)
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
 
 /**
  * Pending Discounts table - очередь скидок для агентов
@@ -565,3 +582,6 @@ export type NewTriggerLog = typeof triggerLogs.$inferInsert;
 
 export type ActiveCheck = typeof activeChecks.$inferSelect;
 export type NewActiveCheck = typeof activeChecks.$inferInsert;
+
+export type Seller = typeof sellers.$inferSelect;
+export type NewSeller = typeof sellers.$inferInsert;
