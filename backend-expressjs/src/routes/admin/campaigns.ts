@@ -1,6 +1,8 @@
 /**
  * Admin API: Campaigns Management (рассылки)
  * CRUD операции + отправка кампаний
+ *
+ * ROUTE ORDERING: Static routes MUST come before parametric routes (/:id)
  */
 
 import { Router } from 'express';
@@ -22,12 +24,11 @@ import {
 } from '../../db/queries/campaigns';
 import {
 	startCampaign,
-	prepareCampaign,
-	scheduleCampaign,
-	previewAudience
+	scheduleCampaign
 } from '../../services/campaignService';
 import { getSegmentCount, type SegmentFilters } from '../../services/segmentationService';
 import { createCampaignImage, getAllCampaignImages, deleteCampaignImage, getCampaignImageById } from '../../db/queries/campaignImages';
+import { safeJsonParse, validatePagination } from '../../utils/helpers';
 
 const router = Router();
 
@@ -56,22 +57,169 @@ const upload = multer({
 // 🔒 All routes require authentication
 router.use(authenticateSession);
 
-// ==================== CAMPAIGNS ====================
+// ==================== STATIC ROUTES FIRST ====================
+// These must be defined BEFORE parametric routes like /:id
+
+/**
+ * POST /api/admin/campaigns/preview-audience - Превью аудитории
+ */
+router.post('/preview-audience', async (req, res) => {
+	try {
+		const { targetType, targetFilters } = req.body;
+
+		let count = 0;
+
+		if (targetType === 'all') {
+			count = await getSegmentCount({});
+		} else if (targetFilters) {
+			count = await getSegmentCount(targetFilters as SegmentFilters);
+		}
+
+		res.json({
+			success: true,
+			data: { count }
+		});
+	} catch (error: any) {
+		console.error('Error previewing audience:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * GET /api/admin/campaigns/images - Список изображений
+ */
+router.get('/images', async (req, res) => {
+	try {
+		const { page, limit, offset } = validatePagination(
+			req.query.page as string,
+			req.query.limit as string
+		);
+
+		const images = await getAllCampaignImages({ limit, offset });
+
+		res.json({
+			success: true,
+			data: {
+				images: images.map(img => ({
+					id: img.id,
+					url: `/api/uploads/campaigns/${img.filename}`,
+					filename: img.filename,
+					originalName: img.original_name,
+					size: img.size,
+					createdAt: img.created_at
+				}))
+			}
+		});
+	} catch (error: any) {
+		console.error('Error fetching campaign images:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * POST /api/admin/campaigns/images/upload - Загрузить изображение
+ * ONLY: super-admin, editor
+ */
+router.post('/images/upload', requireRole('super-admin', 'editor'), upload.single('image'), async (req, res) => {
+	try {
+		const file = req.file;
+
+		if (!file) {
+			return res.status(400).json({ success: false, error: 'Файл не загружен' });
+		}
+
+		// Generate unique filename
+		const timestamp = Date.now();
+		const randomSuffix = Math.random().toString(36).substring(2, 8);
+		const filename = `campaign_${timestamp}_${randomSuffix}.webp`;
+		const filepath = path.join(UPLOADS_DIR, filename);
+
+		// Process image with sharp
+		await sharp(file.buffer)
+			.resize(1280, 1280, {
+				fit: 'inside',
+				withoutEnlargement: true
+			})
+			.webp({ quality: 85 })
+			.toFile(filepath);
+
+		// Get file size
+		const stats = fs.statSync(filepath);
+
+		// Save to DB
+		const image = await createCampaignImage({
+			filename,
+			original_name: file.originalname,
+			mime_type: 'image/webp',
+			size: stats.size
+		});
+
+		const imageUrl = `/api/uploads/campaigns/${filename}`;
+
+		res.status(201).json({
+			success: true,
+			data: {
+				id: image.id,
+				url: imageUrl,
+				filename
+			}
+		});
+	} catch (error: any) {
+		console.error('Error uploading campaign image:', error);
+		res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+	}
+});
+
+/**
+ * DELETE /api/admin/campaigns/images/:imageId - Удалить изображение
+ * ONLY: super-admin
+ */
+router.delete('/images/:imageId', requireRole('super-admin'), async (req, res) => {
+	try {
+		const imageId = parseInt(req.params.imageId);
+
+		if (isNaN(imageId)) {
+			return res.status(400).json({ success: false, error: 'Invalid image ID' });
+		}
+
+		const image = await getCampaignImageById(imageId);
+
+		if (!image) {
+			return res.status(404).json({ success: false, error: 'Изображение не найдено' });
+		}
+
+		// Delete file
+		const filepath = path.join(UPLOADS_DIR, image.filename);
+		if (fs.existsSync(filepath)) {
+			fs.unlinkSync(filepath);
+		}
+
+		// Delete from DB
+		await deleteCampaignImage(imageId);
+
+		res.json({ success: true, message: 'Изображение удалено' });
+	} catch (error: any) {
+		console.error('Error deleting campaign image:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+// ==================== CAMPAIGNS LIST & CREATE ====================
 
 /**
  * GET /api/admin/campaigns - Список кампаний
  */
 router.get('/', async (req, res) => {
 	try {
-		const { status, page = '1', limit = '20' } = req.query;
-
-		const pageNum = parseInt(page as string);
-		const limitNum = parseInt(limit as string);
-		const offset = (pageNum - 1) * limitNum;
+		const { status } = req.query;
+		const { page, limit, offset } = validatePagination(
+			req.query.page as string,
+			req.query.limit as string
+		);
 
 		const campaigns = await getAllCampaigns({
 			status: status as string | undefined,
-			limit: limitNum,
+			limit,
 			offset
 		});
 
@@ -89,9 +237,9 @@ router.get('/', async (req, res) => {
 					buttonUrl: c.button_url,
 					offerId: c.offer_id,
 					targetType: c.target_type,
-					targetFilters: c.target_filters ? JSON.parse(c.target_filters) : null,
+					targetFilters: safeJsonParse(c.target_filters, null),
 					triggerType: c.trigger_type,
-					triggerConfig: c.trigger_config ? JSON.parse(c.trigger_config) : null,
+					triggerConfig: safeJsonParse(c.trigger_config, null),
 					status: c.status,
 					scheduledAt: c.scheduled_at,
 					startedAt: c.started_at,
@@ -104,65 +252,15 @@ router.get('/', async (req, res) => {
 					updatedAt: c.updated_at
 				})),
 				pagination: {
-					page: pageNum,
-					limit: limitNum,
+					page,
+					limit,
 					total,
-					totalPages: Math.ceil(total / limitNum)
+					totalPages: Math.ceil(total / limit)
 				}
 			}
 		});
 	} catch (error: any) {
 		console.error('Error fetching campaigns:', error);
-		res.status(500).json({ success: false, error: 'Internal server error' });
-	}
-});
-
-/**
- * GET /api/admin/campaigns/:id - Получить кампанию
- */
-router.get('/:id', async (req, res) => {
-	try {
-		const campaignId = parseInt(req.params.id);
-		const campaign = await getCampaignById(campaignId);
-
-		if (!campaign) {
-			return res.status(404).json({ success: false, error: 'Кампания не найдена' });
-		}
-
-		// Получаем статистику получателей
-		const recipientStats = await getCampaignRecipientsStats(campaignId);
-
-		res.json({
-			success: true,
-			data: {
-				id: campaign.id,
-				title: campaign.title,
-				messageText: campaign.message_text,
-				messageImage: campaign.message_image,
-				buttonText: campaign.button_text,
-				buttonUrl: campaign.button_url,
-				offerId: campaign.offer_id,
-				targetType: campaign.target_type,
-				targetFilters: campaign.target_filters ? JSON.parse(campaign.target_filters) : null,
-				triggerType: campaign.trigger_type,
-				triggerConfig: campaign.trigger_config ? JSON.parse(campaign.trigger_config) : null,
-				status: campaign.status,
-				scheduledAt: campaign.scheduled_at,
-				startedAt: campaign.started_at,
-				completedAt: campaign.completed_at,
-				stats: {
-					totalRecipients: campaign.total_recipients,
-					sentCount: campaign.sent_count,
-					deliveredCount: campaign.delivered_count,
-					failedCount: campaign.failed_count,
-					...recipientStats
-				},
-				createdAt: campaign.created_at,
-				updatedAt: campaign.updated_at
-			}
-		});
-	} catch (error: any) {
-		console.error('Error fetching campaign:', error);
 		res.status(500).json({ success: false, error: 'Internal server error' });
 	}
 });
@@ -226,6 +324,64 @@ router.post('/', requireRole('super-admin', 'editor'), async (req, res) => {
 	}
 });
 
+// ==================== PARAMETRIC ROUTES LAST ====================
+// These must be defined AFTER static routes
+
+/**
+ * GET /api/admin/campaigns/:id - Получить кампанию
+ */
+router.get('/:id', async (req, res) => {
+	try {
+		const campaignId = parseInt(req.params.id);
+
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
+
+		const campaign = await getCampaignById(campaignId);
+
+		if (!campaign) {
+			return res.status(404).json({ success: false, error: 'Кампания не найдена' });
+		}
+
+		// Получаем статистику получателей
+		const recipientStats = await getCampaignRecipientsStats(campaignId);
+
+		res.json({
+			success: true,
+			data: {
+				id: campaign.id,
+				title: campaign.title,
+				messageText: campaign.message_text,
+				messageImage: campaign.message_image,
+				buttonText: campaign.button_text,
+				buttonUrl: campaign.button_url,
+				offerId: campaign.offer_id,
+				targetType: campaign.target_type,
+				targetFilters: safeJsonParse(campaign.target_filters, null),
+				triggerType: campaign.trigger_type,
+				triggerConfig: safeJsonParse(campaign.trigger_config, null),
+				status: campaign.status,
+				scheduledAt: campaign.scheduled_at,
+				startedAt: campaign.started_at,
+				completedAt: campaign.completed_at,
+				stats: {
+					totalRecipients: campaign.total_recipients,
+					sentCount: campaign.sent_count,
+					deliveredCount: campaign.delivered_count,
+					failedCount: campaign.failed_count,
+					...recipientStats
+				},
+				createdAt: campaign.created_at,
+				updatedAt: campaign.updated_at
+			}
+		});
+	} catch (error: any) {
+		console.error('Error fetching campaign:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
 /**
  * PUT /api/admin/campaigns/:id - Обновить кампанию
  * ONLY: super-admin, editor
@@ -233,6 +389,11 @@ router.post('/', requireRole('super-admin', 'editor'), async (req, res) => {
 router.put('/:id', requireRole('super-admin', 'editor'), async (req, res) => {
 	try {
 		const campaignId = parseInt(req.params.id);
+
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
+
 		const campaign = await getCampaignById(campaignId);
 
 		if (!campaign) {
@@ -289,6 +450,11 @@ router.put('/:id', requireRole('super-admin', 'editor'), async (req, res) => {
 router.delete('/:id', requireRole('super-admin'), async (req, res) => {
 	try {
 		const campaignId = parseInt(req.params.id);
+
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
+
 		const campaign = await getCampaignById(campaignId);
 
 		if (!campaign) {
@@ -311,8 +477,6 @@ router.delete('/:id', requireRole('super-admin'), async (req, res) => {
 	}
 });
 
-// ==================== CAMPAIGN ACTIONS ====================
-
 /**
  * POST /api/admin/campaigns/:id/send - Запустить отправку
  * ONLY: super-admin, editor
@@ -320,6 +484,10 @@ router.delete('/:id', requireRole('super-admin'), async (req, res) => {
 router.post('/:id/send', requireRole('super-admin', 'editor'), async (req, res) => {
 	try {
 		const campaignId = parseInt(req.params.id);
+
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
 
 		const result = await startCampaign(campaignId);
 
@@ -344,6 +512,11 @@ router.post('/:id/send', requireRole('super-admin', 'editor'), async (req, res) 
 router.post('/:id/schedule', requireRole('super-admin', 'editor'), async (req, res) => {
 	try {
 		const campaignId = parseInt(req.params.id);
+
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
+
 		const { scheduledAt } = req.body;
 
 		if (!scheduledAt) {
@@ -376,6 +549,11 @@ router.post('/:id/schedule', requireRole('super-admin', 'editor'), async (req, r
 router.post('/:id/cancel', requireRole('super-admin', 'editor'), async (req, res) => {
 	try {
 		const campaignId = parseInt(req.params.id);
+
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
+
 		const campaign = await getCampaignById(campaignId);
 
 		if (!campaign) {
@@ -407,15 +585,21 @@ router.post('/:id/cancel', requireRole('super-admin', 'editor'), async (req, res
 router.get('/:id/recipients', async (req, res) => {
 	try {
 		const campaignId = parseInt(req.params.id);
-		const { status, page = '1', limit = '50' } = req.query;
 
-		const pageNum = parseInt(page as string);
-		const limitNum = parseInt(limit as string);
-		const offset = (pageNum - 1) * limitNum;
+		if (isNaN(campaignId)) {
+			return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+		}
+
+		const { status } = req.query;
+		const { page, limit, offset } = validatePagination(
+			req.query.page as string,
+			req.query.limit as string,
+			50
+		);
 
 		const recipients = await getCampaignRecipients(campaignId, {
 			status: status as string | undefined,
-			limit: limitNum,
+			limit,
 			offset
 		});
 
@@ -434,157 +618,15 @@ router.get('/:id/recipients', async (req, res) => {
 				})),
 				stats,
 				pagination: {
-					page: pageNum,
-					limit: limitNum,
+					page,
+					limit,
 					total: stats.total,
-					totalPages: Math.ceil(stats.total / limitNum)
+					totalPages: Math.ceil(stats.total / limit)
 				}
 			}
 		});
 	} catch (error: any) {
 		console.error('Error fetching recipients:', error);
-		res.status(500).json({ success: false, error: 'Internal server error' });
-	}
-});
-
-/**
- * POST /api/admin/campaigns/preview-audience - Превью аудитории
- */
-router.post('/preview-audience', async (req, res) => {
-	try {
-		const { targetType, targetFilters } = req.body;
-
-		let count = 0;
-
-		if (targetType === 'all') {
-			count = await getSegmentCount({});
-		} else if (targetFilters) {
-			count = await getSegmentCount(targetFilters as SegmentFilters);
-		}
-
-		res.json({
-			success: true,
-			data: { count }
-		});
-	} catch (error: any) {
-		console.error('Error previewing audience:', error);
-		res.status(500).json({ success: false, error: 'Internal server error' });
-	}
-});
-
-// ==================== CAMPAIGN IMAGES ====================
-
-/**
- * POST /api/admin/campaigns/images/upload - Загрузить изображение
- * ONLY: super-admin, editor
- */
-router.post('/images/upload', requireRole('super-admin', 'editor'), upload.single('image'), async (req, res) => {
-	try {
-		const file = req.file;
-
-		if (!file) {
-			return res.status(400).json({ success: false, error: 'Файл не загружен' });
-		}
-
-		// Generate unique filename
-		const timestamp = Date.now();
-		const randomSuffix = Math.random().toString(36).substring(2, 8);
-		const filename = `campaign_${timestamp}_${randomSuffix}.webp`;
-		const filepath = path.join(UPLOADS_DIR, filename);
-
-		// Process image with sharp
-		await sharp(file.buffer)
-			.resize(1280, 1280, {
-				fit: 'inside',
-				withoutEnlargement: true
-			})
-			.webp({ quality: 85 })
-			.toFile(filepath);
-
-		// Get file size
-		const stats = fs.statSync(filepath);
-
-		// Save to DB
-		const image = await createCampaignImage({
-			filename,
-			original_name: file.originalname,
-			mime_type: 'image/webp',
-			size: stats.size
-		});
-
-		const imageUrl = `/api/uploads/campaigns/${filename}`;
-
-		res.status(201).json({
-			success: true,
-			data: {
-				id: image.id,
-				url: imageUrl,
-				filename
-			}
-		});
-	} catch (error: any) {
-		console.error('Error uploading campaign image:', error);
-		res.status(500).json({ success: false, error: error.message || 'Internal server error' });
-	}
-});
-
-/**
- * GET /api/admin/campaigns/images - Список изображений
- */
-router.get('/images', async (req, res) => {
-	try {
-		const { page = '1', limit = '20' } = req.query;
-
-		const pageNum = parseInt(page as string);
-		const limitNum = parseInt(limit as string);
-		const offset = (pageNum - 1) * limitNum;
-
-		const images = await getAllCampaignImages({ limit: limitNum, offset });
-
-		res.json({
-			success: true,
-			data: {
-				images: images.map(img => ({
-					id: img.id,
-					url: `/api/uploads/campaigns/${img.filename}`,
-					filename: img.filename,
-					originalName: img.original_name,
-					size: img.size,
-					createdAt: img.created_at
-				}))
-			}
-		});
-	} catch (error: any) {
-		console.error('Error fetching campaign images:', error);
-		res.status(500).json({ success: false, error: 'Internal server error' });
-	}
-});
-
-/**
- * DELETE /api/admin/campaigns/images/:id - Удалить изображение
- * ONLY: super-admin
- */
-router.delete('/images/:id', requireRole('super-admin'), async (req, res) => {
-	try {
-		const imageId = parseInt(req.params.id);
-		const image = await getCampaignImageById(imageId);
-
-		if (!image) {
-			return res.status(404).json({ success: false, error: 'Изображение не найдено' });
-		}
-
-		// Delete file
-		const filepath = path.join(UPLOADS_DIR, image.filename);
-		if (fs.existsSync(filepath)) {
-			fs.unlinkSync(filepath);
-		}
-
-		// Delete from DB
-		await deleteCampaignImage(imageId);
-
-		res.json({ success: true, message: 'Изображение удалено' });
-	} catch (error: any) {
-		console.error('Error deleting campaign image:', error);
 		res.status(500).json({ success: false, error: 'Internal server error' });
 	}
 });

@@ -172,6 +172,7 @@ export async function cancelCampaign(id: number) {
 
 /**
  * Добавить получателей в кампанию
+ * Использует onConflictDoNothing для предотвращения дубликатов
  */
 export async function addCampaignRecipients(campaignId: number, userIds: number[]) {
 	if (userIds.length === 0) return [];
@@ -182,7 +183,12 @@ export async function addCampaignRecipients(campaignId: number, userIds: number[
 		status: 'pending' as const
 	}));
 
-	return await db.insert(campaignRecipients).values(values).returning();
+	// Use onConflictDoNothing to handle potential duplicates gracefully
+	return await db
+		.insert(campaignRecipients)
+		.values(values)
+		.onConflictDoNothing()
+		.returning();
 }
 
 /**
@@ -192,6 +198,14 @@ export async function getCampaignRecipients(
 	campaignId: number,
 	options?: { status?: string; limit?: number; offset?: number }
 ) {
+	// Build WHERE condition based on options
+	const whereCondition = options?.status
+		? and(
+				eq(campaignRecipients.campaign_id, campaignId),
+				eq(campaignRecipients.status, options.status as 'pending' | 'sent' | 'delivered' | 'failed')
+			)
+		: eq(campaignRecipients.campaign_id, campaignId);
+
 	let query = db
 		.select({
 			id: campaignRecipients.id,
@@ -206,17 +220,8 @@ export async function getCampaignRecipients(
 		})
 		.from(campaignRecipients)
 		.leftJoin(loyaltyUsers, eq(campaignRecipients.loyalty_user_id, loyaltyUsers.id))
-		.where(eq(campaignRecipients.campaign_id, campaignId))
+		.where(whereCondition)
 		.$dynamic();
-
-	if (options?.status) {
-		query = query.where(
-			and(
-				eq(campaignRecipients.campaign_id, campaignId),
-				eq(campaignRecipients.status, options.status as 'pending' | 'sent' | 'delivered' | 'failed')
-			)
-		);
-	}
 
 	if (options?.limit) {
 		query = query.limit(options.limit);

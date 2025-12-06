@@ -1,22 +1,24 @@
 import { getUsersWithBirthdayToday } from '../services/segmentationService';
 import { getAutoSendTriggers, createTriggerLog, updateTriggerLogStatus } from '../db/queries/triggerTemplates';
-import { createAndSendCampaign, personalizeMessage } from '../services/campaignService';
-import { getLoyaltyUserById } from '../db/queries/loyaltyUsers';
+import { sendToUsers } from '../services/campaignService';
 
 /**
  * Обрабатывает триггер "День рождения"
  * Запускается ежедневно в 09:00
+ *
+ * ОПТИМИЗИРОВАНО: Создаёт ОДНУ кампанию для всех именинников,
+ * вместо отдельной кампании для каждого пользователя
  */
 export async function processBirthdayTrigger(dryRun: boolean = false): Promise<{
 	usersWithBirthday: number;
 	triggersProcessed: number;
-	messagesSent: number;
+	campaignsCreated: number;
 	errors: string[];
 }> {
 	const result = {
 		usersWithBirthday: 0,
 		triggersProcessed: 0,
-		messagesSent: 0,
+		campaignsCreated: 0,
 		errors: [] as string[]
 	};
 
@@ -46,58 +48,44 @@ export async function processBirthdayTrigger(dryRun: boolean = false): Promise<{
 			try {
 				result.triggersProcessed++;
 
-				// Для каждого пользователя с ДР
-				for (const userId of birthdayUserIds) {
-					try {
-						// Создаём лог триггера
-						const log = await createTriggerLog({
-							trigger_id: trigger.id,
-							loyalty_user_id: userId,
-							event_data: JSON.stringify({ event: 'birthday', date: new Date().toISOString() }),
-							status: 'triggered'
-						});
+				// Создаём лог триггера для всей группы именинников
+				const log = await createTriggerLog({
+					trigger_id: trigger.id,
+					event_data: JSON.stringify({
+						event: 'birthday',
+						date: new Date().toISOString(),
+						users_count: birthdayUserIds.length
+					}),
+					status: 'triggered'
+				});
 
-						if (dryRun) {
-							console.log(`[BIRTHDAY] DRY-RUN: Would send birthday message to user #${userId}`);
-							await updateTriggerLogStatus(log.id, 'skipped', undefined, 'Dry run mode');
-							continue;
-						}
+				if (dryRun) {
+					console.log(`[BIRTHDAY] DRY-RUN: Would create campaign for ${birthdayUserIds.length} birthday users`);
+					await updateTriggerLogStatus(log.id, 'skipped', undefined, 'Dry run mode');
+					continue;
+				}
 
-						// Получаем данные пользователя для персонализации
-						const user = await getLoyaltyUserById(userId);
-						if (!user) {
-							await updateTriggerLogStatus(log.id, 'error', undefined, 'User not found');
-							continue;
-						}
-
-						// Создаём и отправляем кампанию для одного пользователя
-						const campaignResult = await createAndSendCampaign(
-							{
-								title: `День рождения: ${user.first_name || 'Клиент'} (${new Date().toLocaleDateString('ru-RU')})`,
-								message_text: trigger.message_template || '🎂 С Днём рождения, {first_name}! Желаем счастья и отличного настроения!',
-								message_image: trigger.image_url,
-								button_text: trigger.button_text,
-								button_url: trigger.button_url,
-								target_type: 'segment',
-								trigger_type: 'event',
-								trigger_config: JSON.stringify({ trigger_id: trigger.id, event_type: 'birthday' })
-							},
-							{ is_active: true } // Фильтр будет переопределён
-						);
-
-						if (campaignResult.success) {
-							await updateTriggerLogStatus(log.id, 'campaign_created', campaignResult.campaignId);
-							result.messagesSent++;
-							console.log(`[BIRTHDAY] Sent birthday message to user #${userId}`);
-						} else {
-							await updateTriggerLogStatus(log.id, 'error', undefined, campaignResult.error);
-							result.errors.push(`User #${userId}: ${campaignResult.error}`);
-						}
-					} catch (userError) {
-						const errorMessage = userError instanceof Error ? userError.message : String(userError);
-						console.error(`[BIRTHDAY] Error processing user #${userId}:`, errorMessage);
-						result.errors.push(`User #${userId}: ${errorMessage}`);
+				// Создаём ОДНУ кампанию для ВСЕХ именинников
+				const campaignResult = await sendToUsers(
+					birthdayUserIds,
+					{
+						title: `День рождения: ${birthdayUserIds.length} клиентов (${new Date().toLocaleDateString('ru-RU')})`,
+						message_text: trigger.message_template || '🎂 С Днём рождения, {first_name}! Желаем счастья и отличного настроения!',
+						message_image: trigger.image_url,
+						button_text: trigger.button_text,
+						button_url: trigger.button_url,
+						trigger_type: 'event',
+						trigger_config: JSON.stringify({ trigger_id: trigger.id, event_type: 'birthday' })
 					}
+				);
+
+				if (campaignResult.success) {
+					await updateTriggerLogStatus(log.id, 'campaign_created', campaignResult.campaignId);
+					result.campaignsCreated++;
+					console.log(`[BIRTHDAY] Campaign #${campaignResult.campaignId} created for ${birthdayUserIds.length} birthday users`);
+				} else {
+					await updateTriggerLogStatus(log.id, 'error', undefined, campaignResult.error);
+					result.errors.push(`Trigger #${trigger.id}: ${campaignResult.error}`);
 				}
 			} catch (triggerError) {
 				const errorMessage = triggerError instanceof Error ? triggerError.message : String(triggerError);

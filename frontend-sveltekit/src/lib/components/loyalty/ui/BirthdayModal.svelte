@@ -2,8 +2,8 @@
   import { modalStore } from '$lib/stores/modal.svelte';
   import { API_BASE_URL } from '$lib/config';
 
-  // Get current Telegram user ID
-  let telegramUserId: number | null = null;
+  // Get Telegram WebApp initData for authentication
+  let initData: string | null = null;
 
   // State
   let month = $state('');
@@ -12,10 +12,20 @@
   let error = $state('');
   let success = $state(false);
 
-  // Try to get Telegram user
+  // Try to get Telegram initData
   $effect(() => {
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-      telegramUserId = window.Telegram.WebApp.initDataUnsafe.user.id;
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+      initData = window.Telegram.WebApp.initData;
+    }
+  });
+
+  // Reset day when month changes and selected day exceeds max days
+  $effect(() => {
+    if (month && day) {
+      const maxDaysInMonth = getDaysInMonth(month);
+      if (parseInt(day) > maxDaysInMonth) {
+        day = '';
+      }
     }
   });
 
@@ -52,8 +62,13 @@
 
   // Save birthday
   async function saveBirthday() {
-    if (!isValid || !telegramUserId) {
+    if (!isValid) {
       error = 'Пожалуйста, выберите месяц и день';
+      return;
+    }
+
+    if (!initData) {
+      error = 'Telegram WebApp не инициализирован';
       return;
     }
 
@@ -65,11 +80,11 @@
 
       const response = await fetch(`${API_BASE_URL}/profile/birthday`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          telegramUserId,
-          birthday
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': initData
+        },
+        body: JSON.stringify({ birthday })
       });
 
       const result = await response.json();

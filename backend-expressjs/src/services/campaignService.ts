@@ -5,16 +5,22 @@ import {
 	addCampaignRecipients,
 	getPendingRecipients,
 	updateRecipientStatus,
+	updateRecipientsStatus,
 	updateCampaignStats,
 	startCampaignSending,
 	completeCampaign,
 	getCampaignRecipientsStats
 } from '../db/queries/campaigns';
 import { getSegmentUserIds, getAllActiveUserIds, type SegmentFilters } from './segmentationService';
-import type { NewCampaign, Campaign, LoyaltyUser } from '../db/schema';
+import { safeJsonParse, sleep, withRetry } from '../utils/helpers';
+import type { NewCampaign } from '../db/schema';
 
-// Telegram Bot URL (from environment)
+// Configuration from environment
 const TELEGRAM_BOT_URL = process.env.TELEGRAM_BOT_URL || 'http://localhost:2017';
+const BATCH_SIZE = parseInt(process.env.CAMPAIGN_BATCH_SIZE || '25');
+const RATE_LIMIT_MS = parseInt(process.env.CAMPAIGN_RATE_LIMIT_MS || '35');
+const BATCH_DELAY_MS = parseInt(process.env.CAMPAIGN_BATCH_DELAY_MS || '1000');
+const MAX_EXECUTION_MS = parseInt(process.env.CAMPAIGN_MAX_EXECUTION_MS || '300000'); // 5 minutes
 
 /**
  * Персонализация текста сообщения
@@ -56,9 +62,7 @@ export async function prepareCampaign(campaignId: number): Promise<{ success: bo
 	if (campaign.target_type === 'all') {
 		userIds = await getAllActiveUserIds();
 	} else {
-		const filters: SegmentFilters = campaign.target_filters
-			? JSON.parse(campaign.target_filters)
-			: {};
+		const filters = safeJsonParse<SegmentFilters>(campaign.target_filters, {});
 		userIds = await getSegmentUserIds(filters);
 	}
 
@@ -76,7 +80,7 @@ export async function prepareCampaign(campaignId: number): Promise<{ success: bo
 }
 
 /**
- * Отправить сообщение в Telegram
+ * Отправить сообщение в Telegram с retry логикой
  */
 async function sendTelegramMessage(
 	chatId: number,
@@ -84,28 +88,49 @@ async function sendTelegramMessage(
 	imageUrl?: string | null,
 	buttonText?: string | null,
 	buttonUrl?: string | null
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
 	try {
-		const response = await fetch(`${TELEGRAM_BOT_URL}/send-campaign-message`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				chatId,
-				text,
-				imageUrl,
-				buttonText,
-				buttonUrl
-			})
-		});
+		const result = await withRetry(
+			async () => {
+				const response = await fetch(`${TELEGRAM_BOT_URL}/send-campaign-message`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						chatId,
+						text,
+						imageUrl,
+						buttonText,
+						buttonUrl
+					})
+				});
 
-		if (!response.ok) {
-			const error = await response.text();
-			return { success: false, error };
-		}
+				if (!response.ok) {
+					const errorText = await response.text();
 
-		return { success: true };
-	} catch (error) {
-		return { success: false, error: String(error) };
+					// Don't retry client errors (4xx) - user blocked bot, etc.
+					if (response.status >= 400 && response.status < 500) {
+						throw Object.assign(new Error(errorText), { retryable: false });
+					}
+
+					// Retry server errors (5xx)
+					throw Object.assign(new Error(errorText), { retryable: true });
+				}
+
+				return { success: true };
+			},
+			{
+				maxRetries: 3,
+				initialDelay: 500,
+				maxDelay: 5000,
+				shouldRetry: (error: any) => error.retryable !== false
+			}
+		);
+
+		return result;
+	} catch (error: any) {
+		// Sanitize error message
+		const errorMessage = error.message?.substring(0, 200) || 'Unknown error';
+		return { success: false, error: errorMessage };
 	}
 }
 
@@ -114,7 +139,7 @@ async function sendTelegramMessage(
  */
 export async function sendCampaignBatch(
 	campaignId: number,
-	batchSize: number = 25
+	batchSize: number = BATCH_SIZE
 ): Promise<{ sent: number; failed: number; remaining: number }> {
 	const campaign = await getCampaignById(campaignId);
 	if (!campaign) {
@@ -124,8 +149,8 @@ export async function sendCampaignBatch(
 	// Получаем pending получателей
 	const recipients = await getPendingRecipients(campaignId, batchSize);
 
-	let sent = 0;
-	let failed = 0;
+	const sentIds: number[] = [];
+	const failedResults: { id: number; error?: string }[] = [];
 
 	for (const recipient of recipients) {
 		// Персонализируем сообщение
@@ -137,8 +162,8 @@ export async function sendCampaignBatch(
 			total_purchases: recipient.total_purchases
 		});
 
-		// Отправляем с rate limiting (35ms между сообщениями)
-		await new Promise(resolve => setTimeout(resolve, 35));
+		// Rate limiting
+		await sleep(RATE_LIMIT_MS);
 
 		const result = await sendTelegramMessage(
 			recipient.chat_id,
@@ -149,31 +174,39 @@ export async function sendCampaignBatch(
 		);
 
 		if (result.success) {
-			await updateRecipientStatus(recipient.id, 'delivered');
-			sent++;
+			sentIds.push(recipient.id);
 		} else {
-			await updateRecipientStatus(recipient.id, 'failed', result.error);
-			failed++;
+			failedResults.push({ id: recipient.id, error: result.error });
 		}
 	}
 
-	// Обновляем статистику кампании
+	// Bulk update sent recipients
+	if (sentIds.length > 0) {
+		await updateRecipientsStatus(sentIds, 'delivered');
+	}
+
+	// Update failed recipients individually (to store error messages)
+	for (const { id, error } of failedResults) {
+		await updateRecipientStatus(id, 'failed', error);
+	}
+
+	// Update campaign stats - FIX: Don't double-count delivered
 	const stats = await getCampaignRecipientsStats(campaignId);
 	await updateCampaignStats(campaignId, {
-		sent_count: stats.sent + stats.delivered,
+		sent_count: stats.sent,
 		delivered_count: stats.delivered,
 		failed_count: stats.failed
 	});
 
 	return {
-		sent,
-		failed,
+		sent: sentIds.length,
+		failed: failedResults.length,
 		remaining: stats.pending
 	};
 }
 
 /**
- * Запустить полную отправку кампании
+ * Запустить полную отправку кампании с таймаутом
  */
 export async function startCampaign(campaignId: number): Promise<{ success: boolean; error?: string }> {
 	const campaign = await getCampaignById(campaignId);
@@ -196,16 +229,32 @@ export async function startCampaign(campaignId: number): Promise<{ success: bool
 	// Обновляем статус на sending
 	await startCampaignSending(campaignId);
 
-	// Отправляем батчами
+	const startTime = Date.now();
 	let hasMore = true;
+	let timedOut = false;
+
+	// Отправляем батчами с таймаутом
 	while (hasMore) {
-		const result = await sendCampaignBatch(campaignId, 25);
+		// Check timeout
+		if (Date.now() - startTime > MAX_EXECUTION_MS) {
+			console.warn(`[CAMPAIGN] Campaign #${campaignId} timed out after ${MAX_EXECUTION_MS}ms`);
+			timedOut = true;
+			break;
+		}
+
+		const result = await sendCampaignBatch(campaignId, BATCH_SIZE);
 		hasMore = result.remaining > 0;
 
-		// Небольшая пауза между батчами
+		// Пауза между батчами
 		if (hasMore) {
-			await new Promise(resolve => setTimeout(resolve, 1000));
+			await sleep(BATCH_DELAY_MS);
 		}
+	}
+
+	if (timedOut) {
+		// Campaign will continue on next scheduled check
+		console.log(`[CAMPAIGN] Campaign #${campaignId} will continue on next run`);
+		return { success: true };
 	}
 
 	// Завершаем кампанию
@@ -226,13 +275,50 @@ export async function createAndSendCampaign(
 		...data,
 		target_type: filters ? 'segment' : 'all',
 		target_filters: filters ? JSON.stringify(filters) : null,
-		trigger_type: 'manual',
+		trigger_type: data.trigger_type || 'manual',
 		status: 'draft'
 	});
 
 	if (!campaign) {
 		return { success: false, error: 'Не удалось создать кампанию' };
 	}
+
+	// Запускаем
+	const result = await startCampaign(campaign.id);
+
+	return {
+		success: result.success,
+		campaignId: campaign.id,
+		error: result.error
+	};
+}
+
+/**
+ * Создать кампанию для конкретных пользователей и отправить
+ */
+export async function sendToUsers(
+	userIds: number[],
+	data: Omit<NewCampaign, 'target_type' | 'target_filters' | 'status'>
+): Promise<{ success: boolean; campaignId?: number; error?: string }> {
+	if (userIds.length === 0) {
+		return { success: false, error: 'Нет получателей' };
+	}
+
+	// Создаем кампанию
+	const campaign = await createCampaign({
+		...data,
+		target_type: 'segment',
+		target_filters: null,
+		status: 'draft',
+		total_recipients: userIds.length
+	});
+
+	if (!campaign) {
+		return { success: false, error: 'Не удалось создать кампанию' };
+	}
+
+	// Добавляем получателей напрямую
+	await addCampaignRecipients(campaign.id, userIds);
 
 	// Запускаем
 	const result = await startCampaign(campaign.id);

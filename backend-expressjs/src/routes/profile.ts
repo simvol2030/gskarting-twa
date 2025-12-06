@@ -1,28 +1,33 @@
 /**
- * Profile API routes (public - for Telegram Web App users)
+ * Profile API routes (for Telegram Web App users)
+ * Secured with Telegram WebApp validation
  */
 
 import { Router } from 'express';
 import { db } from '../db/client';
 import { loyaltyUsers } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { validateTelegramWebApp } from '../middleware/telegram';
 
 const router = Router();
 
 /**
  * PUT /api/profile/birthday - Update user birthday
+ * Requires Telegram WebApp authentication
  */
-router.put('/birthday', async (req, res) => {
+router.put('/birthday', validateTelegramWebApp, async (req, res) => {
 	try {
-		const { telegramUserId, birthday } = req.body;
+		// Get telegramUserId from validated Telegram user (not from body for security)
+		const telegramUserId = req.telegramUser?.id;
 
-		// Validation
 		if (!telegramUserId) {
-			return res.status(400).json({
+			return res.status(401).json({
 				success: false,
-				error: 'Missing telegramUserId'
+				error: 'Authentication required'
 			});
 		}
+
+		const { birthday } = req.body;
 
 		if (!birthday) {
 			return res.status(400).json({
@@ -37,6 +42,20 @@ router.put('/birthday', async (req, res) => {
 			return res.status(400).json({
 				success: false,
 				error: 'Invalid birthday format. Use MM-DD (e.g., 12-25)'
+			});
+		}
+
+		// Validate day for the given month
+		const [month, day] = birthday.split('-').map(Number);
+		const daysInMonth: Record<number, number> = {
+			1: 31, 2: 29, 3: 31, 4: 30, 5: 31, 6: 30,
+			7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
+		};
+
+		if (day > daysInMonth[month]) {
+			return res.status(400).json({
+				success: false,
+				error: `Invalid day ${day} for month ${month}`
 			});
 		}
 
@@ -79,16 +98,17 @@ router.put('/birthday', async (req, res) => {
 });
 
 /**
- * GET /api/profile/:telegramUserId/birthday - Get user birthday
+ * GET /api/profile/birthday - Get current user's birthday
+ * Requires Telegram WebApp authentication
  */
-router.get('/:telegramUserId/birthday', async (req, res) => {
+router.get('/birthday', validateTelegramWebApp, async (req, res) => {
 	try {
-		const telegramUserId = parseInt(req.params.telegramUserId);
+		const telegramUserId = req.telegramUser?.id;
 
-		if (isNaN(telegramUserId)) {
-			return res.status(400).json({
+		if (!telegramUserId) {
+			return res.status(401).json({
 				success: false,
-				error: 'Invalid telegramUserId'
+				error: 'Authentication required'
 			});
 		}
 
