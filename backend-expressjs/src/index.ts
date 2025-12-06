@@ -24,6 +24,9 @@ import sellerRouter from './routes/seller';
 import loyaltyRouter from './routes/api/loyalty';
 import customizationRouter from './routes/api/customization';
 import profileRouter from './routes/profile';
+import catalogRouter from './routes/api/catalog'; // Shop extension: Public catalog
+import cartRouter from './routes/api/cart'; // Shop extension: Shopping cart
+import ordersRouter from './routes/api/orders'; // Shop extension: Orders
 
 // Admin routes
 import adminClientsRouter from './routes/admin/clients';
@@ -38,6 +41,9 @@ import adminAppearanceRouter from './routes/admin/appearance';
 import adminCampaignsRouter from './routes/admin/campaigns';
 import adminTriggersRouter from './routes/admin/triggers';
 import adminSellersRouter from './routes/admin/sellers';
+import adminCategoriesRouter from './routes/admin/categories'; // Shop extension: Categories
+import adminOrdersRouter from './routes/admin/orders'; // Shop extension: Orders management
+import adminShopSettingsRouter from './routes/admin/shop-settings'; // Shop extension: Shop settings
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -111,6 +117,9 @@ app.use('/api/loyalty', loyaltyRouter); // Public loyalty settings endpoint
 app.use('/api/customization', customizationRouter); // Public app customization endpoint
 app.use('/api/profile', profileRouter); // User profile (birthday, etc.)
 app.use('/api/seller', sellerRouter); // Seller PWA authentication
+app.use('/api/catalog', catalogRouter); // Public catalog (categories & products)
+app.use('/api/cart', cartRouter); // Shopping cart
+app.use('/api/orders', ordersRouter); // Orders
 
 // Admin API routes
 app.use('/api/admin/clients', adminClientsRouter);
@@ -125,6 +134,9 @@ app.use('/api/admin/settings/appearance', adminAppearanceRouter); // App appeara
 app.use('/api/admin/campaigns', adminCampaignsRouter); // Campaigns & mailings
 app.use('/api/admin/triggers', adminTriggersRouter); // Trigger templates
 app.use('/api/admin/sellers', adminSellersRouter); // Seller management
+app.use('/api/admin/categories', adminCategoriesRouter); // Shop extension: Categories
+app.use('/api/admin/orders', adminOrdersRouter); // Shop extension: Orders management
+app.use('/api/admin/shop-settings', adminShopSettingsRouter); // Shop extension: Shop settings
 
 // Обработка 404
 app.use((req, res) => {

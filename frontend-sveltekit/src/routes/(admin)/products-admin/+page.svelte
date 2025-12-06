@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Input, Select, Button, Badge, Card } from '$lib/components/ui';
-	import type { Product, ProductCategory } from '$lib/types/admin';
+	import type { Product, ProductCategory, Category } from '$lib/types/admin';
 	import { productsAPI } from '$lib/api/admin/products';
 	import ProductFormModal from '$lib/components/admin/products/ProductFormModal.svelte';
 
@@ -56,10 +56,20 @@
 		}
 	};
 
-	const categoryOptions = $derived(() => [
-		{ value: 'all', label: 'Все категории' },
-		...data.categories.map((c: ProductCategory) => ({ value: c.name, label: `${c.name} (${c.count})` }))
-	]);
+	const categoryOptions = $derived(() => {
+		// Use new categories from table if available, otherwise fallback to legacy
+		const categoriesNew = data.categoriesNew as Category[];
+		if (categoriesNew && categoriesNew.length > 0) {
+			return [
+				{ value: 'all', label: 'Все категории' },
+				...categoriesNew.map((c) => ({ value: c.name, label: `${c.name} (${c.productCount || 0})` }))
+			];
+		}
+		return [
+			{ value: 'all', label: 'Все категории' },
+			...data.categories.map((c: ProductCategory) => ({ value: c.name, label: `${c.name} (${c.count})` }))
+		];
+	});
 
 	const formatCurrency = (num: number) =>
 		num.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' });
@@ -85,7 +95,13 @@
 			<h1>Товары</h1>
 			<p class="text-muted">Всего: {data.pagination.total}</p>
 		</div>
-		<Button variant="primary" onclick={openCreateModal}>+ Создать товар</Button>
+		<div class="header-actions">
+			<a href="/products-admin/import" class="import-btn">
+				<span class="icon">📥</span>
+				Импорт
+			</a>
+			<Button variant="primary" onclick={openCreateModal}>+ Создать товар</Button>
+		</div>
 	</div>
 
 	<div class="filters-panel">
@@ -158,6 +174,7 @@
 	isOpen={formModalOpen}
 	editingProduct={editingProduct}
 	categories={data.categories.map((c: ProductCategory) => c.name)}
+	categoriesNew={data.categoriesNew as Category[]}
 	onClose={() => (formModalOpen = false)}
 	onSuccess={() => {
 		formModalOpen = false;
@@ -186,6 +203,30 @@
 	.text-muted {
 		color: #6b7280;
 		margin: 0;
+	}
+
+	.header-actions {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.import-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+		background: var(--color-bg-secondary, #f3f4f6);
+		border: 1px solid #e5e7eb;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		color: #374151;
+		text-decoration: none;
+		transition: background 0.2s;
+	}
+
+	.import-btn:hover {
+		background: #e5e7eb;
 	}
 
 	.filters-panel {

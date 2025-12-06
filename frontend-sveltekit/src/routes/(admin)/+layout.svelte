@@ -80,6 +80,14 @@
 					<span class="icon">🛍️</span>
 					<span>Товары</span>
 				</a>
+				<a href="/categories" class:active={$page.url.pathname.startsWith('/categories')} onclick={closeMobileMenu}>
+					<span class="icon">📁</span>
+					<span>Категории</span>
+				</a>
+				<a href="/orders" class:active={$page.url.pathname.startsWith('/orders')} onclick={closeMobileMenu}>
+					<span class="icon">📋</span>
+					<span>Заказы</span>
+				</a>
 				<a href="/store-list" class:active={$page.url.pathname.startsWith('/store-list')} onclick={closeMobileMenu}>
 					<span class="icon">🏪</span>
 					<span>Магазины</span>
@@ -91,6 +99,10 @@
 				<a href="/statistics" class:active={$page.url.pathname.startsWith('/statistics')} onclick={closeMobileMenu}>
 					<span class="icon">📈</span>
 					<span>Статистика</span>
+				</a>
+				<a href="/shop-settings" class:active={$page.url.pathname === '/shop-settings'} onclick={closeMobileMenu}>
+					<span class="icon">🛒</span>
+					<span>Настройки магазина</span>
 				</a>
 				{#if data.user?.role === 'super-admin'}
 					<a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeMobileMenu}>

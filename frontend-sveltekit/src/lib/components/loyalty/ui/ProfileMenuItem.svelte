@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { modalStore, type ModalType } from '$lib/stores/modal.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
 
@@ -9,6 +10,7 @@
     title: string;
     description: string;
     action: string | null;
+    href?: string;
   }
 
   interface Props {
@@ -18,7 +20,9 @@
   let { item }: Props = $props();
 
   function handleClick() {
-    if (item.action === 'alert') {
+    if (item.action === 'link' && item.href) {
+      goto(item.href);
+    } else if (item.action === 'alert') {
       // M-001 FIX: Added phone number to support message
       toastStore.show('Свяжитесь с нами: +7 (495) 123-45-67 или support@murzico.ru', 'info');
     } else if (item.action === 'openPetsModal') {

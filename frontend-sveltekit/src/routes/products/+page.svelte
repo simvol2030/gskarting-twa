@@ -1,10 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { cart } from '$lib/stores/cart';
+
+	interface CategoryItem {
+		id: number;
+		name: string;
+		slug: string;
+		image: string | null;
+	}
 
 	let { data } = $props();
 
 	let searchValue = $state(data.filters.search);
 	let selectedCategory = $state(data.filters.category);
+	let addingToCart = $state<number | null>(null); // Track which product is being added
+
+	// Категории с новой структурой (slug/name/image)
+	const categoriesNew = data.categories as CategoryItem[];
 
 	function handleSearch() {
 		const params = new URLSearchParams();
@@ -13,8 +25,8 @@
 		goto(`/products?${params.toString()}`);
 	}
 
-	function handleCategoryChange(category: string) {
-		selectedCategory = category;
+	function handleCategoryChange(categorySlug: string) {
+		selectedCategory = categorySlug;
 		handleSearch();
 	}
 
@@ -22,6 +34,31 @@
 		searchValue = '';
 		selectedCategory = 'all';
 		goto('/products');
+	}
+
+	// Получаем название категории по slug для отображения
+	function getCategoryName(slug: string): string {
+		if (slug === 'all') return 'Все';
+		const category = categoriesNew.find(c => c.slug === slug);
+		return category?.name || slug;
+	}
+
+	// Добавление товара в корзину
+	async function handleAddToCart(e: Event, productId: number) {
+		e.stopPropagation(); // Prevent card click
+		if (addingToCart === productId) return; // Prevent double click
+
+		addingToCart = productId;
+		try {
+			await cart.addItem(productId, 1);
+			// Visual feedback - show briefly that item was added
+			setTimeout(() => {
+				addingToCart = null;
+			}, 500);
+		} catch (error) {
+			console.error('Failed to add to cart:', error);
+			addingToCart = null;
+		}
 	}
 </script>
 
@@ -58,13 +95,13 @@
 			>
 				Все
 			</button>
-			{#each data.categories as category}
+			{#each categoriesNew as category (category.id)}
 				<button
 					class="category-btn"
-					class:active={selectedCategory === category}
-					onclick={() => handleCategoryChange(category)}
+					class:active={selectedCategory === category.slug}
+					onclick={() => handleCategoryChange(category.slug)}
 				>
-					{category}
+					{category.name}
 				</button>
 			{/each}
 		</div>
@@ -92,11 +129,26 @@
 					<h3 class="product-name">{product.name}</h3>
 					<span class="product-category">{product.category}</span>
 
-					<div class="product-pricing">
-						{#if product.old_price}
-							<span class="old-price">{product.old_price.toLocaleString('ru-RU')} ₽</span>
-						{/if}
-						<span class="price">{product.price.toLocaleString('ru-RU')} ₽</span>
+					<div class="product-footer">
+						<div class="product-pricing">
+							{#if product.old_price}
+								<span class="old-price">{product.old_price.toLocaleString('ru-RU')} ₽</span>
+							{/if}
+							<span class="price">{product.price.toLocaleString('ru-RU')} ₽</span>
+						</div>
+
+						<button
+							class="add-to-cart-btn"
+							class:adding={addingToCart === product.id}
+							onclick={(e) => handleAddToCart(e, product.id)}
+							aria-label="Добавить в корзину"
+						>
+							{#if addingToCart === product.id}
+								<span class="check-icon">✓</span>
+							{:else}
+								<span class="cart-plus-icon">🛒</span>
+							{/if}
+						</button>
 					</div>
 				</div>
 			</article>
@@ -314,15 +366,21 @@
 		margin-bottom: 8px;
 	}
 
+	.product-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-end;
+		gap: 8px;
+	}
+
 	.product-pricing {
 		display: flex;
-		align-items: center;
-		gap: 6px;
-		flex-wrap: wrap;
+		flex-direction: column;
+		gap: 2px;
 	}
 
 	.old-price {
-		font-size: 13px;
+		font-size: 12px;
 		color: var(--text-secondary);
 		text-decoration: line-through;
 	}
@@ -331,6 +389,51 @@
 		font-size: 16px;
 		font-weight: 700;
 		color: var(--primary-orange);
+	}
+
+	.add-to-cart-btn {
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
+		background: var(--primary-orange);
+		border: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		flex-shrink: 0;
+	}
+
+	.add-to-cart-btn:hover {
+		background: var(--primary-orange-dark);
+		transform: scale(1.05);
+	}
+
+	.add-to-cart-btn:active {
+		transform: scale(0.95);
+	}
+
+	.add-to-cart-btn.adding {
+		background: var(--accent-green, #22c55e);
+		animation: pulse 0.3s ease-out;
+	}
+
+	@keyframes pulse {
+		0% { transform: scale(1); }
+		50% { transform: scale(1.2); }
+		100% { transform: scale(1); }
+	}
+
+	.cart-plus-icon {
+		font-size: 16px;
+		filter: grayscale(1) brightness(10);
+	}
+
+	.check-icon {
+		font-size: 18px;
+		color: white;
+		font-weight: bold;
 	}
 
 	.empty-state {

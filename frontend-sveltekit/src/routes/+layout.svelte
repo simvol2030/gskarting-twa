@@ -7,6 +7,7 @@
   import BottomNav from '$lib/components/loyalty/layout/BottomNav.svelte';
   import MobileMenu from '$lib/components/loyalty/layout/MobileMenu.svelte';
   import QRModal from '$lib/components/loyalty/ui/QRModal.svelte';
+  import CartDrawer from '$lib/components/loyalty/ui/CartDrawer.svelte';
   import favicon from '$lib/assets/favicon.svg';
   import '$lib/styles/themes.css';
   import '$lib/styles/loyalty.css';
@@ -27,6 +28,7 @@
 
   let menuOpen = $state(false);
   let qrModalOpen = $state(false);
+  let cartDrawerOpen = $state(false);
 
   // Reactive user data for QR Modal (updated by LoyaltyCard)
   let currentCardNumber = $state(data.user.cardNumber);
@@ -47,6 +49,14 @@
 
   function closeQRModal() {
     qrModalOpen = false;
+  }
+
+  function openCartDrawer() {
+    cartDrawerOpen = true;
+  }
+
+  function closeCartDrawer() {
+    cartDrawerOpen = false;
   }
 
   // Function to update user data from child components
@@ -124,8 +134,9 @@
 
 {#if isLoyaltyApp}
   <div class="app-container">
-    <Header onMenuClick={openMenu} />
+    <Header onMenuClick={openMenu} onCartClick={openCartDrawer} />
     <MobileMenu open={menuOpen} onClose={closeMenu} />
+    <CartDrawer open={cartDrawerOpen} onClose={closeCartDrawer} />
 
     <main class="content">
       {@render children?.()}
