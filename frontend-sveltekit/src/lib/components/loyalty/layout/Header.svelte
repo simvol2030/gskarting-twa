@@ -1,5 +1,6 @@
 <script lang="ts">
   import { theme, toggleTheme } from '$lib/stores/loyalty';
+  import { appName, appSlogan, logoUrl } from '$lib/stores/customization';
 
   interface Props {
     onMenuClick: () => void;
@@ -10,11 +11,11 @@
 
 <header class="app-header">
   <div class="header-left">
-    <img src="/logo.png" alt="Мурзико" class="app-logo" />
+    <img src={$logoUrl} alt={$appName} class="app-logo" />
     <div class="header-title">
-      <span class="store-name">Мурзико</span>
+      <span class="store-name">{$appName}</span>
       <span class="header-divider">|</span>
-      <span class="section-name">Лояльность</span>
+      <span class="section-name">{$appSlogan}</span>
     </div>
   </div>
 

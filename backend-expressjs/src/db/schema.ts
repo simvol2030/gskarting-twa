@@ -318,3 +318,63 @@ export type NewLoyaltySettings = typeof loyaltySettings.$inferInsert;
 
 export type StoreImage = typeof storeImages.$inferSelect;
 export type NewStoreImage = typeof storeImages.$inferInsert;
+
+/**
+ * App Customization table - настройки внешнего вида приложения
+ * Singleton таблица (всегда 1 запись с id=1)
+ * Позволяет настраивать брендинг, цвета, навигацию под любой бизнес
+ */
+export const appCustomization = sqliteTable('app_customization', {
+	id: integer('id').primaryKey().$default(() => 1),
+
+	// === БРЕНДИНГ ===
+	app_name: text('app_name').notNull().default('Мурзико'),           // Название в header
+	app_slogan: text('app_slogan').notNull().default('Лояльность'),    // Слоган после |
+	logo_url: text('logo_url').notNull().default('/logo.png'),         // URL логотипа
+	favicon_url: text('favicon_url').default('/favicon.ico'),          // URL фавикона
+
+	// === ЦВЕТОВАЯ СХЕМА (LIGHT THEME) ===
+	primary_color: text('primary_color').notNull().default('#ff6b00'),      // Основной цвет
+	primary_color_dark: text('primary_color_dark').notNull().default('#e55d00'),   // Тёмный оттенок primary
+	primary_color_light: text('primary_color_light').notNull().default('#ff8533'), // Светлый оттенок primary
+	secondary_color: text('secondary_color').notNull().default('#10b981'),  // Вторичный (зелёный)
+	secondary_color_dark: text('secondary_color_dark').notNull().default('#059669'),
+	accent_color: text('accent_color').notNull().default('#dc2626'),        // Акцент (красный)
+
+	// === ЦВЕТОВАЯ СХЕМА (DARK THEME) ===
+	dark_bg_primary: text('dark_bg_primary').notNull().default('#17212b'),      // Фон (Telegram style)
+	dark_bg_secondary: text('dark_bg_secondary').notNull().default('#0e1621'),  // Вторичный фон
+	dark_bg_tertiary: text('dark_bg_tertiary').notNull().default('#1f2c38'),    // Третичный фон
+	dark_primary_color: text('dark_primary_color').notNull().default('#ff8533'), // Primary в dark mode
+	dark_text_primary: text('dark_text_primary').notNull().default('#ffffff'),
+	dark_text_secondary: text('dark_text_secondary').notNull().default('#aaaaaa'),
+	dark_border_color: text('dark_border_color').notNull().default('#2b3943'),
+
+	// === НАВИГАЦИЯ ===
+	// JSON массив с настройками нижнего меню (5 кнопок)
+	// Формат: [{id, href, label, icon, visible}]
+	bottom_nav_items: text('bottom_nav_items').notNull().default(JSON.stringify([
+		{ id: 'home', href: '/', label: 'Главная', icon: 'home', visible: true },
+		{ id: 'offers', href: '/offers', label: 'Акции', icon: 'tag', visible: true },
+		{ id: 'stores', href: '/stores', label: 'Магазины', icon: 'location', visible: true },
+		{ id: 'history', href: '/history', label: 'Бонусы', icon: 'coins', visible: true },
+		{ id: 'profile', href: '/profile', label: 'Профиль', icon: 'user', visible: true }
+	])),
+
+	// JSON массив с настройками бокового меню
+	// Формат: [{id, href, label, icon, visible, isExternal}]
+	sidebar_menu_items: text('sidebar_menu_items').notNull().default(JSON.stringify([
+		{ id: 'home', href: '/', label: 'Главная', icon: '📊', visible: true, isExternal: false },
+		{ id: 'products', href: '/products', label: 'Товары', icon: '🛍️', visible: true, isExternal: false },
+		{ id: 'offers', href: '/offers', label: 'Акции', icon: '🎁', visible: true, isExternal: false },
+		{ id: 'stores', href: '/stores', label: 'Магазины', icon: '🏪', visible: true, isExternal: false },
+		{ id: 'history', href: '/history', label: 'История', icon: '📜', visible: true, isExternal: false },
+		{ id: 'profile', href: '/profile', label: 'Профиль', icon: '👤', visible: true, isExternal: false }
+	])),
+
+	// === МЕТА ===
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+export type AppCustomization = typeof appCustomization.$inferSelect;
+export type NewAppCustomization = typeof appCustomization.$inferInsert;

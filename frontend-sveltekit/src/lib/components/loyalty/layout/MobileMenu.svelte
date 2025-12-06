@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { browser } from '$app/environment';
+  import { sidebarMenuItems } from '$lib/stores/customization';
 
   interface Props {
     open: boolean;
@@ -8,15 +9,6 @@
   }
 
   let { open, onClose }: Props = $props();
-
-  const menuItems = [
-    { href: '/', icon: '📊', label: 'Главная' },
-    { href: '/products', icon: '🛍️', label: 'Товары' },
-    { href: '/offers', icon: '🎁', label: 'Акции' },
-    { href: '/stores', icon: '🏪', label: 'Магазины' },
-    { href: '/history', icon: '📜', label: 'История' },
-    { href: '/profile', icon: '👤', label: 'Профиль' }
-  ];
 
   $effect(() => {
     if (!browser) return;
@@ -81,16 +73,29 @@
   </div>
 
   <nav class="sidebar-nav">
-    {#each menuItems as item}
-      <a
-        href={item.href}
-        class="sidebar-item"
-        class:active={$page.url.pathname === item.href}
-        onclick={handleNavClick}
-      >
-        <span class="sidebar-icon">{item.icon}</span>
-        <span>{item.label}</span>
-      </a>
+    {#each $sidebarMenuItems as item}
+      {#if item.isExternal}
+        <a
+          href={item.href}
+          class="sidebar-item"
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick={handleNavClick}
+        >
+          <span class="sidebar-icon">{item.icon}</span>
+          <span>{item.label}</span>
+        </a>
+      {:else}
+        <a
+          href={item.href}
+          class="sidebar-item"
+          class:active={$page.url.pathname === item.href}
+          onclick={handleNavClick}
+        >
+          <span class="sidebar-icon">{item.icon}</span>
+          <span>{item.label}</span>
+        </a>
+      {/if}
     {/each}
   </nav>
 </aside>
