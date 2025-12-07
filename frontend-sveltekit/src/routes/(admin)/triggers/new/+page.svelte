@@ -194,9 +194,9 @@
 					<label for="message">Шаблон сообщения *</label>
 					<div class="variables-hint">
 						Переменные:
-						<button type="button" onclick={() => insertVariable('first_name')}>{'{first_name}'}</button>
-						<button type="button" onclick={() => insertVariable('balance')}>{'{balance}'}</button>
-						<button type="button" onclick={() => insertVariable('card_number')}>{'{card_number}'}</button>
+						<button type="button" onclick={() => insertVariable('first_name')}>&#123;first_name&#125;</button>
+						<button type="button" onclick={() => insertVariable('balance')}>&#123;balance&#125;</button>
+						<button type="button" onclick={() => insertVariable('card_number')}>&#123;card_number&#125;</button>
 					</div>
 					<textarea
 						id="message"
