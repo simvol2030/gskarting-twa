@@ -256,7 +256,13 @@
 							<div class="scanner-error">
 								{#if scannerError === 'camera_permission'}
 									<p class="error-title">❌ Нет доступа к камере</p>
-									<p class="error-hint">💡 Разрешите доступ к камере в настройках браузера</p>
+									<p class="error-hint">📱 Как включить камеру:</p>
+									<ol class="error-steps">
+										<li>Откройте <strong>Настройки</strong> телефона</li>
+										<li>Найдите <strong>Приложения</strong> → <strong>Продавец</strong></li>
+										<li>Выберите <strong>Разрешения</strong></li>
+										<li>Включите <strong>Камера</strong></li>
+									</ol>
 								{:else if scannerError === 'camera_not_found'}
 									<p class="error-title">❌ Камера не найдена</p>
 									<p class="error-hint">💡 Используйте устройство с камерой</p>
@@ -434,6 +440,24 @@
 		font-size: 13px;
 		margin: 0;
 		line-height: 1.4;
+	}
+
+	.error-steps {
+		text-align: left;
+		color: #cbd5e1;
+		font-size: 13px;
+		margin: 8px 0 0 0;
+		padding-left: 20px;
+		line-height: 1.6;
+	}
+
+	.error-steps li {
+		margin: 4px 0;
+	}
+
+	.error-steps strong {
+		color: #10b981;
+		font-weight: 600;
 	}
 
 	.start-scanner-btn {
