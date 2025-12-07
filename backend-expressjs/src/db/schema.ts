@@ -298,6 +298,9 @@ export const pendingDiscounts = sqliteTable('pending_discounts', {
 		.notNull()
 		.references(() => stores.id, { onDelete: 'cascade' }),
 
+	// Customer identification (legacy field, kept for compatibility)
+	customer_card_number: text('customer_card_number').notNull(),
+
 	// Transaction link
 	transaction_id: integer('transaction_id')
 		.notNull()
@@ -527,6 +530,36 @@ export const triggerLogs = sqliteTable('trigger_logs', {
 }, (table) => ({
 	triggerIdx: index('idx_trigger_logs_trigger').on(table.trigger_id),
 	createdIdx: index('idx_trigger_logs_created').on(table.created_at)
+}));
+
+/**
+ * Welcome Messages table - приветственные сообщения Telegram бота
+ * Управление последовательностью сообщений при команде /start
+ */
+export const welcomeMessages = sqliteTable('welcome_messages', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+
+	// Порядок отправки
+	order_number: integer('order_number').notNull(),
+
+	// Контент сообщения
+	message_text: text('message_text').notNull(),
+	message_image: text('message_image'),
+
+	// Кнопка (опционально)
+	button_text: text('button_text'),
+	button_url: text('button_url'),
+
+	// Настройки отправки
+	delay_seconds: integer('delay_seconds').notNull().default(1),
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+
+	// Аудит
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	orderIdx: index('idx_welcome_messages_order').on(table.order_number),
+	activeIdx: index('idx_welcome_messages_active').on(table.is_active, table.order_number)
 }));
 
 /**
@@ -775,3 +808,6 @@ export type NewShopSettings = typeof shopSettings.$inferInsert;
 
 export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
 export type NewOrderStatusHistory = typeof orderStatusHistory.$inferInsert;
+
+export type WelcomeMessage = typeof welcomeMessages.$inferSelect;
+export type NewWelcomeMessage = typeof welcomeMessages.$inferInsert;

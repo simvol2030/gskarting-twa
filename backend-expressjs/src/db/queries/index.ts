@@ -12,3 +12,4 @@ export * from './transactions';
 export * from './cashierTransactions';
 export * from './loyaltySettings';
 export * from './sellers';
+export * from './welcomeMessages';

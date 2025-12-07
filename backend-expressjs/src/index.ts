@@ -44,6 +44,7 @@ import adminSellersRouter from './routes/admin/sellers';
 import adminCategoriesRouter from './routes/admin/categories'; // Shop extension: Categories
 import adminOrdersRouter from './routes/admin/orders'; // Shop extension: Orders management
 import adminShopSettingsRouter from './routes/admin/shop-settings'; // Shop extension: Shop settings
+import adminWelcomeMessagesRouter from './routes/admin/welcome-messages'; // Welcome messages for Telegram bot
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -137,6 +138,7 @@ app.use('/api/admin/sellers', adminSellersRouter); // Seller management
 app.use('/api/admin/categories', adminCategoriesRouter); // Shop extension: Categories
 app.use('/api/admin/orders', adminOrdersRouter); // Shop extension: Orders management
 app.use('/api/admin/shop-settings', adminShopSettingsRouter); // Shop extension: Shop settings
+app.use('/api/admin/welcome-messages', adminWelcomeMessagesRouter); // Welcome messages for bot
 
 // Обработка 404
 app.use((req, res) => {
