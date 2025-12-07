@@ -667,6 +667,10 @@
 
 	/* Mobile Responsive */
 	@media (max-width: 768px) {
+		.amount-input-wrapper {
+			justify-content: center;
+		}
+
 		.amount-input {
 			font-size: 24px;
 			text-align: center;
