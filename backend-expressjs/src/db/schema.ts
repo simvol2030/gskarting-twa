@@ -577,14 +577,10 @@ export const activeChecks = sqliteTable('active_checks', {
 	check_amount: real('check_amount').notNull(),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 	expires_at: text('expires_at').notNull()
+
 }, (table) => ({
 	storeIdx: index('idx_active_checks_store').on(table.store_id),
 	expiresIdx: index('idx_active_checks_expires').on(table.expires_at)
-	numberIdx: index('idx_orders_number').on(table.order_number),
-	userIdx: index('idx_orders_user').on(table.user_id),
-	statusIdx: index('idx_orders_status').on(table.status),
-	createdIdx: index('idx_orders_created').on(table.created_at),
-	storeIdx: index('idx_orders_store').on(table.store_id)
 }));
 
 /**

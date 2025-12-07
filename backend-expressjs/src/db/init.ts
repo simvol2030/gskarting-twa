@@ -231,6 +231,7 @@ export async function initializeDatabase() {
 	}
 	console.log('✅ Database tables initialized (managed by Drizzle ORM)');
 }
+}
 
 /**
  * Seed данных - заполнение БД тестовыми данными
