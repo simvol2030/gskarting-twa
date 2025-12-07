@@ -30,7 +30,8 @@
                                 !$page.url.pathname.startsWith('/settings') &&
                                 !$page.url.pathname.startsWith('/login') &&
                                 !$page.url.pathname.startsWith('/logout') &&
-                                !$page.url.pathname.startsWith('/cashier'));
+                                !$page.url.pathname.startsWith('/cashier') &&
+                                !$page.url.pathname.startsWith('/seller'));
 
   let menuOpen = $state(false);
   let qrModalOpen = $state(false);
