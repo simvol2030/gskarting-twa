@@ -28,6 +28,10 @@ import catalogRouter from './routes/api/catalog'; // Shop extension: Public cata
 import cartRouter from './routes/api/cart'; // Shop extension: Shopping cart
 import ordersRouter from './routes/api/orders'; // Shop extension: Orders
 
+// Bot API routes (public, no auth required)
+import botWelcomeMessagesRouter from './routes/bot/welcome-messages';
+import botRegisterRouter from './routes/bot/register';
+
 // Admin routes
 import adminClientsRouter from './routes/admin/clients';
 import adminPromotionsRouter from './routes/admin/promotions';
@@ -121,6 +125,10 @@ app.use('/api/seller', sellerRouter); // Seller PWA authentication
 app.use('/api/catalog', catalogRouter); // Public catalog (categories & products)
 app.use('/api/cart', cartRouter); // Shopping cart
 app.use('/api/orders', ordersRouter); // Orders
+
+// Bot API routes (public, no auth required)
+app.use('/api/bot/welcome-messages', botWelcomeMessagesRouter); // Welcome messages for bot
+app.use('/api/bot', botRegisterRouter); // User registration via bot
 
 // Admin API routes
 app.use('/api/admin/clients', adminClientsRouter);

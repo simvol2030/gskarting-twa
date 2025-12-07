@@ -58,7 +58,7 @@ interface APIResponse {
  */
 async function getActiveWelcomeMessages(): Promise<WelcomeMessage[]> {
 	try {
-		const response = await fetch(`${API_BASE_URL}/admin/welcome-messages/active`);
+		const response = await fetch(`${API_BASE_URL}/bot/welcome-messages/active`);
 		const json = await response.json() as APIResponse;
 
 		if (!json.success) {
@@ -70,6 +70,40 @@ async function getActiveWelcomeMessages(): Promise<WelcomeMessage[]> {
 	} catch (error) {
 		console.error('Error fetching welcome messages:', error);
 		return [];
+	}
+}
+
+/**
+ * Зарегистрировать пользователя в системе лояльности
+ */
+async function registerUser(ctx: any): Promise<any> {
+	try {
+		const response = await fetch(`${API_BASE_URL}/bot/register`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				telegramUserId: ctx.from.id,
+				chatId: ctx.chat.id,
+				firstName: ctx.from.first_name,
+				lastName: ctx.from.last_name || null,
+				username: ctx.from.username || null,
+				languageCode: ctx.from.language_code || 'ru'
+			})
+		});
+
+		const json = await response.json();
+
+		if (!json.success) {
+			console.error('Failed to register user:', json.error);
+			return null;
+		}
+
+		return json.data;
+	} catch (error) {
+		console.error('Error registering user:', error);
+		return null;
 	}
 }
 
@@ -95,6 +129,17 @@ bot.command('start', async (ctx) => {
 	const telegramUserId = ctx.from?.id;
 
 	console.log(`📝 Новый пользователь: ${firstName} (ID: ${telegramUserId})`);
+
+	// Регистрируем пользователя (или получаем существующего)
+	const registrationResult = await registerUser(ctx);
+	if (!registrationResult) {
+		console.error('⚠️ Failed to register user');
+		await ctx.reply('Произошла ошибка при регистрации. Попробуйте позже.');
+		return;
+	}
+
+	const { user, welcomeBonus, alreadyRegistered } = registrationResult;
+	console.log(`✅ User registered: card=${user.card_number}, balance=${user.current_balance}₽`);
 
 	// Получить сообщения из базы данных
 	const messages = await getActiveWelcomeMessages();
