@@ -331,6 +331,7 @@ router.post('/', async (req: Request, res: Response) => {
 				tx.insert(pendingDiscounts).values({
 					store_id: storeId,
 					transaction_id: spendTx.id, // ✅ Ссылка на transactions.id (spend record)
+					check_amount: checkAmount, // ✅ FIX: Required field for database schema
 					discount_amount: pointsToRedeem,
 					status: 'pending',
 					expires_at: expiresAt

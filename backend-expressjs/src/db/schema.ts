@@ -299,12 +299,14 @@ export const pendingDiscounts = sqliteTable('pending_discounts', {
 		.references(() => stores.id, { onDelete: 'cascade' }),
 
 	// Customer identification (legacy field, kept for compatibility)
-	customer_card_number: text('customer_card_number').notNull(),
+	customer_card_number: text('customer_card_number'),
 
 	// Transaction link
 	transaction_id: integer('transaction_id')
-		.notNull()
 		.references(() => transactions.id, { onDelete: 'cascade' }),
+
+	// Check data
+	check_amount: real('check_amount').notNull(),
 
 	// Discount data
 	discount_amount: real('discount_amount').notNull(),
