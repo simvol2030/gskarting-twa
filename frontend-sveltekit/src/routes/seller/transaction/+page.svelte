@@ -61,9 +61,10 @@
 		try {
 			const response = await fetch('/api/loyalty/settings');
 			if (response.ok) {
-				const data = await response.json();
-				cashbackPercent = data.earning_percent || 4;
-				maxDiscountPercent = data.max_discount_percent || 20;
+				const result = await response.json();
+				// Backend returns: { success: true, data: { earningPercent, maxDiscountPercent, ... } }
+				cashbackPercent = result.data?.earningPercent || 4;
+				maxDiscountPercent = result.data?.maxDiscountPercent || 20;
 			}
 		} catch (err) {
 			console.error('Failed to load settings:', err);
