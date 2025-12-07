@@ -72,6 +72,10 @@
 					<span class="icon">📨</span>
 					<span>Рассылки</span>
 				</a>
+			<a href="/campaigns/welcome" class:active={$page.url.pathname.startsWith('/campaigns/welcome')} onclick={closeMobileMenu}>
+				<span class="icon">👋</span>
+				<span>Приветственные сообщения</span>
+			</a>
 				<a href="/triggers" class:active={$page.url.pathname.startsWith('/triggers')} onclick={closeMobileMenu}>
 					<span class="icon">⚡</span>
 					<span>Триггеры</span>
