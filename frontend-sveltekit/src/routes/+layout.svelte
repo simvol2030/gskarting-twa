@@ -18,9 +18,15 @@
   const isLoyaltyApp = $derived(!$page.url.pathname.startsWith('/dashboard') &&
                                 !$page.url.pathname.startsWith('/clients') &&
                                 !$page.url.pathname.startsWith('/promotions') &&
+                                !$page.url.pathname.startsWith('/campaigns') &&
+                                !$page.url.pathname.startsWith('/triggers') &&
                                 !$page.url.pathname.startsWith('/products-admin') &&
+                                !$page.url.pathname.startsWith('/categories') &&
+                                !$page.url.pathname.startsWith('/orders') &&
                                 !$page.url.pathname.startsWith('/store-list') &&
+                                !$page.url.pathname.startsWith('/sellers') &&
                                 !$page.url.pathname.startsWith('/statistics') &&
+                                !$page.url.pathname.startsWith('/shop-settings') &&
                                 !$page.url.pathname.startsWith('/settings') &&
                                 !$page.url.pathname.startsWith('/login') &&
                                 !$page.url.pathname.startsWith('/logout') &&
