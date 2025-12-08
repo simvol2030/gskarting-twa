@@ -81,7 +81,10 @@
 		loyaltyCardBadgeBg: data.settings.appearance.loyaltyCardBadgeBg || 'rgba(255,255,255,0.95)',
 		loyaltyCardBadgeText: data.settings.appearance.loyaltyCardBadgeText || '#e55d00',
 		loyaltyCardBorderRadius: data.settings.appearance.loyaltyCardBorderRadius ?? 24,
-		loyaltyCardShowShimmer: data.settings.appearance.loyaltyCardShowShimmer ?? true
+		loyaltyCardShowShimmer: data.settings.appearance.loyaltyCardShowShimmer ?? true,
+
+		// Customizable Labels
+		productsLabel: data.settings.appearance.productsLabel || 'Товары'
 	});
 
 	// Preset icons for bottom nav
@@ -332,7 +335,8 @@
 						loyaltyCardBadgeBg: appearanceForm.loyaltyCardBadgeBg,
 						loyaltyCardBadgeText: appearanceForm.loyaltyCardBadgeText,
 						loyaltyCardBorderRadius: appearanceForm.loyaltyCardBorderRadius,
-						loyaltyCardShowShimmer: appearanceForm.loyaltyCardShowShimmer
+						loyaltyCardShowShimmer: appearanceForm.loyaltyCardShowShimmer,
+						productsLabel: appearanceForm.productsLabel
 					}),
 					credentials: 'include'
 				});
@@ -579,6 +583,12 @@
 							<label for="brandSlogan">Слоган</label>
 							<input type="text" id="brandSlogan" bind:value={appearanceForm.appSlogan} maxlength="50" />
 						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="productsLabel">Название раздела Товары</label>
+						<input type="text" id="productsLabel" bind:value={appearanceForm.productsLabel} maxlength="20" placeholder="Товары, Меню, Магазин..." />
+						<small>Как называть раздел товаров в навигации (нижняя панель и боковое меню)</small>
 					</div>
 				</div>
 

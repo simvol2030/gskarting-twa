@@ -236,6 +236,9 @@ router.get('/', async (req, res) => {
 				loyaltyCardBorderRadius: s.loyalty_card_border_radius,
 				loyaltyCardShowShimmer: Boolean(s.loyalty_card_show_shimmer),
 
+				// Customizable Labels
+				productsLabel: s.products_label,
+
 				// Meta
 				updatedAt: s.updated_at
 			}
@@ -315,6 +318,9 @@ router.put('/', requireRole('super-admin', 'editor'), async (req, res) => {
 		if (data.loyaltyCardBadgeText !== undefined) updates.loyalty_card_badge_text = data.loyaltyCardBadgeText;
 		if (data.loyaltyCardBorderRadius !== undefined) updates.loyalty_card_border_radius = Number(data.loyaltyCardBorderRadius);
 		if (data.loyaltyCardShowShimmer !== undefined) updates.loyalty_card_show_shimmer = data.loyaltyCardShowShimmer ? 1 : 0;
+
+		// Customizable Labels
+		if (data.productsLabel !== undefined) updates.products_label = data.productsLabel.trim();
 
 		// Update settings
 		await db.update(appCustomization).set(updates).where(eq(appCustomization.id, 1));
