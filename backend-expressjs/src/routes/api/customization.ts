@@ -102,7 +102,8 @@ router.get('/', async (req, res) => {
 			},
 
 			// Customizable Labels
-			productsLabel: s.products_label
+			productsLabel: s.products_label,
+			productsIcon: s.products_icon
 		};
 
 		// Update cache

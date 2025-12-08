@@ -754,6 +754,7 @@ export const appCustomization = sqliteTable('app_customization', {
 
 	// === КАСТОМИЗАЦИЯ ЛЕЙБЛОВ ===
 	products_label: text('products_label').notNull().default('Товары'),  // Название раздела товаров (Меню, Товары, Магазин)
+	products_icon: text('products_icon').notNull().default('cart'),  // Иконка раздела товаров (cart, shopping-bag, heart, star)
 
 	// === ВИДЖЕТ ЛОЯЛЬНОСТИ (карточка баланса) ===
 	loyalty_card_gradient_start: text('loyalty_card_gradient_start').notNull().default('#ff6b00'),  // Начало градиента

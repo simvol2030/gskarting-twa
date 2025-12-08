@@ -60,6 +60,7 @@ export interface CustomizationData {
 	};
 	loyaltyCard: LoyaltyCardSettings;
 	productsLabel: string; // Customizable label for Products section
+	productsIcon: string; // Customizable icon for Products section (cart, shopping-bag, heart, star)
 }
 
 // Default values (fallback if API is not available)
@@ -112,7 +113,8 @@ const defaultCustomization: CustomizationData = {
 		borderRadius: 24,
 		showShimmer: true
 	},
-	productsLabel: 'Товары'
+	productsLabel: 'Товары',
+	productsIcon: 'cart'
 };
 
 // SVG paths for bottom nav icons
@@ -143,7 +145,7 @@ export const colors = derived(customization, $c => $c.colors);
 export const darkTheme = derived(customization, $c => $c.darkTheme);
 export const bottomNavItems = derived(customization, $c =>
 	$c.navigation.bottomNav.filter(item => item.visible).map(item =>
-		item.id === 'products' ? { ...item, label: $c.productsLabel } : item
+		item.id === 'products' ? { ...item, label: $c.productsLabel, icon: $c.productsIcon } : item
 	)
 );
 export const sidebarMenuItems = derived(customization, $c =>
@@ -152,6 +154,7 @@ export const sidebarMenuItems = derived(customization, $c =>
 	)
 );
 export const productsLabel = derived(customization, $c => $c.productsLabel);
+export const productsIcon = derived(customization, $c => $c.productsIcon);
 // BUG-3 FIX: Add fallback for loyaltyCard if undefined (defensive programming)
 export const loyaltyCardSettings = derived(customization, $c => $c.loyaltyCard || defaultCustomization.loyaltyCard);
 

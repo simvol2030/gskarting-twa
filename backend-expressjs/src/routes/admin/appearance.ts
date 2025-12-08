@@ -238,6 +238,7 @@ router.get('/', async (req, res) => {
 
 				// Customizable Labels
 				productsLabel: s.products_label,
+				productsIcon: s.products_icon,
 
 				// Meta
 				updatedAt: s.updated_at
@@ -321,6 +322,7 @@ router.put('/', requireRole('super-admin', 'editor'), async (req, res) => {
 
 		// Customizable Labels
 		if (data.productsLabel !== undefined) updates.products_label = data.productsLabel.trim();
+		if (data.productsIcon !== undefined) updates.products_icon = data.productsIcon;
 
 		// Update settings
 		await db.update(appCustomization).set(updates).where(eq(appCustomization.id, 1));
