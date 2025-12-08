@@ -16,7 +16,6 @@
 
   // Check if current route is loyalty app (not admin routes or cashier)
   const isLoyaltyApp = $derived(!$page.url.pathname.startsWith('/dashboard') &&
-                                !$page.url.pathname.startsWith('/feed') &&
                                 !$page.url.pathname.startsWith('/feed-admin') &&
                                 !$page.url.pathname.startsWith('/clients') &&
                                 !$page.url.pathname.startsWith('/promotions') &&
