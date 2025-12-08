@@ -921,3 +921,113 @@ export type NewFeedPostTag = typeof feedPostTags.$inferInsert;
 
 export type FeedPostReaction = typeof feedPostReactions.$inferSelect;
 export type NewFeedPostReaction = typeof feedPostReactions.$inferInsert;
+export type NewOrderItem = typeof orderItems.$inferInsert;
+
+export type ShopSettings = typeof shopSettings.$inferSelect;
+export type NewShopSettings = typeof shopSettings.$inferInsert;
+
+export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
+export type NewOrderStatusHistory = typeof orderStatusHistory.$inferInsert;
+
+// =====================================================
+// WEB STORIES TABLES
+// =====================================================
+
+/**
+ * Stories Highlights table - группы/кружки историй
+ * Каждый хайлайт содержит несколько story items
+ */
+export const storiesHighlights = sqliteTable('stories_highlights', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	title: text('title').notNull(),
+	cover_image: text('cover_image'),
+	position: integer('position').notNull().default(0),
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	positionIdx: index('idx_highlights_position').on(table.position),
+	activeIdx: index('idx_highlights_active').on(table.is_active),
+	activePositionIdx: index('idx_highlights_active_position').on(table.is_active, table.position)
+}));
+
+/**
+ * Stories Items table - контент внутри хайлайтов
+ * Поддерживает фото и видео с кнопками-редиректами
+ */
+export const storiesItems = sqliteTable('stories_items', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	highlight_id: integer('highlight_id')
+		.notNull()
+		.references(() => storiesHighlights.id, { onDelete: 'cascade' }),
+	type: text('type', { enum: ['photo', 'video'] }).notNull(),
+	media_url: text('media_url').notNull(),
+	thumbnail_url: text('thumbnail_url'),
+	duration: integer('duration').notNull().default(5), // секунды
+	link_url: text('link_url'),
+	link_text: text('link_text'),
+	position: integer('position').notNull().default(0),
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	highlightIdx: index('idx_items_highlight').on(table.highlight_id),
+	positionIdx: index('idx_items_position').on(table.highlight_id, table.position),
+	activeIdx: index('idx_items_active').on(table.is_active)
+}));
+
+/**
+ * Stories Settings table - настройки отображения Stories
+ * Singleton таблица (всегда 1 запись с id=1)
+ */
+export const storiesSettings = sqliteTable('stories_settings', {
+	id: integer('id').primaryKey().$default(() => 1),
+	enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+	shape: text('shape', { enum: ['circle', 'square'] }).notNull().default('circle'),
+	border_width: integer('border_width').notNull().default(3),
+	border_color: text('border_color').notNull().default('#ff6b00'),
+	border_gradient: text('border_gradient'), // JSON: {start: '#ff6b00', end: '#dc2626'}
+	show_title: integer('show_title', { mode: 'boolean' }).notNull().default(true),
+	title_position: text('title_position', { enum: ['bottom', 'inside'] }).notNull().default('bottom'),
+	highlight_size: integer('highlight_size').notNull().default(70), // px
+	max_video_duration: integer('max_video_duration').notNull().default(45), // секунды
+	max_video_size_mb: integer('max_video_size_mb').notNull().default(50),
+	auto_convert_webp: integer('auto_convert_webp', { mode: 'boolean' }).notNull().default(true),
+	webp_quality: integer('webp_quality').notNull().default(85),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+/**
+ * Stories Views table - аналитика просмотров
+ * Записывает каждый просмотр story item
+ */
+export const storiesViews = sqliteTable('stories_views', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	story_item_id: integer('story_item_id')
+		.notNull()
+		.references(() => storiesItems.id, { onDelete: 'cascade' }),
+	user_id: integer('user_id').references(() => loyaltyUsers.id, { onDelete: 'set null' }),
+	session_id: text('session_id'),
+	view_duration: real('view_duration').notNull().default(0), // секунды
+	completed: integer('completed', { mode: 'boolean' }).notNull().default(false),
+	link_clicked: integer('link_clicked', { mode: 'boolean' }).notNull().default(false),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	itemIdx: index('idx_views_item').on(table.story_item_id),
+	userIdx: index('idx_views_user').on(table.user_id),
+	dateIdx: index('idx_views_date').on(table.created_at),
+	itemDateIdx: index('idx_views_item_date').on(table.story_item_id, table.created_at)
+}));
+
+// TypeScript типы для Web Stories
+export type StoriesHighlight = typeof storiesHighlights.$inferSelect;
+export type NewStoriesHighlight = typeof storiesHighlights.$inferInsert;
+
+export type StoriesItem = typeof storiesItems.$inferSelect;
+export type NewStoriesItem = typeof storiesItems.$inferInsert;
+
+export type StoriesSettings = typeof storiesSettings.$inferSelect;
+export type NewStoriesSettings = typeof storiesSettings.$inferInsert;
+
+export type StoriesView = typeof storiesViews.$inferSelect;
+export type NewStoriesView = typeof storiesViews.$inferInsert;

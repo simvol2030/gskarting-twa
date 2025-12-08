@@ -51,6 +51,10 @@ import adminOrdersRouter from './routes/admin/orders'; // Shop extension: Orders
 import adminShopSettingsRouter from './routes/admin/shop-settings'; // Shop extension: Shop settings
 import adminWelcomeMessagesRouter from './routes/admin/welcome-messages'; // Welcome messages for Telegram bot
 import adminFeedRouter from './routes/admin/feed'; // Feed admin API
+import adminStoriesRouter from './routes/admin/stories'; // Web Stories management
+
+// Public Stories API
+import storiesRouter from './routes/stories';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -129,6 +133,7 @@ app.use('/api/catalog', catalogRouter); // Public catalog (categories & products
 app.use('/api/cart', cartRouter); // Shopping cart
 app.use('/api/orders', ordersRouter); // Orders
 app.use('/api/feed', feedRouter); // Feed/Лента public API
+app.use('/api/stories', storiesRouter); // Web Stories (public)
 
 // Bot API routes (public, no auth required)
 app.use('/api/bot/welcome-messages', botWelcomeMessagesRouter); // Welcome messages for bot
@@ -152,6 +157,7 @@ app.use('/api/admin/orders', adminOrdersRouter); // Shop extension: Orders manag
 app.use('/api/admin/shop-settings', adminShopSettingsRouter); // Shop extension: Shop settings
 app.use('/api/admin/welcome-messages', adminWelcomeMessagesRouter); // Welcome messages for bot
 app.use('/api/admin/feed', adminFeedRouter); // Feed/Лента admin API
+app.use('/api/admin/stories', adminStoriesRouter); // Web Stories management
 
 // Обработка 404
 app.use((req, res) => {

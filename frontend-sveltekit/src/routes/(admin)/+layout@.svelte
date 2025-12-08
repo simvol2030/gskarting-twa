@@ -84,6 +84,10 @@
 					<span class="icon">📰</span>
 					<span>Лента</span>
 				</a>
+				<a href="/stories" class:active={$page.url.pathname.startsWith('/stories')} onclick={closeMobileMenu}>
+					<span class="icon">📸</span>
+					<span>Истории</span>
+				</a>
 				<a href="/products-admin" class:active={$page.url.pathname.startsWith('/products-admin')} onclick={closeMobileMenu}>
 					<span class="icon">🛍️</span>
 					<span>Товары</span>
