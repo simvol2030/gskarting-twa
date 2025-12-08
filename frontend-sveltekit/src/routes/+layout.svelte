@@ -29,6 +29,7 @@
                                 !$page.url.pathname.startsWith('/sellers') &&
                                 !$page.url.pathname.startsWith('/statistics') &&
                                 !$page.url.pathname.startsWith('/shop-settings') &&
+                                !$page.url.pathname.startsWith('/stories') &&
                                 !$page.url.pathname.startsWith('/settings') &&
                                 !$page.url.pathname.startsWith('/login') &&
                                 !$page.url.pathname.startsWith('/logout') &&
