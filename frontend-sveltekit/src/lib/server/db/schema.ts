@@ -625,16 +625,18 @@ export type NewFeedPostTag = typeof feedPostTags.$inferInsert;
 
 export type FeedPostReaction = typeof feedPostReactions.$inferSelect;
 export type NewFeedPostReaction = typeof feedPostReactions.$inferInsert;
-export type NewOrderItem = typeof orderItems.$inferInsert;
-
-export type ShopSettings = typeof shopSettings.$inferSelect;
-export type NewShopSettings = typeof shopSettings.$inferInsert;
-
-export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
-export type NewOrderStatusHistory = typeof orderStatusHistory.$inferInsert;
 
 // =====================================================
 // WEB STORIES TABLES
+// =====================================================
+
+/**
+ * Stories Highlights table - группы/кружки историй
+ * Каждый хайлайт содержит несколько story items
+ */
+export const storiesHighlights = sqliteTable('stories_highlights', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	title: text('title').notNull(),
 	cover_image: text('cover_image'),
 	position: integer('position').notNull().default(0),
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
