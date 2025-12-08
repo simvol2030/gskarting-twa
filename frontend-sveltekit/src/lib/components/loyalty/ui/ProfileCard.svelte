@@ -94,6 +94,8 @@
         console.log('[ProfileCard] 📡 Background: Calling initializeUser() with pre-fetched user...');
         const result = await initializeUser(undefined, telegramUser);
         console.log('[ProfileCard] 📡 Background: initializeUser() result:', result);
+        console.log('[ProfileCard] 📡 Result type:', typeof result);
+        console.log('[ProfileCard] 📡 Result keys:', result ? Object.keys(result) : 'null');
 
         if (result && result.success) {
           console.log('[ProfileCard] 💰 Updating balance from API:', result.user.current_balance);
@@ -112,14 +114,17 @@
             displayUserBalance: displayUser.balance
           });
         } else {
-          // Show error to user
-          registrationError = 'Не удалось зарегистрировать аккаунт. Попробуйте перезапустить приложение.';
-          console.warn('[ProfileCard] ⚠️ API returned no result');
+          // Show detailed error
+          const errorDetail = !result ? 'API returned null' : `success=${result.success}`;
+          registrationError = `Не удалось зарегистрировать аккаунт (${errorDetail}). Попробуйте перезапустить приложение.`;
+          console.warn('[ProfileCard] ⚠️ API failed:', errorDetail);
+          console.warn('[ProfileCard] ⚠️ Full result:', JSON.stringify(result));
         }
       } catch (error) {
         // Show error to user
         registrationError = 'Ошибка подключения к серверу. Проверьте интернет и перезапустите приложение.';
         console.error('[ProfileCard] ❌ Background API failed:', error);
+        console.error('[ProfileCard] ❌ Error details:', error instanceof Error ? error.message : String(error));
       } finally {
         isRegistering = false;
       }
