@@ -789,15 +789,6 @@ export type NewActiveCheck = typeof activeChecks.$inferInsert;
 
 export type Seller = typeof sellers.$inferSelect;
 export type NewSeller = typeof sellers.$inferInsert;
-export type Category = typeof categories.$inferSelect;
-export type NewCategory = typeof categories.$inferInsert;
-
-export type CartItem = typeof cartItems.$inferSelect;
-export type NewCartItem = typeof cartItems.$inferInsert;
-
-export type Order = typeof orders.$inferSelect;
-export type NewOrder = typeof orders.$inferInsert;
-
 export type OrderItem = typeof orderItems.$inferSelect;
 export type NewOrderItem = typeof orderItems.$inferInsert;
 
