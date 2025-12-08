@@ -80,6 +80,10 @@
 					<span class="icon">⚡</span>
 					<span>Триггеры</span>
 				</a>
+				<a href="/feed-admin" class:active={$page.url.pathname.startsWith('/feed-admin')} onclick={closeMobileMenu}>
+					<span class="icon">📰</span>
+					<span>Лента</span>
+				</a>
 				<a href="/products-admin" class:active={$page.url.pathname.startsWith('/products-admin')} onclick={closeMobileMenu}>
 					<span class="icon">🛍️</span>
 					<span>Товары</span>
