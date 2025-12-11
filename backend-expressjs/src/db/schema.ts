@@ -165,7 +165,7 @@ export const categories = sqliteTable('categories', {
 	slug: text('slug').notNull().unique(),
 	description: text('description'),
 	image: text('image'),
-	parent_id: integer('parent_id').references((): ReturnType<typeof integer> => categories.id, { onDelete: 'set null' }),
+	parent_id: integer('parent_id').references(() => categories.id, { onDelete: 'set null' }),
 	position: integer('position').notNull().default(0),
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -916,13 +916,6 @@ export type NewFeedPostTag = typeof feedPostTags.$inferInsert;
 
 export type FeedPostReaction = typeof feedPostReactions.$inferSelect;
 export type NewFeedPostReaction = typeof feedPostReactions.$inferInsert;
-export type NewOrderItem = typeof orderItems.$inferInsert;
-
-export type ShopSettings = typeof shopSettings.$inferSelect;
-export type NewShopSettings = typeof shopSettings.$inferInsert;
-
-export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
-export type NewOrderStatusHistory = typeof orderStatusHistory.$inferInsert;
 
 // =====================================================
 // WEB STORIES TABLES
