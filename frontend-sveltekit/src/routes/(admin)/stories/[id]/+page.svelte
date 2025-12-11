@@ -42,6 +42,7 @@
 	// Upload state
 	let uploading = $state(false);
 	let uploadProgress = $state(0);
+	let uploadComplete = $state(false);
 
 	// Drag & Drop
 	let draggedItem = $state<StoryItem | null>(null);
@@ -195,11 +196,16 @@
 			}
 		}
 
+		// Reset upload state
 		uploading = true;
+		uploadProgress = 0;
+		uploadComplete = false;
 		itemError = null;
 
 		try {
-			const result = await storiesAPI.upload.uploadMedia(file);
+			const result = await storiesAPI.upload.uploadMedia(file, (percent) => {
+				uploadProgress = percent;
+			});
 			itemForm.mediaUrl = result.url;
 			if (result.thumbnailUrl) {
 				itemForm.thumbnailUrl = result.thumbnailUrl;
@@ -207,10 +213,16 @@
 			if (result.duration) {
 				itemForm.duration = Math.ceil(result.duration);
 			}
+			// Show success state briefly
+			uploadComplete = true;
+			setTimeout(() => {
+				uploadComplete = false;
+			}, 2000);
 		} catch (err: any) {
 			itemError = err.message || 'Ошибка загрузки';
 		} finally {
 			uploading = false;
+			uploadProgress = 0;
 			input.value = '';
 		}
 	}
@@ -467,9 +479,17 @@
 					<button type="button" class="remove-media" onclick={() => itemForm.mediaUrl = ''}>✕</button>
 				</div>
 			{:else}
-				<label class="upload-area" class:uploading>
+				<label class="upload-area" class:uploading class:upload-complete={uploadComplete}>
 					{#if uploading}
-						<span>Загрузка...</span>
+						<div class="upload-progress-container">
+							<div class="upload-progress-bar">
+								<div class="upload-progress-fill" style="width: {uploadProgress}%"></div>
+							</div>
+							<span class="upload-progress-text">Загрузка... {uploadProgress}%</span>
+						</div>
+					{:else if uploadComplete}
+						<span class="upload-success-icon">✓</span>
+						<span class="upload-success-text">Загружено!</span>
 					{:else}
 						<span class="upload-icon">📤</span>
 						<span>Нажмите для загрузки фото или видео</span>
@@ -972,6 +992,62 @@
 		font-size: 0.75rem;
 		color: #9ca3af;
 		margin-top: 0.5rem;
+	}
+
+	/* Upload progress styles */
+	.upload-progress-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+		max-width: 200px;
+	}
+
+	.upload-progress-bar {
+		width: 100%;
+		height: 8px;
+		background: #e5e7eb;
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	.upload-progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #667eea, #764ba2);
+		border-radius: 4px;
+		transition: width 0.2s ease;
+	}
+
+	.upload-progress-text {
+		font-size: 0.875rem;
+		color: #667eea;
+		font-weight: 500;
+	}
+
+	.upload-area.upload-complete {
+		border-color: #10b981;
+		background: #ecfdf5;
+	}
+
+	.upload-success-icon {
+		width: 48px;
+		height: 48px;
+		background: #10b981;
+		color: white;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.5rem;
+		font-weight: bold;
+		margin-bottom: 0.5rem;
+	}
+
+	.upload-success-text {
+		font-size: 1rem;
+		color: #10b981;
+		font-weight: 600;
 	}
 
 	.media-preview {
