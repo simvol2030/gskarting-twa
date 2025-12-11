@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
 		const conditions = [];
 
 		if (status && status !== 'all') {
-			conditions.push(eq(orders.status, status as string));
+			conditions.push(eq(orders.status, status as 'processing' | 'cancelled' | 'delivered' | 'new' | 'confirmed' | 'shipped'));
 		}
 
 		if (dateFrom) {

@@ -85,7 +85,7 @@ async function sendTelegramMessage(botToken: string, chatId: string, message: st
 			})
 		});
 
-		const result = await response.json();
+		const result = await response.json() as { ok: boolean; description?: string };
 		if (!result.ok) {
 			console.error('Telegram API error:', result.description);
 			return false;
