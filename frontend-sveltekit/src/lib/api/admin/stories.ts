@@ -225,21 +225,54 @@ export const itemsAPI = {
 
 export const uploadAPI = {
 	/**
-	 * Upload media file (image or video)
+	 * Upload media file (image or video) with progress tracking
 	 */
-	async uploadMedia(file: File, onProgress?: (percent: number) => void): Promise<UploadMediaResponse> {
-		const formData = new FormData();
-		formData.append('file', file);
+	uploadMedia(file: File, onProgress?: (percent: number) => void): Promise<UploadMediaResponse> {
+		return new Promise((resolve, reject) => {
+			const formData = new FormData();
+			formData.append('file', file);
 
-		// For progress tracking, we'd need XMLHttpRequest
-		// For simplicity, using fetch without progress
-		const response = await fetch(`${API_BASE_URL}/api/admin/stories/upload`, {
-			method: 'POST',
-			credentials: 'include',
-			body: formData
+			const xhr = new XMLHttpRequest();
+
+			// Track upload progress
+			xhr.upload.onprogress = (event) => {
+				if (event.lengthComputable && onProgress) {
+					const percent = Math.round((event.loaded / event.total) * 100);
+					onProgress(percent);
+				}
+			};
+
+			xhr.onload = () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					try {
+						const response = JSON.parse(xhr.responseText);
+						resolve(response);
+					} catch {
+						reject(new Error('Ошибка парсинга ответа сервера'));
+					}
+				} else {
+					try {
+						const errorData = JSON.parse(xhr.responseText);
+						reject(new Error(errorData.error || `Ошибка загрузки: ${xhr.status}`));
+					} catch {
+						reject(new Error(`Ошибка загрузки: ${xhr.status}`));
+					}
+				}
+			};
+
+			xhr.onerror = () => {
+				reject(new Error('Ошибка сети при загрузке файла'));
+			};
+
+			xhr.ontimeout = () => {
+				reject(new Error('Превышено время ожидания загрузки'));
+			};
+
+			xhr.open('POST', `${API_BASE_URL}/api/admin/stories/upload`);
+			xhr.withCredentials = true;
+			xhr.timeout = 300000; // 5 minutes timeout for large files
+			xhr.send(formData);
 		});
-
-		return handleResponse(response);
 	},
 
 	/**
