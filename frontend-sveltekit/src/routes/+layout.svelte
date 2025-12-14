@@ -2,7 +2,7 @@
   import { onMount, setContext } from 'svelte';
   import { page } from '$app/stores';
   import { initTheme } from '$lib/stores/loyalty';
-  import { loadCustomization, appName, colors } from '$lib/stores/customization';
+  import { loadCustomization, customization, applyCustomStyles, appName, colors } from '$lib/stores/customization';
   import Header from '$lib/components/loyalty/layout/Header.svelte';
   import BottomNav from '$lib/components/loyalty/layout/BottomNav.svelte';
   import MobileMenu from '$lib/components/loyalty/layout/MobileMenu.svelte';
@@ -13,6 +13,13 @@
   import '$lib/styles/loyalty.css';
 
   let { children, data } = $props();
+
+  // BUG FIX: Initialize customization immediately from server data to prevent logo flashing
+  // This runs BEFORE first render, unlike onMount which runs after
+  if (data.customization && typeof window !== 'undefined') {
+    customization.set(data.customization);
+    applyCustomStyles(data.customization);
+  }
 
   // Check if current route is loyalty app (not admin routes or cashier)
   // Note: Admin routes use (admin)/+layout@.svelte but we still need to exclude them here
@@ -89,10 +96,16 @@
       console.log('[+layout] 🌐 window.Telegram at mount:', !!window.Telegram);
       console.log('[+layout] 📍 Current pathname:', $page.url.pathname);
 
-      // Load customization settings first (non-blocking)
-      loadCustomization().catch(err => {
-        console.warn('[+layout] ⚠️ Failed to load customization:', err);
-      });
+      // Customization already loaded from server data (see lines 17-22)
+      // Only fallback to API if server data was not available
+      if (!data.customization) {
+        console.log('[+layout] ⚠️ No server customization, loading from API');
+        loadCustomization().catch(err => {
+          console.warn('[+layout] ⚠️ Failed to load customization:', err);
+        });
+      } else {
+        console.log('[+layout] ✅ Using server-loaded customization (SSR)');
+      }
 
       // Initialize theme
       initTheme();
