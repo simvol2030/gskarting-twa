@@ -142,26 +142,26 @@
 </script>
 
 <svelte:head>
-	<title>Checkout</title>
+	<title>Оформление заказа</title>
 </svelte:head>
 
 <div class="checkout-page">
 	{#if loading}
 		<div class="loading">
 			<div class="spinner"></div>
-			<p>Loading...</p>
+			<p>Загрузка...</p>
 		</div>
 	{:else if !settings}
 		<div class="error-state">
-			<p>Failed to load checkout</p>
-			<button onclick={() => goto('/products')}>Back to Products</button>
+			<p>Не удалось загрузить оформление</p>
+			<button onclick={() => goto('/products')}>Вернуться к товарам</button>
 		</div>
 	{:else}
 		<header class="page-header">
 			<button class="back-btn" onclick={() => history.back()}>
 				<span class="back-icon">&larr;</span>
 			</button>
-			<h1>Checkout</h1>
+			<h1>Оформление заказа</h1>
 		</header>
 
 		{#if error}
@@ -171,21 +171,21 @@
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 			<!-- Contact Info -->
 			<section class="form-section">
-				<h2>Contact Info</h2>
+				<h2>Контактная информация</h2>
 
 				<div class="form-group">
-					<label for="name">Name *</label>
+					<label for="name">Имя *</label>
 					<input
 						type="text"
 						id="name"
 						bind:value={customerName}
-						placeholder="John Doe"
+						placeholder="Иван Иванов"
 						required
 					/>
 				</div>
 
 				<div class="form-group">
-					<label for="phone">Phone *</label>
+					<label for="phone">Телефон *</label>
 					<input
 						type="tel"
 						id="phone"
@@ -197,7 +197,7 @@
 				</div>
 
 				<div class="form-group">
-					<label for="email">Email (optional)</label>
+					<label for="email">Email (не обязательно)</label>
 					<input
 						type="email"
 						id="email"
@@ -209,7 +209,7 @@
 
 			<!-- Delivery Type -->
 			<section class="form-section">
-				<h2>How to receive</h2>
+				<h2>Способ получения</h2>
 
 				<div class="delivery-options">
 					{#if settings.deliveryEnabled}
@@ -220,17 +220,17 @@
 							onclick={() => deliveryType = 'delivery'}
 						>
 							<span class="option-icon">🚚</span>
-							<span class="option-label">Delivery</span>
+							<span class="option-label">Доставка</span>
 							{#if settings.deliveryCost > 0}
 								<span class="option-price">
 									{#if settings.freeDeliveryFrom}
-										Free from {settings.freeDeliveryFrom.toLocaleString('ru-RU')} ₽
+										Бесплатно от {settings.freeDeliveryFrom.toLocaleString('ru-RU')} ₽
 									{:else}
 										{settings.deliveryCost.toLocaleString('ru-RU')} ₽
 									{/if}
 								</span>
 							{:else}
-								<span class="option-price free">Free</span>
+								<span class="option-price free">Бесплатно</span>
 							{/if}
 						</button>
 					{/if}
@@ -243,8 +243,8 @@
 							onclick={() => deliveryType = 'pickup'}
 						>
 							<span class="option-icon">🏪</span>
-							<span class="option-label">Pickup</span>
-							<span class="option-price free">Free</span>
+							<span class="option-label">Самовывоз</span>
+							<span class="option-price free">Бесплатно</span>
 						</button>
 					{/if}
 				</div>
@@ -253,19 +253,19 @@
 				{#if deliveryType === 'delivery'}
 					<div class="address-fields">
 						<div class="form-group">
-							<label for="address">Address *</label>
+							<label for="address">Адрес *</label>
 							<input
 								type="text"
 								id="address"
 								bind:value={deliveryAddress}
-								placeholder="Street, building"
+								placeholder="Улица, дом"
 								required
 							/>
 						</div>
 
 						<div class="form-row">
 							<div class="form-group small">
-								<label for="entrance">Entrance</label>
+								<label for="entrance">Подъезд</label>
 								<input
 									type="text"
 									id="entrance"
@@ -275,7 +275,7 @@
 							</div>
 
 							<div class="form-group small">
-								<label for="floor">Floor</label>
+								<label for="floor">Этаж</label>
 								<input
 									type="text"
 									id="floor"
@@ -285,7 +285,7 @@
 							</div>
 
 							<div class="form-group small">
-								<label for="apartment">Apt.</label>
+								<label for="apartment">Кв.</label>
 								<input
 									type="text"
 									id="apartment"
@@ -296,7 +296,7 @@
 						</div>
 
 						<div class="form-group">
-							<label for="intercom">Intercom</label>
+							<label for="intercom">Домофон</label>
 							<input
 								type="text"
 								id="intercom"
@@ -310,7 +310,7 @@
 				<!-- Store Selection for Pickup -->
 				{#if deliveryType === 'pickup'}
 					<div class="store-selection">
-						<p class="selection-label">Select pickup point *</p>
+						<p class="selection-label">Выберите точку самовывоза *</p>
 						<div class="stores-list">
 							{#each settings.stores as store (store.id)}
 								<button
@@ -331,11 +331,11 @@
 
 			<!-- Notes -->
 			<section class="form-section">
-				<h2>Notes (optional)</h2>
+				<h2>Примечания (не обязательно)</h2>
 				<div class="form-group">
 					<textarea
 						bind:value={notes}
-						placeholder="Special requests or instructions..."
+						placeholder="Особые пожелания или инструкции..."
 						rows="3"
 					></textarea>
 				</div>
@@ -343,7 +343,7 @@
 
 			<!-- Order Summary -->
 			<section class="form-section summary-section">
-				<h2>Order Summary</h2>
+				<h2>Итого по заказу</h2>
 
 				<div class="summary-items">
 					{#each cartItems as item (item.id)}
@@ -357,21 +357,21 @@
 
 				<div class="summary-totals">
 					<div class="summary-row">
-						<span>Subtotal ({itemCount} items)</span>
+						<span>Сумма ({itemCount} товаров)</span>
 						<span>{subtotal.toLocaleString('ru-RU')} ₽</span>
 					</div>
 
 					{#if deliveryType === 'delivery'}
 						<div class="summary-row">
-							<span>Delivery</span>
+							<span>Доставка</span>
 							<span class:free={deliveryCost() === 0}>
-								{deliveryCost() === 0 ? 'Free' : deliveryCost().toLocaleString('ru-RU') + ' ₽'}
+								{deliveryCost() === 0 ? 'Бесплатно' : deliveryCost().toLocaleString('ru-RU') + ' ₽'}
 							</span>
 						</div>
 					{/if}
 
 					<div class="summary-row total">
-						<span>Total</span>
+						<span>Итого</span>
 						<span>{total.toLocaleString('ru-RU')} ₽</span>
 					</div>
 				</div>
@@ -380,7 +380,7 @@
 			<!-- Min Order Warning -->
 			{#if !minOrderMet()}
 				<div class="min-order-warning">
-					Minimum order: {settings.minOrderAmount.toLocaleString('ru-RU')} ₽
+					Минимальный заказ: {settings.minOrderAmount.toLocaleString('ru-RU')} ₽
 				</div>
 			{/if}
 
@@ -392,9 +392,9 @@
 			>
 				{#if submitting}
 					<span class="btn-spinner"></span>
-					Processing...
+					Обработка...
 				{:else}
-					Place Order ({total.toLocaleString('ru-RU')} ₽)
+					Оформить заказ ({total.toLocaleString('ru-RU')} ₽)
 				{/if}
 			</button>
 		</form>
