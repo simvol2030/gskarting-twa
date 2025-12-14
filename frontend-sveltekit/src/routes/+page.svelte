@@ -54,11 +54,10 @@
 <!-- Section Divider -->
 <div class="section-divider"></div>
 
-<!-- 4. Рекомендации для вашего питомца -->
+<!-- 4. Рекомендации для Вас -->
 <section class="section-content">
   <h2 class="section-header centered">
-    <span>🐾</span>
-    <span>Рекомендации для вашего питомца</span>
+    <span>Рекомендации для Вас</span>
   </h2>
   <div class="recommendations-list">
     {#each data.recommendations as recommendation}

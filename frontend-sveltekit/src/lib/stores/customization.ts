@@ -65,8 +65,8 @@ export interface CustomizationData {
 
 // Default values (fallback if API is not available)
 const defaultCustomization: CustomizationData = {
-	appName: 'Мурзико',
-	appSlogan: 'Лояльность',
+	appName: 'ГРАНАТ',
+	appSlogan: '',
 	logoUrl: '/logo.png',
 	faviconUrl: '/favicon.ico',
 	colors: {
