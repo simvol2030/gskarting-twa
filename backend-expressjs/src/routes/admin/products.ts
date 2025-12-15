@@ -9,11 +9,21 @@ import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
 import { db } from '../../db/client';
-import { products, categories } from '../../db/schema';
+import { products, categories, productVariations } from '../../db/schema';
 import { eq, and, desc, like, sql, asc } from 'drizzle-orm';
 import { authenticateSession, requireRole } from '../../middleware/session-auth';
 import { validateProductData } from '../../utils/validation';
 import { parse as csvParse } from 'csv-parse/sync';
+import {
+	getVariationsByProductId,
+	getVariationById,
+	createVariation,
+	updateVariation,
+	deleteVariation,
+	createVariationsBulk,
+	updateVariationsOrder,
+	hasVariations
+} from '../../db/queries/productVariations';
 
 const router = Router();
 
@@ -130,22 +140,51 @@ router.get('/', async (req, res) => {
 			.limit(limitNum)
 			.offset(offset);
 
-		const productsData = dbProducts.map((p) => ({
-			id: p.id,
-			name: p.name,
-			description: p.description,
-			price: p.price,
-			oldPrice: p.old_price,
-			quantityInfo: p.quantity_info,
-			image: p.image,
-			category: p.category,
-			categoryId: p.category_id, // Shop extension
-			sku: p.sku, // Shop extension
-			position: p.position, // Shop extension
-			isActive: Boolean(p.is_active),
-			showOnHome: Boolean(p.show_on_home),
-			isRecommendation: Boolean(p.is_recommendation)
-		}));
+		// Get variations for all products
+		const productIds = dbProducts.map(p => p.id);
+		const allVariations = productIds.length > 0
+			? await db.select().from(productVariations).where(sql`${productVariations.product_id} IN (${sql.join(productIds.map(id => sql`${id}`), sql`, `)})`)
+			: [];
+
+		const variationsByProduct = new Map<number, typeof allVariations>();
+		for (const v of allVariations) {
+			if (!variationsByProduct.has(v.product_id)) {
+				variationsByProduct.set(v.product_id, []);
+			}
+			variationsByProduct.get(v.product_id)!.push(v);
+		}
+
+		const productsData = dbProducts.map((p) => {
+			const productVariations = variationsByProduct.get(p.id) || [];
+			return {
+				id: p.id,
+				name: p.name,
+				description: p.description,
+				price: p.price,
+				oldPrice: p.old_price,
+				quantityInfo: p.quantity_info,
+				image: p.image,
+				category: p.category,
+				categoryId: p.category_id,
+				sku: p.sku,
+				position: p.position,
+				isActive: Boolean(p.is_active),
+				showOnHome: Boolean(p.show_on_home),
+				isRecommendation: Boolean(p.is_recommendation),
+				variationAttribute: p.variation_attribute,
+				hasVariations: productVariations.length > 0,
+				variations: productVariations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.old_price,
+					sku: v.sku,
+					position: v.position,
+					isDefault: Boolean(v.is_default),
+					isActive: Boolean(v.is_active)
+				}))
+			};
+		});
 
 		res.json({
 			success: true,
@@ -233,7 +272,8 @@ router.post('/', requireRole('super-admin', 'editor'), async (req, res) => {
 	try {
 		const {
 			name, description, price, oldPrice, quantityInfo, image,
-			category, categoryId, sku, // Shop extension
+			category, categoryId, sku,
+			variationAttribute, variations, // Product variations support
 			isActive = true, showOnHome = false, isRecommendation = false
 		} = req.body;
 
@@ -256,8 +296,9 @@ router.post('/', requireRole('super-admin', 'editor'), async (req, res) => {
 				quantity_info: quantityInfo,
 				image,
 				category,
-				category_id: categoryId || null, // Shop extension
-				sku: sku || null, // Shop extension
+				category_id: categoryId || null,
+				sku: sku || null,
+				variation_attribute: variationAttribute || null,
 				is_active: isActive,
 				show_on_home: showOnHome,
 				is_recommendation: isRecommendation
@@ -265,6 +306,20 @@ router.post('/', requireRole('super-admin', 'editor'), async (req, res) => {
 			.returning();
 
 		const created = result[0];
+
+		// Create variations if provided
+		let createdVariations: any[] = [];
+		if (variations && Array.isArray(variations) && variations.length > 0) {
+			createdVariations = await createVariationsBulk(created.id, variations.map((v: any, index: number) => ({
+				name: v.name,
+				price: v.price,
+				old_price: v.oldPrice,
+				sku: v.sku,
+				position: v.position ?? index,
+				is_default: v.isDefault ?? (index === 0),
+				is_active: v.isActive ?? true
+			})));
+		}
 
 		res.status(201).json({
 			success: true,
@@ -277,11 +332,23 @@ router.post('/', requireRole('super-admin', 'editor'), async (req, res) => {
 				quantityInfo: created.quantity_info,
 				image: created.image,
 				category: created.category,
-				categoryId: created.category_id, // Shop extension
-				sku: created.sku, // Shop extension
+				categoryId: created.category_id,
+				sku: created.sku,
+				variationAttribute: created.variation_attribute,
 				isActive: Boolean(created.is_active),
 				showOnHome: Boolean(created.show_on_home),
-				isRecommendation: Boolean(created.is_recommendation)
+				isRecommendation: Boolean(created.is_recommendation),
+				hasVariations: createdVariations.length > 0,
+				variations: createdVariations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.old_price,
+					sku: v.sku,
+					position: v.position,
+					isDefault: Boolean(v.is_default),
+					isActive: Boolean(v.is_active)
+				}))
 			}
 		});
 	} catch (error: any) {
@@ -299,7 +366,8 @@ router.put('/:id', requireRole('super-admin', 'editor'), async (req, res) => {
 		const productId = parseInt(req.params.id);
 		const {
 			name, description, price, oldPrice, quantityInfo, image,
-			category, categoryId, sku, // Shop extension
+			category, categoryId, sku,
+			variationAttribute, variations, // Product variations support
 			isActive, showOnHome, isRecommendation
 		} = req.body;
 
@@ -322,8 +390,9 @@ router.put('/:id', requireRole('super-admin', 'editor'), async (req, res) => {
 				quantity_info: quantityInfo,
 				image,
 				category,
-				category_id: categoryId !== undefined ? categoryId : undefined, // Shop extension
-				sku: sku !== undefined ? sku : undefined, // Shop extension
+				category_id: categoryId !== undefined ? categoryId : undefined,
+				sku: sku !== undefined ? sku : undefined,
+				variation_attribute: variationAttribute !== undefined ? variationAttribute : undefined,
 				is_active: isActive,
 				show_on_home: showOnHome,
 				is_recommendation: isRecommendation
@@ -337,6 +406,28 @@ router.put('/:id', requireRole('super-admin', 'editor'), async (req, res) => {
 
 		const updated = result[0];
 
+		// Update variations if provided
+		let updatedVariations: any[] = [];
+		if (variations !== undefined) {
+			if (Array.isArray(variations) && variations.length > 0) {
+				updatedVariations = await createVariationsBulk(productId, variations.map((v: any, index: number) => ({
+					name: v.name,
+					price: v.price,
+					old_price: v.oldPrice,
+					sku: v.sku,
+					position: v.position ?? index,
+					is_default: v.isDefault ?? (index === 0),
+					is_active: v.isActive ?? true
+				})));
+			} else if (Array.isArray(variations) && variations.length === 0) {
+				// Clear all variations if empty array provided
+				await db.delete(productVariations).where(eq(productVariations.product_id, productId));
+			}
+		} else {
+			// Get existing variations
+			updatedVariations = await getVariationsByProductId(productId);
+		}
+
 		res.json({
 			success: true,
 			data: {
@@ -348,11 +439,23 @@ router.put('/:id', requireRole('super-admin', 'editor'), async (req, res) => {
 				quantityInfo: updated.quantity_info,
 				image: updated.image,
 				category: updated.category,
-				categoryId: updated.category_id, // Shop extension
-				sku: updated.sku, // Shop extension
+				categoryId: updated.category_id,
+				sku: updated.sku,
+				variationAttribute: updated.variation_attribute,
 				isActive: Boolean(updated.is_active),
 				showOnHome: Boolean(updated.show_on_home),
-				isRecommendation: Boolean(updated.is_recommendation)
+				isRecommendation: Boolean(updated.is_recommendation),
+				hasVariations: updatedVariations.length > 0,
+				variations: updatedVariations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.old_price,
+					sku: v.sku,
+					position: v.position,
+					isDefault: Boolean(v.is_default),
+					isActive: Boolean(v.is_active)
+				}))
 			}
 		});
 	} catch (error: any) {
@@ -689,6 +792,173 @@ router.get('/import/template', requireRole('super-admin', 'editor'), (req, res) 
 		res.setHeader('Content-Disposition', 'attachment; filename=import_template.csv');
 		// Add BOM for Excel compatibility
 		res.send('\ufeff' + csvContent);
+	}
+});
+
+// =====================================================
+// PRODUCT VARIATIONS API
+// =====================================================
+
+/**
+ * GET /api/admin/products/:id/variations - Get all variations for a product
+ */
+router.get('/:id/variations', async (req, res) => {
+	try {
+		const productId = parseInt(req.params.id);
+		const variations = await getVariationsByProductId(productId);
+
+		res.json({
+			success: true,
+			data: {
+				variations: variations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.old_price,
+					sku: v.sku,
+					position: v.position,
+					isDefault: Boolean(v.is_default),
+					isActive: Boolean(v.is_active)
+				}))
+			}
+		});
+	} catch (error: any) {
+		console.error('Error fetching variations:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * POST /api/admin/products/:id/variations - Create a new variation
+ * ONLY: super-admin, editor
+ */
+router.post('/:id/variations', requireRole('super-admin', 'editor'), async (req, res) => {
+	try {
+		const productId = parseInt(req.params.id);
+		const { name, price, oldPrice, sku, position, isDefault, isActive } = req.body;
+
+		if (!name || typeof price !== 'number' || price <= 0) {
+			return res.status(400).json({
+				success: false,
+				error: 'Название и цена обязательны'
+			});
+		}
+
+		const variation = await createVariation({
+			product_id: productId,
+			name,
+			price,
+			old_price: oldPrice ?? null,
+			sku: sku ?? null,
+			position: position ?? 0,
+			is_default: isDefault ?? false,
+			is_active: isActive ?? true
+		});
+
+		res.status(201).json({
+			success: true,
+			data: {
+				id: variation.id,
+				name: variation.name,
+				price: variation.price,
+				oldPrice: variation.old_price,
+				sku: variation.sku,
+				position: variation.position,
+				isDefault: Boolean(variation.is_default),
+				isActive: Boolean(variation.is_active)
+			}
+		});
+	} catch (error: any) {
+		console.error('Error creating variation:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * PUT /api/admin/products/:id/variations/:variationId - Update a variation
+ * ONLY: super-admin, editor
+ */
+router.put('/:id/variations/:variationId', requireRole('super-admin', 'editor'), async (req, res) => {
+	try {
+		const variationId = parseInt(req.params.variationId);
+		const { name, price, oldPrice, sku, position, isDefault, isActive } = req.body;
+
+		const variation = await updateVariation(variationId, {
+			name,
+			price,
+			old_price: oldPrice,
+			sku,
+			position,
+			is_default: isDefault,
+			is_active: isActive
+		});
+
+		if (!variation) {
+			return res.status(404).json({ success: false, error: 'Вариация не найдена' });
+		}
+
+		res.json({
+			success: true,
+			data: {
+				id: variation.id,
+				name: variation.name,
+				price: variation.price,
+				oldPrice: variation.old_price,
+				sku: variation.sku,
+				position: variation.position,
+				isDefault: Boolean(variation.is_default),
+				isActive: Boolean(variation.is_active)
+			}
+		});
+	} catch (error: any) {
+		console.error('Error updating variation:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * DELETE /api/admin/products/:id/variations/:variationId - Delete a variation
+ * ONLY: super-admin
+ */
+router.delete('/:id/variations/:variationId', requireRole('super-admin'), async (req, res) => {
+	try {
+		const variationId = parseInt(req.params.variationId);
+
+		const deleted = await deleteVariation(variationId);
+
+		if (!deleted) {
+			return res.status(404).json({ success: false, error: 'Вариация не найдена' });
+		}
+
+		res.json({ success: true, message: 'Вариация удалена' });
+	} catch (error: any) {
+		console.error('Error deleting variation:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * PUT /api/admin/products/:id/variations/reorder - Reorder variations
+ * ONLY: super-admin, editor
+ */
+router.put('/:id/variations/reorder', requireRole('super-admin', 'editor'), async (req, res) => {
+	try {
+		const productId = parseInt(req.params.id);
+		const { orderedIds } = req.body;
+
+		if (!Array.isArray(orderedIds)) {
+			return res.status(400).json({
+				success: false,
+				error: 'orderedIds должен быть массивом'
+			});
+		}
+
+		await updateVariationsOrder(productId, orderedIds);
+
+		res.json({ success: true, message: 'Порядок обновлен' });
+	} catch (error: any) {
+		console.error('Error reordering variations:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
 	}
 });
 

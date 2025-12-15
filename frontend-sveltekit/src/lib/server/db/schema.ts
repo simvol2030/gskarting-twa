@@ -109,6 +109,7 @@ export const products = sqliteTable('products', {
 	category_id: integer('category_id').references(() => categories.id, { onDelete: 'set null' }), // Новое поле FK
 	sku: text('sku'), // Артикул
 	position: integer('position').notNull().default(0), // Позиция в категории
+	variation_attribute: text('variation_attribute'), // Название атрибута вариации (Размер, Объём, Цвет)
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 	show_on_home: integer('show_on_home', { mode: 'boolean' }).notNull().default(false),
 	is_recommendation: integer('is_recommendation', { mode: 'boolean' }).notNull().default(false)
@@ -118,6 +119,27 @@ export const products = sqliteTable('products', {
 	categoryIdx: index('idx_products_category').on(table.category_id),
 	skuIdx: index('idx_products_sku').on(table.sku),
 	positionIdx: index('idx_products_position').on(table.category_id, table.position)
+}));
+
+/**
+ * Product Variations - вариации товаров (размеры, объёмы, цвета)
+ */
+export const productVariations = sqliteTable('product_variations', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	product_id: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(), // Название вариации (25см, 30см, 500мл, Красный)
+	price: real('price').notNull(),
+	old_price: real('old_price'),
+	sku: text('sku'),
+	position: integer('position').notNull().default(0),
+	is_default: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	productIdx: index('idx_variations_product').on(table.product_id),
+	productActiveIdx: index('idx_variations_product_active').on(table.product_id, table.is_active),
+	positionIdx: index('idx_variations_position').on(table.product_id, table.position)
 }));
 
 /**
@@ -323,13 +345,15 @@ export const cartItems = sqliteTable('cart_items', {
 	session_id: text('session_id'), // для гостей (cookie)
 	user_id: integer('user_id').references(() => loyaltyUsers.id, { onDelete: 'cascade' }), // для авторизованных
 	product_id: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+	variation_id: integer('variation_id').references(() => productVariations.id, { onDelete: 'cascade' }), // вариация товара
 	quantity: integer('quantity').notNull().default(1),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
 	sessionIdx: index('idx_cart_session').on(table.session_id),
 	userIdx: index('idx_cart_user').on(table.user_id),
-	productIdx: index('idx_cart_product').on(table.product_id)
+	productIdx: index('idx_cart_product').on(table.product_id),
+	variationIdx: index('idx_cart_variation').on(table.variation_id)
 }));
 
 /**
@@ -468,6 +492,9 @@ export type NewLoyaltyUser = typeof loyaltyUsers.$inferInsert;
 
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
+
+export type ProductVariation = typeof productVariations.$inferSelect;
+export type NewProductVariation = typeof productVariations.$inferInsert;
 
 export type Offer = typeof offers.$inferSelect;
 export type NewOffer = typeof offers.$inferInsert;
@@ -728,3 +755,62 @@ export type NewStoriesSettings = typeof storiesSettings.$inferInsert;
 
 export type StoriesView = typeof storiesViews.$inferSelect;
 export type NewStoriesView = typeof storiesViews.$inferInsert;
+
+// =====================================================
+// APP CUSTOMIZATION
+// =====================================================
+
+/**
+ * App Customization table - настройки внешнего вида приложения
+ * Singleton таблица (всегда 1 запись с id=1)
+ */
+export const appCustomization = sqliteTable('app_customization', {
+	id: integer('id').primaryKey().$default(() => 1),
+
+	// === БРЕНДИНГ ===
+	app_name: text('app_name').notNull().default('Мурзико'),
+	app_slogan: text('app_slogan').notNull().default('Лояльность'),
+	logo_url: text('logo_url').notNull().default('/logo.png'),
+	favicon_url: text('favicon_url').default('/favicon.ico'),
+
+	// === ЦВЕТОВАЯ СХЕМА (LIGHT THEME) ===
+	primary_color: text('primary_color').notNull().default('#ff6b00'),
+	primary_color_dark: text('primary_color_dark').notNull().default('#e55d00'),
+	primary_color_light: text('primary_color_light').notNull().default('#ff8533'),
+	secondary_color: text('secondary_color').notNull().default('#10b981'),
+	secondary_color_dark: text('secondary_color_dark').notNull().default('#059669'),
+	accent_color: text('accent_color').notNull().default('#dc2626'),
+
+	// === ЦВЕТОВАЯ СХЕМА (DARK THEME) ===
+	dark_bg_primary: text('dark_bg_primary').notNull().default('#17212b'),
+	dark_bg_secondary: text('dark_bg_secondary').notNull().default('#0e1621'),
+	dark_bg_tertiary: text('dark_bg_tertiary').notNull().default('#1f2c38'),
+	dark_primary_color: text('dark_primary_color').notNull().default('#ff8533'),
+	dark_text_primary: text('dark_text_primary').notNull().default('#ffffff'),
+	dark_text_secondary: text('dark_text_secondary').notNull().default('#aaaaaa'),
+	dark_border_color: text('dark_border_color').notNull().default('#2b3943'),
+
+	// === НАВИГАЦИЯ ===
+	bottom_nav_items: text('bottom_nav_items').notNull().default('[]'),
+	sidebar_menu_items: text('sidebar_menu_items').notNull().default('[]'),
+
+	// === КАСТОМИЗАЦИЯ ЛЕЙБЛОВ ===
+	products_label: text('products_label').notNull().default('Товары'),
+	products_icon: text('products_icon').notNull().default('cart'),
+
+	// === ВИДЖЕТ ЛОЯЛЬНОСТИ ===
+	loyalty_card_gradient_start: text('loyalty_card_gradient_start').notNull().default('#ff6b00'),
+	loyalty_card_gradient_end: text('loyalty_card_gradient_end').notNull().default('#dc2626'),
+	loyalty_card_text_color: text('loyalty_card_text_color').notNull().default('#ffffff'),
+	loyalty_card_accent_color: text('loyalty_card_accent_color').notNull().default('#ffffff'),
+	loyalty_card_badge_bg: text('loyalty_card_badge_bg').notNull().default('rgba(255,255,255,0.95)'),
+	loyalty_card_badge_text: text('loyalty_card_badge_text').notNull().default('#e55d00'),
+	loyalty_card_border_radius: integer('loyalty_card_border_radius').notNull().default(24),
+	loyalty_card_show_shimmer: integer('loyalty_card_show_shimmer').notNull().default(1),
+
+	// === МЕТА ===
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+export type AppCustomization = typeof appCustomization.$inferSelect;
+export type NewAppCustomization = typeof appCustomization.$inferInsert;

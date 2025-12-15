@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db/client';
-import { products, categories } from '$lib/server/db/schema';
-import { eq, and, like, asc, desc } from 'drizzle-orm';
+import { products, categories, productVariations } from '$lib/server/db/schema';
+import { eq, and, like, asc, desc, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -51,8 +51,56 @@ export const load: PageServerLoad = async ({ url }) => {
 		allProducts = allProducts.filter((p) => p.name.toLowerCase().includes(searchLower));
 	}
 
+	// Загружаем вариации для всех продуктов
+	const productIds = allProducts.map(p => p.id);
+	const allVariations = productIds.length > 0
+		? await db
+			.select()
+			.from(productVariations)
+			.where(and(
+				sql`${productVariations.product_id} IN (${sql.join(productIds.map(id => sql`${id}`), sql`, `)})`,
+				eq(productVariations.is_active, true)
+			))
+			.orderBy(asc(productVariations.position))
+		: [];
+
+	// Группируем вариации по product_id
+	const variationsByProduct = new Map<number, typeof allVariations>();
+	for (const v of allVariations) {
+		if (!variationsByProduct.has(v.product_id)) {
+			variationsByProduct.set(v.product_id, []);
+		}
+		variationsByProduct.get(v.product_id)!.push(v);
+	}
+
+	// Формируем данные продуктов с вариациями
+	const productsWithVariations = allProducts.map(p => {
+		const variations = variationsByProduct.get(p.id) || [];
+		const defaultVariation = variations.find(v => v.is_default) || variations[0];
+
+		// Цена из дефолтной вариации если есть
+		const displayPrice = defaultVariation ? defaultVariation.price : p.price;
+		const displayOldPrice = defaultVariation ? defaultVariation.old_price : p.old_price;
+
+		return {
+			...p,
+			price: displayPrice,
+			old_price: displayOldPrice,
+			hasVariations: variations.length > 0,
+			variationAttribute: p.variation_attribute,
+			variations: variations.map(v => ({
+				id: v.id,
+				name: v.name,
+				price: v.price,
+				oldPrice: v.old_price,
+				sku: v.sku,
+				isDefault: v.is_default
+			}))
+		};
+	});
+
 	return {
-		products: allProducts,
+		products: productsWithVariations,
 		categories: categoryList,
 		// Также передаём legacy категории для обратной совместимости
 		legacyCategories: [...new Set(allProducts.map((p) => p.category))].filter(Boolean).sort(),

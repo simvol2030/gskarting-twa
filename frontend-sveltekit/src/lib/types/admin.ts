@@ -222,6 +222,35 @@ export interface CategoriesListParams {
 // ============================================
 
 /**
+ * ProductVariation - вариация товара (размер, объём, цвет)
+ */
+export interface ProductVariation {
+	id: number;
+	productId: number;
+	name: string;
+	price: number;
+	oldPrice: number | null;
+	sku: string | null;
+	position: number;
+	isDefault: boolean;
+	isActive: boolean;
+	createdAt?: string;
+	updatedAt?: string;
+}
+
+/**
+ * ProductVariationFormData - форма вариации
+ */
+export interface ProductVariationFormData {
+	id?: number;
+	name: string;
+	price: number;
+	oldPrice?: number;
+	sku?: string;
+	isDefault: boolean;
+}
+
+/**
  * Product - товар каталога (Sprint 3 Extended + Shop Extension)
  */
 export interface Product {
@@ -236,9 +265,11 @@ export interface Product {
 	categoryId: number | null; // Shop extension: FK to categories table
 	sku: string | null; // Shop extension: артикул товара
 	position: number; // Shop extension: позиция для сортировки
+	variationAttribute: string | null; // Название атрибута вариации (Размер, Объём)
 	isActive: boolean;
 	showOnHome: boolean; // топовые товары
 	isRecommendation: boolean; // рекомендации без цены
+	variations?: ProductVariation[]; // Вариации товара
 	createdAt?: string;
 	updatedAt?: string;
 }
@@ -256,9 +287,11 @@ export interface ProductFormData {
 	category: string; // Legacy text category
 	categoryId: number | null; // Shop extension: FK to categories table
 	sku: string | undefined; // Shop extension: артикул товара
+	variationAttribute?: string; // Название атрибута вариации
 	isActive: boolean;
 	showOnHome: boolean;
 	isRecommendation: boolean;
+	variations?: ProductVariationFormData[]; // Вариации товара
 }
 
 /**

@@ -81,7 +81,9 @@
 
 							<div class="item-details">
 								<h4 class="item-name">{item.product.name}</h4>
-								{#if item.product.quantityInfo}
+								{#if item.variation}
+									<span class="item-variation">{item.variation.name}</span>
+								{:else if item.product.quantityInfo}
 									<span class="item-info">{item.product.quantityInfo}</span>
 								{/if}
 								<div class="item-price">
@@ -342,6 +344,14 @@
 		color: var(--text-secondary);
 		display: block;
 		margin-bottom: 4px;
+	}
+
+	.item-variation {
+		font-size: 12px;
+		color: var(--primary-orange);
+		display: block;
+		margin-bottom: 4px;
+		font-weight: 500;
 	}
 
 	.item-price {

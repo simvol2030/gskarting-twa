@@ -194,13 +194,39 @@ export const products = sqliteTable('products', {
 	position: integer('position').notNull().default(0), // Позиция в категории
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 	show_on_home: integer('show_on_home', { mode: 'boolean' }).notNull().default(false),
-	is_recommendation: integer('is_recommendation', { mode: 'boolean' }).notNull().default(false)
+	is_recommendation: integer('is_recommendation', { mode: 'boolean' }).notNull().default(false),
+	variation_attribute: text('variation_attribute') // Название атрибута вариации: "Размер", "Объём", "Цвет"
 }, (table) => ({
 	homePageIdx: index('idx_products_home_page').on(table.is_active, table.show_on_home),
 	recommendationsIdx: index('idx_products_recommendations').on(table.is_active, table.is_recommendation),
 	categoryIdx: index('idx_products_category').on(table.category_id),
 	skuIdx: index('idx_products_sku').on(table.sku),
 	positionIdx: index('idx_products_position').on(table.category_id, table.position)
+}));
+
+/**
+ * Product Variations table - вариации товаров (размеры, объёмы, цвета)
+ * Примеры: Пицца 25см/30см/35см, Чай 250мл/500мл/1л, Футболка S/M/L/XL
+ */
+export const productVariations = sqliteTable('product_variations', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	product_id: integer('product_id')
+		.notNull()
+		.references(() => products.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(), // "25 см", "500 мл", "M", "Красный"
+	price: real('price').notNull(),
+	old_price: real('old_price'), // Для отображения скидок
+	sku: text('sku'), // SKU конкретной вариации
+	position: integer('position').notNull().default(0), // Порядок сортировки
+	is_default: integer('is_default', { mode: 'boolean' }).notNull().default(false), // Вариация по умолчанию
+	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	productIdx: index('idx_product_variations_product').on(table.product_id),
+	defaultIdx: index('idx_product_variations_default').on(table.product_id, table.is_default),
+	activeIdx: index('idx_product_variations_active').on(table.product_id, table.is_active),
+	positionIdx: index('idx_product_variations_position').on(table.product_id, table.position)
 }));
 
 /**
@@ -445,13 +471,15 @@ export const cartItems = sqliteTable('cart_items', {
 	session_id: text('session_id'), // для гостей (cookie)
 	user_id: integer('user_id').references(() => loyaltyUsers.id, { onDelete: 'cascade' }), // для авторизованных
 	product_id: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+	variation_id: integer('variation_id').references(() => productVariations.id, { onDelete: 'cascade' }), // Вариация товара
 	quantity: integer('quantity').notNull().default(1),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
 	sessionIdx: index('idx_cart_session').on(table.session_id),
 	userIdx: index('idx_cart_user').on(table.user_id),
-	productIdx: index('idx_cart_product').on(table.product_id)
+	productIdx: index('idx_cart_product').on(table.product_id),
+	variationIdx: index('idx_cart_variation').on(table.variation_id)
 }));
 
 /**
@@ -592,17 +620,20 @@ export const orderItems = sqliteTable('order_items', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	order_id: integer('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
 	product_id: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+	variation_id: integer('variation_id').references(() => productVariations.id, { onDelete: 'set null' }), // Вариация товара
 
 	// Снапшот на момент заказа
 	product_name: text('product_name').notNull(),
 	product_price: integer('product_price').notNull(), // в копейках
+	variation_name: text('variation_name'), // Название вариации на момент заказа ("30 см", "500 мл")
 	quantity: integer('quantity').notNull(),
 	total: integer('total').notNull(), // в копейках
 
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
 	orderIdx: index('idx_order_items_order').on(table.order_id),
-	productIdx: index('idx_order_items_product').on(table.product_id)
+	productIdx: index('idx_order_items_product').on(table.product_id),
+	variationIdx: index('idx_order_items_variation').on(table.variation_id)
 }));
 
 /**
@@ -686,6 +717,9 @@ export type NewCashierTransaction = typeof cashierTransactions.$inferInsert;
 
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
+
+export type ProductVariation = typeof productVariations.$inferSelect;
+export type NewProductVariation = typeof productVariations.$inferInsert;
 
 export type Offer = typeof offers.$inferSelect;
 export type NewOffer = typeof offers.$inferInsert;

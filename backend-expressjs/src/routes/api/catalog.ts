@@ -5,8 +5,9 @@
 
 import { Router } from 'express';
 import { db } from '../../db/client';
-import { categories, products } from '../../db/schema';
+import { categories, products, productVariations } from '../../db/schema';
 import { eq, and, asc, desc, isNull, sql } from 'drizzle-orm';
+import { getActiveVariationsByProductId, getDefaultVariation } from '../../db/queries/productVariations';
 
 const router = Router();
 
@@ -177,7 +178,8 @@ router.get('/products', async (req, res) => {
 				image: products.image,
 				category_id: products.category_id,
 				sku: products.sku,
-				position: products.position
+				position: products.position,
+				variation_attribute: products.variation_attribute
 			})
 			.from(products)
 			.where(whereClause)
@@ -185,17 +187,55 @@ router.get('/products', async (req, res) => {
 			.limit(limitNum)
 			.offset(offset);
 
-		const productsData = dbProducts.map(p => ({
-			id: p.id,
-			name: p.name,
-			description: p.description,
-			price: p.price,
-			oldPrice: p.old_price,
-			quantityInfo: p.quantity_info,
-			image: p.image,
-			categoryId: p.category_id,
-			sku: p.sku
-		}));
+		// Get variations for all products in one query
+		const productIds = dbProducts.map(p => p.id);
+		const allVariations = productIds.length > 0
+			? await db.select().from(productVariations)
+				.where(and(
+					sql`${productVariations.product_id} IN (${sql.join(productIds.map(id => sql`${id}`), sql`, `)})`,
+					eq(productVariations.is_active, true)
+				))
+				.orderBy(asc(productVariations.position))
+			: [];
+
+		const variationsByProduct = new Map<number, typeof allVariations>();
+		for (const v of allVariations) {
+			if (!variationsByProduct.has(v.product_id)) {
+				variationsByProduct.set(v.product_id, []);
+			}
+			variationsByProduct.get(v.product_id)!.push(v);
+		}
+
+		const productsData = dbProducts.map(p => {
+			const variations = variationsByProduct.get(p.id) || [];
+			const defaultVariation = variations.find(v => v.is_default) || variations[0];
+
+			// Price from default variation if available, otherwise from product
+			const displayPrice = defaultVariation ? defaultVariation.price : p.price;
+			const displayOldPrice = defaultVariation ? defaultVariation.old_price : p.old_price;
+
+			return {
+				id: p.id,
+				name: p.name,
+				description: p.description,
+				price: displayPrice,
+				oldPrice: displayOldPrice,
+				quantityInfo: p.quantity_info,
+				image: p.image,
+				categoryId: p.category_id,
+				sku: p.sku,
+				variationAttribute: p.variation_attribute,
+				hasVariations: variations.length > 0,
+				variations: variations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.old_price,
+					sku: v.sku,
+					isDefault: Boolean(v.is_default)
+				}))
+			};
+		});
 
 		res.json({
 			success: true,
@@ -244,18 +284,36 @@ router.get('/products/:id', async (req, res) => {
 			categoryInfo = category || null;
 		}
 
+		// Get variations
+		const variations = await getActiveVariationsByProductId(productId);
+		const defaultVariation = variations.find(v => v.is_default) || variations[0];
+
+		// Price from default variation if available
+		const displayPrice = defaultVariation ? defaultVariation.price : product.price;
+		const displayOldPrice = defaultVariation ? defaultVariation.old_price : product.old_price;
+
 		res.json({
 			success: true,
 			data: {
 				id: product.id,
 				name: product.name,
 				description: product.description,
-				price: product.price,
-				oldPrice: product.old_price,
+				price: displayPrice,
+				oldPrice: displayOldPrice,
 				quantityInfo: product.quantity_info,
 				image: product.image,
 				category: categoryInfo,
-				sku: product.sku
+				sku: product.sku,
+				variationAttribute: product.variation_attribute,
+				hasVariations: variations.length > 0,
+				variations: variations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.old_price,
+					sku: v.sku,
+					isDefault: Boolean(v.is_default)
+				}))
 			}
 		});
 	} catch (error: any) {

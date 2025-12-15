@@ -14,3 +14,4 @@ export * from './loyaltySettings';
 export * from './sellers';
 export * from './welcomeMessages';
 export * from './feed';
+export * from './productVariations';

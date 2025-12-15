@@ -3,6 +3,15 @@
 	import { Modal, Button, Input, Textarea, Select } from '$lib/components/ui';
 	import { productsAPI } from '$lib/api/admin/products';
 
+	interface ProductVariationForm {
+		id?: number;
+		name: string;
+		price: number;
+		oldPrice?: number;
+		sku?: string;
+		isDefault: boolean;
+	}
+
 	interface Props {
 		isOpen: boolean;
 		editingProduct?: Product | null;
@@ -28,6 +37,10 @@
 		showOnHome: false,
 		isRecommendation: false
 	});
+
+	// Variations state
+	let variationAttribute = $state<string>('');
+	let variations = $state<ProductVariationForm[]>([]);
 
 	let imagePreview = $state<string | null>(null);
 	let loading = $state(false);
@@ -63,6 +76,17 @@
 				isRecommendation: editingProduct.isRecommendation
 			};
 			imagePreview = editingProduct.image;
+			// Load variations if available
+			variationAttribute = (editingProduct as any).variationAttribute || '';
+			const productVariations = (editingProduct as any).variations || [];
+			variations = productVariations.map((v: any) => ({
+				id: v.id,
+				name: v.name,
+				price: v.price,
+				oldPrice: v.oldPrice,
+				sku: v.sku,
+				isDefault: v.isDefault
+			}));
 		} else if (isOpen) {
 			formData = {
 				name: '',
@@ -79,6 +103,8 @@
 				isRecommendation: false
 			};
 			imagePreview = null;
+			variationAttribute = '';
+			variations = [];
 		}
 	});
 
@@ -116,6 +142,35 @@
 		if (value && value.startsWith('http')) {
 			imagePreview = value;
 		}
+	};
+
+	// Variation management functions
+	const addVariation = () => {
+		const isFirst = variations.length === 0;
+		variations = [...variations, {
+			name: '',
+			price: formData.price || 0,
+			oldPrice: undefined,
+			sku: undefined,
+			isDefault: isFirst // First variation is default
+		}];
+	};
+
+	const removeVariation = (index: number) => {
+		const wasDefault = variations[index].isDefault;
+		variations = variations.filter((_, i) => i !== index);
+		// If we removed the default, make first one default
+		if (wasDefault && variations.length > 0) {
+			variations = variations.map((v, i) => ({ ...v, isDefault: i === 0 }));
+		}
+	};
+
+	const setDefaultVariation = (index: number) => {
+		variations = variations.map((v, i) => ({ ...v, isDefault: i === index }));
+	};
+
+	const updateVariation = (index: number, field: keyof ProductVariationForm, value: any) => {
+		variations = variations.map((v, i) => i === index ? { ...v, [field]: value } : v);
 	};
 
 	const handleFileUpload = async (e: Event) => {
@@ -180,10 +235,24 @@
 		error = null;
 
 		try {
+			// Prepare data with variations
+			const dataWithVariations = {
+				...formData,
+				variationAttribute: variations.length > 0 ? variationAttribute : undefined,
+				variations: variations.length > 0 ? variations.map(v => ({
+					id: v.id,
+					name: v.name,
+					price: v.price,
+					oldPrice: v.oldPrice,
+					sku: v.sku,
+					isDefault: v.isDefault
+				})) : []
+			};
+
 			if (editingProduct) {
-				await productsAPI.update(editingProduct.id, formData);
+				await productsAPI.update(editingProduct.id, dataWithVariations);
 			} else {
-				await productsAPI.create(formData);
+				await productsAPI.create(dataWithVariations);
 			}
 			onSuccess?.();
 			onClose();
@@ -217,6 +286,85 @@
 		<div class="form-row">
 			<Input label="Цена (₽)" type="number" bind:value={formData.price} min={0} step={0.01} required />
 			<Input label="Старая цена (₽)" type="number" bind:value={formData.oldPrice} min={0} step={0.01} />
+		</div>
+
+		<!-- Вариации товара -->
+		<div class="variations-section">
+			<div class="variations-header">
+				<label class="section-label">Вариации товара</label>
+				<button type="button" class="add-variation-btn" onclick={addVariation}>
+					+ Добавить вариацию
+				</button>
+			</div>
+
+			{#if variations.length > 0}
+				<div class="variation-attribute">
+					<Input
+						label="Название атрибута"
+						placeholder="Размер, Объём, Цвет..."
+						bind:value={variationAttribute}
+						maxLength={50}
+					/>
+				</div>
+
+				<div class="variations-list">
+					{#each variations as variation, index}
+						<div class="variation-item">
+							<div class="variation-row">
+								<div class="variation-name">
+									<input
+										type="text"
+										placeholder="Название (25см, 500мл)"
+										value={variation.name}
+										oninput={(e) => updateVariation(index, 'name', (e.target as HTMLInputElement).value)}
+										class="variation-input"
+									/>
+								</div>
+								<div class="variation-price">
+									<input
+										type="number"
+										placeholder="Цена"
+										value={variation.price}
+										oninput={(e) => updateVariation(index, 'price', parseFloat((e.target as HTMLInputElement).value) || 0)}
+										min="0"
+										step="0.01"
+										class="variation-input"
+									/>
+								</div>
+								<div class="variation-old-price">
+									<input
+										type="number"
+										placeholder="Старая цена"
+										value={variation.oldPrice || ''}
+										oninput={(e) => updateVariation(index, 'oldPrice', parseFloat((e.target as HTMLInputElement).value) || undefined)}
+										min="0"
+										step="0.01"
+										class="variation-input"
+									/>
+								</div>
+								<div class="variation-default">
+									<label class="default-label">
+										<input
+											type="radio"
+											name="default-variation"
+											checked={variation.isDefault}
+											onchange={() => setDefaultVariation(index)}
+										/>
+										<span>По умолч.</span>
+									</label>
+								</div>
+								<button type="button" class="remove-variation-btn" onclick={() => removeVariation(index)}>
+									×
+								</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+
+				<p class="variations-hint">
+					Вариация «по умолчанию» отображается в каталоге. Цена товара выше используется если вариаций нет.
+				</p>
+			{/if}
 		</div>
 
 		<!-- Изображение -->
@@ -413,4 +561,117 @@
 	.checkbox-row input[type='checkbox'] { width: 1.25rem; height: 1.25rem; cursor: pointer; accent-color: #10b981; }
 	.error-message { padding: 0.75rem 1rem; background: #fee2e2; color: #991b1b; border-radius: 0.5rem; font-size: 0.875rem; }
 	.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem; }
+
+	/* Variations styles */
+	.variations-section {
+		border: 1px solid #e5e7eb;
+		border-radius: 0.5rem;
+		padding: 1rem;
+		background: #fafafa;
+	}
+
+	.variations-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.75rem;
+	}
+
+	.variations-header .section-label {
+		margin-bottom: 0;
+	}
+
+	.add-variation-btn {
+		padding: 0.5rem 1rem;
+		background: #10b981;
+		color: white;
+		border: none;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+
+	.add-variation-btn:hover {
+		background: #059669;
+	}
+
+	.variation-attribute {
+		margin-bottom: 1rem;
+	}
+
+	.variations-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.variation-item {
+		background: white;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		padding: 0.75rem;
+	}
+
+	.variation-row {
+		display: grid;
+		grid-template-columns: 2fr 1fr 1fr auto auto;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.variation-input {
+		width: 100%;
+		padding: 0.5rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+	}
+
+	.variation-input:focus {
+		outline: none;
+		border-color: #10b981;
+	}
+
+	.variation-default {
+		white-space: nowrap;
+	}
+
+	.default-label {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.75rem;
+		color: #6b7280;
+		cursor: pointer;
+	}
+
+	.default-label input {
+		accent-color: #10b981;
+	}
+
+	.remove-variation-btn {
+		width: 28px;
+		height: 28px;
+		background: #fee2e2;
+		color: #dc2626;
+		border: none;
+		border-radius: 0.375rem;
+		font-size: 1.25rem;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: background 0.2s;
+	}
+
+	.remove-variation-btn:hover {
+		background: #fecaca;
+	}
+
+	.variations-hint {
+		margin-top: 0.75rem;
+		font-size: 0.75rem;
+		color: #6b7280;
+	}
 </style>
