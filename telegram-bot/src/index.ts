@@ -14,6 +14,11 @@ const WEB_APP_URL = process.env.WEB_APP_URL ||
     ? 'https://murzicoin.murzico.ru'
     : 'http://localhost:5173');
 
+const API_BASE_URL = process.env.API_BASE_URL ||
+  (NODE_ENV === 'production'
+    ? 'https://sl.bot-3.ru/api'
+    : 'http://localhost:3000/api');
+
 const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '2017');
 
 if (!BOT_TOKEN) {
@@ -27,86 +32,200 @@ const bot = new Bot(BOT_TOKEN);
 const app = express();
 app.use(express.json());
 
-// ===== ПРИВЕТСТВЕННЫЕ СООБЩЕНИЯ =====
+// ===== ТИПЫ =====
 
-const WELCOME_MESSAGE_1 = `💳 Добро пожаловать в программу лояльности сети магазинов "Мурзик & Co"!
+interface WelcomeMessage {
+	id: number;
+	order_number: number;
+	message_text: string;
+	message_image: string | null;
+	button_text: string | null;
+	button_url: string | null;
+	delay_seconds: number;
+	is_active: boolean;
+}
 
-🎉 Спасибо, что выбрали нас!
+interface APIResponse {
+	success: boolean;
+	data?: WelcomeMessage[];
+	error?: string;
+}
 
-Мы рады приветствовать вас в нашей программе лояльности. Теперь каждая покупка приносит вам выгоду!`;
+interface RegistrationResponse {
+	success: boolean;
+	data?: {
+		user: any;
+		welcomeBonus: number;
+		alreadyRegistered: boolean;
+	};
+	error?: string;
+}
 
-const WELCOME_BONUS = `🎁 СТАРТОВЫЙ БОНУС
+// ===== ФУНКЦИИ ДЛЯ РАБОТЫ С API =====
 
-Мы начислили вам 500 мурзи-коинов на счёт!
+/**
+ * Получить активные приветственные сообщения из базы данных
+ */
+async function getActiveWelcomeMessages(): Promise<WelcomeMessage[]> {
+	try {
+		const response = await fetch(`${API_BASE_URL}/bot/welcome-messages/active`);
+		const json = await response.json() as APIResponse;
 
-Используйте их при следующей покупке и получите скидку! 💰`;
+		if (!json.success) {
+			console.error('Failed to fetch welcome messages:', json.error);
+			return [];
+		}
 
-const PROGRAM_RULES = `📋 КАК РАБОТАЕТ ПРОГРАММА
+		return json.data || [];
+	} catch (error) {
+		console.error('Error fetching welcome messages:', error);
+		return [];
+	}
+}
 
-💚 НАЧИСЛЕНИЕ БАЛЛОВ:
-• Покупаете на 1000₽ → получаете 40 мурзи-коинов (4%)
-• Баллы начисляются автоматически после каждой покупки
+/**
+ * Зарегистрировать пользователя в системе лояльности
+ */
+async function registerUser(ctx: any): Promise<any> {
+	try {
+		const response = await fetch(`${API_BASE_URL}/bot/register`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				telegramUserId: ctx.from.id,
+				chatId: ctx.chat.id,
+				firstName: ctx.from.first_name,
+				lastName: ctx.from.last_name || null,
+				username: ctx.from.username || null,
+				languageCode: ctx.from.language_code || 'ru'
+			})
+		});
 
-💳 СПИСАНИЕ БАЛЛОВ:
-• Можете списать до 20% от суммы чека
-• 1 мурзи-коин = 1 рубль скидки
-• Выбираете сами: списать или накапливать
+		const json = await response.json() as RegistrationResponse;
 
-⏰ СРОК ДЕЙСТВИЯ:
-• Баллы действуют 1.5 месяца (45 дней)
-• После истечения срока баллы сгорают
-• Успейте использовать их вовремя!
+		if (!json.success) {
+			console.error('Failed to register user:', json.error);
+			return null;
+		}
 
-🏪 ГДЕ ИСПОЛЬЗОВАТЬ:
-• Покажите QR код карты кассиру
-• Кассир применит скидку автоматически
-• Вы видите результат сразу в чеке!`;
+		return json.data;
+	} catch (error) {
+		console.error('Error registering user:', error);
+		return null;
+	}
+}
+
+/**
+ * Заменить переменные в тексте сообщения
+ */
+function replaceVariables(
+	text: string,
+	user: { first_name?: string; last_name?: string; username?: string }
+): string {
+	return text
+		.replace(/\{first_name\}/g, user.first_name || '')
+		.replace(/\{last_name\}/g, user.last_name || '')
+		.replace(/\{username\}/g, user.username || '')
+		.replace(/\{WEB_APP_URL\}/g, WEB_APP_URL);
+}
 
 // ===== HANDLER: /start =====
 bot.command('start', async (ctx) => {
 	const firstName = ctx.from?.first_name || 'друг';
+	const lastName = ctx.from?.last_name;
+	const username = ctx.from?.username;
 	const telegramUserId = ctx.from?.id;
 
 	console.log(`📝 Новый пользователь: ${firstName} (ID: ${telegramUserId})`);
 
-	// Сообщение 1: Приветствие
-	if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
-		const keyboard = new InlineKeyboard()
-			.webApp('Мурзи-коины', WEB_APP_URL);
-		await ctx.reply(WELCOME_MESSAGE_1, {
-			reply_markup: keyboard
-		});
-	} else {
-		await ctx.reply(WELCOME_MESSAGE_1 + '\n\n💻 Локальный тест: ' + WEB_APP_URL);
+	// Регистрируем пользователя (или получаем существующего)
+	const registrationResult = await registerUser(ctx);
+	if (!registrationResult) {
+		console.error('⚠️ Failed to register user');
+		await ctx.reply('Произошла ошибка при регистрации. Попробуйте позже.');
+		return;
 	}
 
-	// Задержка 1 секунда
-	await new Promise(resolve => setTimeout(resolve, 1000));
+	const { user, welcomeBonus, alreadyRegistered } = registrationResult;
+	console.log(`✅ User registered: card=${user.card_number}, balance=${user.current_balance}₽`);
 
-	// Сообщение 2: Стартовый бонус
-	if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
-		const keyboard = new InlineKeyboard()
-			.webApp('Мурзи-коины', WEB_APP_URL);
-		await ctx.reply(WELCOME_BONUS, {
-			reply_markup: keyboard
-		});
-	} else {
-		await ctx.reply(WELCOME_BONUS + '\n\n💻 Локальный тест: ' + WEB_APP_URL);
+	// Получить сообщения из базы данных
+	const messages = await getActiveWelcomeMessages();
+
+	if (messages.length === 0) {
+		console.error('⚠️ No active welcome messages found in database');
+		await ctx.reply('Добро пожаловать! Откройте приложение для просмотра вашей карты лояльности.');
+		return;
 	}
 
-	// Задержка 1 секунда
-	await new Promise(resolve => setTimeout(resolve, 1000));
+	// Отправить все сообщения по порядку
+	for (const message of messages) {
+		// Задержка перед отправкой (кроме первого сообщения с delay_seconds = 0)
+		if (message.delay_seconds > 0) {
+			await new Promise(resolve => setTimeout(resolve, message.delay_seconds * 1000));
+		}
 
-	// Сообщение 3: Правила программы
-	if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
-		const keyboard = new InlineKeyboard()
-			.webApp('Мурзи-коины', WEB_APP_URL);
-		await ctx.reply(PROGRAM_RULES, {
-			reply_markup: keyboard
+		// Заменить переменные в тексте
+		const messageText = replaceVariables(message.message_text, {
+			first_name: firstName,
+			last_name: lastName,
+			username: username
 		});
-	} else {
-		// Локальное тестирование - без кнопки (Telegram требует HTTPS!)
-		await ctx.reply(PROGRAM_RULES + '\n\n💻 Локальный тест: ' + WEB_APP_URL);
+
+		// Создать кнопку если указана
+		let keyboard: InlineKeyboard | undefined;
+		if (message.button_text && message.button_url) {
+			const buttonUrl = replaceVariables(message.button_url, {
+				first_name: firstName,
+				last_name: lastName,
+				username: username
+			});
+
+			// Для production используем WebApp кнопку
+			if (NODE_ENV === 'production' && buttonUrl.startsWith('https://')) {
+				keyboard = new InlineKeyboard().webApp(message.button_text, buttonUrl);
+			}
+		}
+
+		// Отправить сообщение с изображением или без
+		try {
+			if (message.message_image) {
+				// Отправить фото с подписью
+				const photoOptions: any = {
+					caption: messageText,
+					parse_mode: 'HTML' as const
+				};
+				if (keyboard) {
+					photoOptions.reply_markup = keyboard;
+				}
+				await ctx.replyWithPhoto(message.message_image, photoOptions);
+			} else {
+				// Отправить текстовое сообщение
+				if (keyboard) {
+					await ctx.reply(messageText, { reply_markup: keyboard });
+				} else {
+					// Для локальной разработки добавляем URL в текст
+					const localTestSuffix = NODE_ENV !== 'production' ? `\n\n💻 Локальный тест: ${WEB_APP_URL}` : '';
+					await ctx.reply(messageText + localTestSuffix);
+				}
+			}
+		} catch (error) {
+			console.error(`Error sending welcome message #${message.order_number}:`, error);
+			// Fallback: отправить только текст если фото не удалось
+			if (message.message_image) {
+				try {
+					if (keyboard) {
+						await ctx.reply(messageText, { reply_markup: keyboard });
+					} else {
+						await ctx.reply(messageText);
+					}
+				} catch (fallbackError) {
+					console.error('Fallback message also failed:', fallbackError);
+				}
+			}
+		}
 	}
 });
 
@@ -118,11 +237,6 @@ bot.command('balance', async (ctx) => {
 	await ctx.reply('Откройте карту лояльности чтобы увидеть ваш текущий баланс:', {
 		reply_markup: keyboard
 	});
-});
-
-// ===== HANDLER: /rules =====
-bot.command('rules', async (ctx) => {
-	await ctx.reply(PROGRAM_RULES);
 });
 
 // ===== HANDLER: Любой текст =====
@@ -227,6 +341,99 @@ app.post('/notify-transaction', async (req, res) => {
 				success: false,
 				error: 'User blocked bot'
 			});
+		}
+
+		res.status(500).json({
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		});
+	}
+});
+
+// ===== WEBHOOK: Отправка рассылки (campaigns) =====
+
+interface CampaignMessage {
+	chatId: number;
+	text: string;
+	imageUrl?: string;
+	buttonText?: string;
+	buttonUrl?: string;
+}
+
+app.post('/send-campaign-message', async (req, res) => {
+	try {
+		const message: CampaignMessage = req.body;
+
+		console.log('📬 Отправка сообщения кампании:', { chatId: message.chatId, hasImage: !!message.imageUrl });
+
+		const { chatId, text, imageUrl, buttonText, buttonUrl } = message;
+
+		if (!chatId || !text) {
+			return res.status(400).json({ error: 'Missing chatId or text' });
+		}
+
+		// Build inline keyboard if button is provided
+		let keyboard: InlineKeyboard | undefined;
+		if (buttonText && buttonUrl) {
+			keyboard = new InlineKeyboard();
+			// Check if it's a web app URL or regular URL
+			if (buttonUrl.startsWith('https://') && buttonUrl.includes(WEB_APP_URL.replace('https://', ''))) {
+				keyboard.webApp(buttonText, buttonUrl);
+			} else {
+				keyboard.url(buttonText, buttonUrl);
+			}
+		} else if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
+			// Default button to open web app
+			keyboard = new InlineKeyboard().webApp('Мурзи-коины', WEB_APP_URL);
+		}
+
+		// Send message with or without image
+		if (imageUrl) {
+			// Send photo with caption
+			// Determine if imageUrl is local or remote
+			const photoUrl = imageUrl.startsWith('http')
+				? imageUrl
+				: `${process.env.BACKEND_URL || 'http://localhost:3000'}${imageUrl}`;
+
+			await bot.api.sendPhoto(chatId, photoUrl, {
+				caption: text,
+				reply_markup: keyboard
+			});
+		} else {
+			// Send text message
+			await bot.api.sendMessage(chatId, text, {
+				reply_markup: keyboard,
+				parse_mode: 'HTML'
+			});
+		}
+
+		console.log(`✅ Сообщение кампании отправлено: chatId=${chatId}`);
+
+		res.json({ success: true });
+
+	} catch (error) {
+		console.error('❌ Ошибка отправки сообщения кампании:', error);
+
+		if (error && typeof error === "object" && "error_code" in error) {
+			const tgError = error as any;
+
+			if (tgError.error_code === 403) {
+				// User blocked bot
+				return res.status(200).json({
+					success: false,
+					error: 'User blocked bot',
+					code: 403
+				});
+			}
+
+			if (tgError.error_code === 400) {
+				// Bad request (e.g., chat not found)
+				return res.status(200).json({
+					success: false,
+					error: tgError.description || 'Bad request',
+					code: 400
+				});
+			}
 		}
 
 		res.status(500).json({

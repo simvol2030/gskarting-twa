@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 // Server-side proxy должен использовать ВНУТРЕННИЙ backend URL (не PUBLIC_BACKEND_URL!)
-const BACKEND_URL = 'http://localhost:3015';
+const BACKEND_URL = 'http://localhost:3007';
 
 /**
  * Proxy endpoint для получения ожидающих скидок
@@ -20,10 +20,11 @@ export const GET: RequestHandler = async ({ url, fetch, request }) => {
 		return json({ error: 'Missing storeId parameter' }, { status: 400 });
 	}
 
-	// CRITICAL SECURITY: Validate storeId is a valid number
+	// CRITICAL SECURITY: Validate storeId is a valid positive number
+	// 🔴 BUG-5 FIX: Убран хардкод 10 магазинов - теперь поддерживаем до 1000
 	const storeId = parseInt(storeIdParam, 10);
-	if (isNaN(storeId) || storeId < 1 || storeId > 10) {
-		return json({ error: 'Invalid storeId: must be a number between 1 and 10' }, { status: 400 });
+	if (isNaN(storeId) || storeId < 1 || storeId > 1000) {
+		return json({ error: 'Invalid storeId: must be a positive number (1-1000)' }, { status: 400 });
 	}
 
 	try {

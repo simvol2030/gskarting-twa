@@ -1,20 +1,23 @@
 <script lang="ts">
   import { theme, toggleTheme } from '$lib/stores/loyalty';
+  import { appName, appSlogan, logoUrl } from '$lib/stores/customization';
+  import CartIcon from '$lib/components/loyalty/ui/CartIcon.svelte';
 
   interface Props {
     onMenuClick: () => void;
+    onCartClick?: () => void;
   }
 
-  let { onMenuClick }: Props = $props();
+  let { onMenuClick, onCartClick }: Props = $props();
 </script>
 
 <header class="app-header">
   <div class="header-left">
-    <img src="/logo.png" alt="Мурзико" class="app-logo" />
+    <img src={$logoUrl} alt={$appName} class="app-logo" />
     <div class="header-title">
-      <span class="store-name">Мурзико</span>
+      <span class="store-name">{$appName}</span>
       <span class="header-divider">|</span>
-      <span class="section-name">Лояльность</span>
+      <span class="section-name">{$appSlogan}</span>
     </div>
   </div>
 
@@ -22,6 +25,8 @@
     <button class="theme-toggle" onclick={toggleTheme} aria-label="Переключить тему">
       <span class="theme-icon">{$theme === 'light' ? '🌙' : '☀️'}</span>
     </button>
+
+    <CartIcon onClick={onCartClick} />
 
     <button class="hamburger-button" onclick={onMenuClick} aria-label="Открыть меню">
       <svg class="hamburger-icon" fill="currentColor" viewBox="0 0 24 24">

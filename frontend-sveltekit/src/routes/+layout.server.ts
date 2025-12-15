@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db/client';
-import { loyaltyUsers, transactions, loyaltySettings } from '$lib/server/db/schema';
+import { loyaltyUsers, transactions, loyaltySettings, appCustomization } from '$lib/server/db/schema';
 import { eq, gte, and, count, sum, sql } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 import { getRetentionCutoffDate, getRetentionDays } from '$lib/utils/retention';
@@ -113,9 +113,41 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
     detailedRulesText: 'Подробные правила программы лояльности'
   };
 
+  // Load app customization (SSR to prevent logo flashing)
+  const [customizationRow] = await db.select().from(appCustomization).where(eq(appCustomization.id, 1)).limit(1);
+
+  let customization = null;
+  if (customizationRow) {
+    const s = customizationRow;
+    customization = {
+      appName: s.app_name,
+      appSlogan: s.app_slogan,
+      logoUrl: s.logo_url,
+      faviconUrl: s.favicon_url,
+      colors: {
+        primary: s.primary_color,
+        primaryDark: s.primary_color_dark,
+        primaryLight: s.primary_color_light,
+        secondary: s.secondary_color,
+        secondaryDark: s.secondary_color_dark,
+        accent: s.accent_color
+      },
+      darkTheme: {
+        bgPrimary: s.dark_bg_primary,
+        bgSecondary: s.dark_bg_secondary,
+        bgTertiary: s.dark_bg_tertiary,
+        primary: s.dark_primary_color,
+        textPrimary: s.dark_text_primary,
+        textSecondary: s.dark_text_secondary,
+        borderColor: s.dark_border_color
+      }
+    };
+  }
+
   return {
     user,
     loyaltyRules,
-    isDemoMode
+    isDemoMode,
+    customization
   };
 };

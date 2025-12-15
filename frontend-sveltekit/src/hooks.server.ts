@@ -43,9 +43,10 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 
 	// Permissions Policy - отключаем ненужные API браузера
+	// camera=(self) разрешает использование камеры для QR-сканирования в seller интерфейсе
 	response.headers.set(
 		'Permissions-Policy',
-		'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=()'
+		'geolocation=(), microphone=(), camera=(self), payment=(), usb=(), magnetometer=()'
 	);
 
 	// HSTS - заставляем использовать HTTPS (только в production)
@@ -150,6 +151,10 @@ const requestLogger: Handle = async ({ event, resolve }) => {
 
 /**
  * Комбинируем все hooks в правильном порядке
+ *
+ * NOTE: /api requests are proxied by nginx directly to Express backend (port 3007)
+ * We removed the SvelteKit proxy hook because it was breaking multipart/form-data
+ * uploads (like Stories image upload) by converting body to arrayBuffer.
  */
 export const handle = sequence(
 	requestLogger,      // 1. Логирование (первым, чтобы замерить всё)

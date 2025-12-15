@@ -1,5 +1,6 @@
 <script lang="ts">
   import LoyaltyCard from '$lib/components/loyalty/ui/LoyaltyCard.svelte';
+  import StoriesCarousel from '$lib/components/loyalty/ui/StoriesCarousel.svelte';
   import RecommendationCard from '$lib/components/loyalty/ui/RecommendationCard.svelte';
   import OfferCardCompact from '$lib/components/loyalty/ui/OfferCardCompact.svelte';
   import ProductCard from '$lib/components/loyalty/ui/ProductCard.svelte';
@@ -10,7 +11,10 @@
 <!-- 1. Карта лояльности -->
 <LoyaltyCard user={data.user} loyaltyRules={data.loyaltyRules} />
 
-<!-- 2. Акции месяца -->
+<!-- 2. Web Stories -->
+<StoriesCarousel userId={data.user?.id} />
+
+<!-- 3. Акции месяца -->
 <section class="section-content">
   <h2 class="section-header centered">
     <span>🎉</span>
@@ -50,11 +54,10 @@
 <!-- Section Divider -->
 <div class="section-divider"></div>
 
-<!-- 4. Рекомендации для вашего питомца -->
+<!-- 4. Рекомендации для Вас -->
 <section class="section-content">
   <h2 class="section-header centered">
-    <span>🐾</span>
-    <span>Рекомендации для вашего питомца</span>
+    <span>Рекомендации для Вас</span>
   </h2>
   <div class="recommendations-list">
     {#each data.recommendations as recommendation}

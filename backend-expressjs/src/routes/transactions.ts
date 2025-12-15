@@ -134,7 +134,7 @@ router.get('/recent', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
 	try {
-		const { customer, storeId, checkAmount, pointsToRedeem, cashbackAmount, finalAmount } = req.body;
+		const { customer, storeId, checkAmount, pointsToRedeem, cashbackAmount, finalAmount, sellerId, sellerName } = req.body;
 
 		// Validation
 		if (!customer || !customer.id) {
@@ -293,6 +293,8 @@ router.post('/', async (req: Request, res: Response) => {
 				const spendTx = tx.insert(transactions).values({
 					loyalty_user_id: customer.id,
 					store_id: storeId,
+					seller_id: sellerId || null,
+					seller_name: sellerName || null,
 					title: 'Списание за покупку',
 					amount: pointsToRedeem,
 					type: 'spend',
@@ -308,6 +310,8 @@ router.post('/', async (req: Request, res: Response) => {
 					tx.insert(transactions).values({
 						loyalty_user_id: customer.id,
 						store_id: storeId,
+						seller_id: sellerId || null,
+						seller_name: sellerName || null,
 						title: `Начисление кешбэка (${loyaltySettings.earning_percent}% от оплаты)`, // 🔴 FIX: Dynamic %
 						amount: serverCalculatedCashback,
 						type: 'earn',
@@ -326,7 +330,9 @@ router.post('/', async (req: Request, res: Response) => {
 				const expiresAt = new Date(Date.now() + EXPIRY_SECONDS * 1000).toISOString();
 				tx.insert(pendingDiscounts).values({
 					store_id: storeId,
+					customer_card_number: customer.cardNumber || customerRecord.card_number, // ✅ FIX: TypeScript requires this field
 					transaction_id: spendTx.id, // ✅ Ссылка на transactions.id (spend record)
+					check_amount: checkAmount, // ✅ FIX: Required field for database schema
 					discount_amount: pointsToRedeem,
 					status: 'pending',
 					expires_at: expiresAt
@@ -339,6 +345,8 @@ router.post('/', async (req: Request, res: Response) => {
 				tx.insert(transactions).values({
 					loyalty_user_id: customer.id,
 					store_id: storeId,
+					seller_id: sellerId || null,
+					seller_name: sellerName || null,
 					title: `Начисление за покупку (${loyaltySettings.earning_percent}%)`, // 🔴 FIX: Dynamic %
 					amount: serverCalculatedCashback,
 					type: 'earn',

@@ -11,33 +11,76 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db/client';
-import { cashierTransactions, loyaltyUsers, pendingDiscounts } from '../db/schema';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { pendingDiscounts, activeChecks } from '../db/schema';
+import { eq, and, sql, inArray, lt } from 'drizzle-orm';
 
 const router = Router();
 
-// ==================== Временное хранилище предчека ====================
-// 🚨 LIMITATION: In-memory storage не масштабируется на multiple backend instances
-//
-// TODO для horizontal scaling (>1 backend instance):
-// Option 1: Redis с TTL 60s
-//   - npm install redis
-//   - await redisClient.setex(`precheck:${storeId}`, 60, JSON.stringify(data))
-// Option 2: БД таблица active_checks (store_id, amount, timestamp, expires_at)
-//   - CREATE INDEX ON active_checks(store_id, expires_at)
-//   - Periodic cleanup старше 60 секунд
-//
-// Current: РАБОТАЕТ для single instance deployment (PM2 без cluster mode)
-interface PreCheckData {
-	checkAmount: number;
-	storeId: number;
-	storeName: string; // 🔴 NEW: Название магазина
-	timestamp: string;
+// ==================== BUG-4 FIX: Персистентное хранилище предчека ====================
+// Используем таблицу active_checks вместо in-memory Map
+// Это решает проблему потери данных при рестарте backend
+
+const ACTIVE_CHECK_TTL_SECONDS = 60; // TTL для суммы чека
+
+/**
+ * Получить активную сумму чека для магазина из БД
+ */
+async function getActiveCheck(storeId: number) {
+	const now = new Date().toISOString();
+
+	// Удаляем expired записи для этого магазина
+	await db.delete(activeChecks)
+		.where(lt(activeChecks.expires_at, now));
+
+	// Получаем текущую запись
+	const result = await db.select()
+		.from(activeChecks)
+		.where(eq(activeChecks.store_id, storeId))
+		.limit(1);
+
+	return result[0] || null;
 }
 
-// Хранилище: ключ = storeId, значение = данные предчека
-// 🔴 NEW ARCHITECTURE: Заполняется агентами через POST /register-amount
-const preCheckStore = new Map<number, PreCheckData>();
+/**
+ * Сохранить/обновить сумму чека для магазина в БД
+ */
+async function setActiveCheck(storeId: number, storeName: string, checkAmount: number) {
+	const now = new Date();
+	const expiresAt = new Date(now.getTime() + ACTIVE_CHECK_TTL_SECONDS * 1000).toISOString();
+
+	// UPSERT: вставить или обновить
+	await db.insert(activeChecks)
+		.values({
+			store_id: storeId,
+			store_name: storeName,
+			check_amount: checkAmount,
+			created_at: now.toISOString(),
+			expires_at: expiresAt
+		})
+		.onConflictDoUpdate({
+			target: activeChecks.store_id,
+			set: {
+				store_name: storeName,
+				check_amount: checkAmount,
+				created_at: now.toISOString(),
+				expires_at: expiresAt
+			}
+		});
+}
+
+/**
+ * Очистка всех expired записей (вызывается периодически)
+ */
+async function cleanupExpiredChecks() {
+	const now = new Date().toISOString();
+	const result = await db.delete(activeChecks)
+		.where(lt(activeChecks.expires_at, now))
+		.returning();
+
+	if (result.length > 0) {
+		console.log(`[1C API] Cleaned up ${result.length} expired active checks`);
+	}
+}
 
 // ==================== GET /api/1c/check-amount ====================
 /**
@@ -63,8 +106,8 @@ router.get('/check-amount', async (req: Request, res: Response) => {
 			});
 		}
 
-		// 🔴 NEW ARCHITECTURE: Читаем из памяти (Agent сам отправляет данные через POST /register-amount)
-		const data = preCheckStore.get(storeId);
+		// 🔴 BUG-4 FIX: Читаем из БД вместо in-memory Map
+		const data = await getActiveCheck(storeId);
 
 		if (!data) {
 			// Данных нет - либо agent не запущен, либо еще не отправил
@@ -77,13 +120,13 @@ router.get('/check-amount', async (req: Request, res: Response) => {
 			});
 		}
 
-		console.log(`[1C API] Check amount retrieved: ${data.checkAmount}₽ (store: ${data.storeName})`);
+		console.log(`[1C API] Check amount retrieved: ${data.check_amount}₽ (store: ${data.store_name})`);
 
 		return res.json({
-			checkAmount: data.checkAmount,
-			storeId: data.storeId,
-			storeName: data.storeName,
-			timestamp: data.timestamp
+			checkAmount: data.check_amount,
+			storeId: data.store_id,
+			storeName: data.store_name,
+			timestamp: data.created_at
 		});
 
 	} catch (error) {
@@ -97,6 +140,7 @@ router.get('/check-amount', async (req: Request, res: Response) => {
 // ==================== POST /api/1c/set-check-amount ====================
 /**
  * Установить сумму предчека (вызывается из 1С)
+ * DEPRECATED: Используйте /register-amount с аутентификацией
  *
  * Body:
  * {
@@ -114,13 +158,12 @@ router.post('/set-check-amount', async (req: Request, res: Response) => {
 			});
 		}
 
-		// Сохраняем в временное хранилище
-		preCheckStore.set(storeId, {
-			checkAmount: parseFloat(checkAmount),
-			storeId: parseInt(storeId),
-			storeName: `Store ${storeId}`, // Временное название (этот endpoint deprecated)
-			timestamp: new Date().toISOString()
-		});
+		// 🔴 BUG-4 FIX: Сохраняем в БД вместо in-memory Map
+		await setActiveCheck(
+			parseInt(storeId),
+			`Store ${storeId}`, // Временное название (этот endpoint deprecated)
+			parseFloat(checkAmount)
+		);
 
 		console.log(`[1C API] Pre-check set for store ${storeId}: ${checkAmount}₽`);
 
@@ -140,7 +183,7 @@ router.post('/set-check-amount', async (req: Request, res: Response) => {
 
 // ==================== POST /api/1c/register-amount ====================
 /**
- * 🔴 NEW: Agent регистрирует сумму чека (Reverse Polling Architecture)
+ * Agent регистрирует сумму чека (Reverse Polling Architecture)
  *
  * Вызывается агентом когда сумма в amount.json меняется.
  *
@@ -183,13 +226,12 @@ router.post('/register-amount', async (req: Request, res: Response) => {
 			});
 		}
 
-		// Сохраняем в память
-		preCheckStore.set(parseInt(storeId), {
-			checkAmount: parseFloat(amount),
-			storeId: parseInt(storeId),
-			storeName: storeName,
-			timestamp: timestamp || new Date().toISOString()
-		});
+		// 🔴 BUG-4 FIX: Сохраняем в БД вместо in-memory Map
+		await setActiveCheck(
+			parseInt(storeId),
+			storeName,
+			parseFloat(amount)
+		);
 
 		console.log(`[1C API] Amount registered: ${amount}₽ from ${storeName} (store ${storeId})`);
 
@@ -391,14 +433,84 @@ router.post('/confirm-discount', async (req: Request, res: Response) => {
 // ==================== GET /api/1c/health ====================
 /**
  * Health check endpoint
+ * MEDIUM-3 FIX: Расширенная информация для диагностики агентов
  */
-router.get('/health', (req: Request, res: Response) => {
-	res.json({
-		status: 'ok',
-		service: '1C Integration API',
-		timestamp: new Date().toISOString(),
-		preCheckStoreCount: preCheckStore.size
-	});
+router.get('/health', async (req: Request, res: Response) => {
+	try {
+		// Получаем статистику из БД
+		const activeChecksCount = await db.select({ count: sql<number>`count(*)` })
+			.from(activeChecks);
+
+		const pendingCount = await db.select({ count: sql<number>`count(*)` })
+			.from(pendingDiscounts)
+			.where(eq(pendingDiscounts.status, 'pending'));
+
+		// Очищаем expired записи
+		await cleanupExpiredChecks();
+
+		res.json({
+			status: 'ok',
+			service: '1C Integration API',
+			timestamp: new Date().toISOString(),
+			activeChecksCount: activeChecksCount[0]?.count || 0,
+			pendingDiscountsCount: pendingCount[0]?.count || 0,
+			version: '2.0.0' // BUG-4 FIX: persistent storage
+		});
+	} catch (error) {
+		console.error('[1C API] Health check error:', error);
+		res.status(500).json({
+			status: 'error',
+			service: '1C Integration API',
+			timestamp: new Date().toISOString(),
+			error: 'Database connection failed'
+		});
+	}
+});
+
+// ==================== GET /api/1c/agent-status ====================
+/**
+ * MEDIUM-3 FIX: Статус агента для конкретного магазина
+ * Позволяет диагностировать проблемы с подключением агента
+ */
+router.get('/agent-status', async (req: Request, res: Response) => {
+	try {
+		const storeId = parseInt(req.query.storeId as string);
+
+		if (!storeId || isNaN(storeId)) {
+			return res.status(400).json({
+				error: 'Invalid storeId parameter'
+			});
+		}
+
+		const activeCheck = await getActiveCheck(storeId);
+
+		if (!activeCheck) {
+			return res.json({
+				storeId,
+				agentConnected: false,
+				lastSeen: null,
+				message: 'Агент не подключен или не отправлял данные'
+			});
+		}
+
+		const lastSeenDate = new Date(activeCheck.created_at);
+		const secondsAgo = Math.floor((Date.now() - lastSeenDate.getTime()) / 1000);
+
+		return res.json({
+			storeId,
+			agentConnected: secondsAgo < ACTIVE_CHECK_TTL_SECONDS,
+			lastSeen: activeCheck.created_at,
+			secondsAgo,
+			storeName: activeCheck.store_name,
+			lastCheckAmount: activeCheck.check_amount
+		});
+
+	} catch (error) {
+		console.error('[1C API] Agent status error:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
 });
 
 export default router;
