@@ -87,8 +87,10 @@
 		// Для Android/Desktop - используем deferredPrompt
 		if (!deferredPrompt) {
 			console.log('[PWA Button] No deferred prompt available');
-			// Показываем инструкцию как fallback
-			showIOSInstructions = true;
+			console.log('[PWA Button] Possible reasons: user declined before, or browser settings');
+
+			// Для Android без deferredPrompt показываем альтернативную инструкцию
+			alert('Чтобы установить приложение:\n\n1. Откройте меню браузера (⋮)\n2. Выберите "Установить приложение" или "Добавить на главный экран"\n\nЕсли не видите такой опции, возможно приложение уже установлено или ваш браузер не поддерживает установку.');
 			return;
 		}
 
@@ -137,15 +139,52 @@
 {#if showIOSInstructions}
 	<div class="modal-overlay" onclick={() => showIOSInstructions = false}>
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-			<h3>Установка на iOS</h3>
+			<div class="modal-header">
+				<span class="modal-icon">📱</span>
+				<h3>Как установить приложение</h3>
+			</div>
+
+			<p class="modal-explanation">
+				На iPhone/iPad приложения устанавливаются вручную через Safari.<br>
+				<strong>Следуйте этим шагам:</strong>
+			</p>
+
 			<ol class="ios-instructions">
-				<li>Нажмите кнопку "Поделиться" <span class="share-icon">⎙</span> внизу экрана</li>
-				<li>Прокрутите вниз и выберите "На экран «Домой»"</li>
-				<li>Нажмите "Добавить"</li>
+				<li>
+					<span class="step-number">1</span>
+					<div class="step-content">
+						<div class="step-text">
+							Нажмите кнопку <strong>"Поделиться"</strong>
+							<span class="share-icon pulse">⎙</span>
+							<span class="hint">внизу экрана Safari</span>
+						</div>
+					</div>
+				</li>
+				<li>
+					<span class="step-number">2</span>
+					<div class="step-content">
+						<div class="step-text">
+							Прокрутите вниз в меню и найдите<br>
+							<strong>"На экран «Домой»"</strong> <span class="hint">(иконка с плюсом)</span>
+						</div>
+					</div>
+				</li>
+				<li>
+					<span class="step-number">3</span>
+					<div class="step-content">
+						<div class="step-text">
+							Нажмите <strong>"Добавить"</strong> в правом верхнем углу
+						</div>
+					</div>
+				</li>
 			</ol>
-			<button class="close-btn" onclick={() => showIOSInstructions = false}>
-				Понятно
-			</button>
+
+			<div class="modal-footer">
+				<p class="footer-note">💡 После установки приложение появится на главном экране</p>
+				<button class="close-btn" onclick={() => showIOSInstructions = false}>
+					Понятно, установлю вручную
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}
@@ -272,30 +311,131 @@
 		animation: slideUp 0.3s ease;
 	}
 
+	.modal-header {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin-bottom: 16px;
+	}
+
+	.modal-icon {
+		font-size: 32px;
+	}
+
 	.modal-content h3 {
-		margin: 0 0 16px 0;
+		margin: 0;
 		color: #f8fafc;
 		font-size: 20px;
 		font-weight: 700;
 	}
 
-	.ios-instructions {
-		list-style: decimal;
-		padding-left: 24px;
-		margin: 0 0 20px 0;
+	.modal-explanation {
 		color: #cbd5e1;
-		line-height: 1.8;
+		font-size: 14px;
+		line-height: 1.6;
+		margin: 0 0 20px 0;
+		padding: 12px;
+		background: rgba(59, 130, 246, 0.1);
+		border-radius: 8px;
+		border-left: 3px solid #3b82f6;
+	}
+
+	.modal-explanation strong {
+		color: #f8fafc;
+	}
+
+	.ios-instructions {
+		list-style: none;
+		padding: 0;
+		margin: 0 0 20px 0;
 	}
 
 	.ios-instructions li {
-		margin-bottom: 8px;
+		display: flex;
+		gap: 12px;
+		margin-bottom: 16px;
+		padding: 12px;
+		background: rgba(255, 255, 255, 0.05);
+		border-radius: 8px;
+		transition: all 0.2s ease;
+	}
+
+	.ios-instructions li:hover {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.step-number {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		color: white;
+		border-radius: 50%;
+		font-size: 14px;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+
+	.step-content {
+		flex: 1;
+	}
+
+	.step-text {
+		color: #cbd5e1;
+		font-size: 14px;
+		line-height: 1.8;
+	}
+
+	.step-text strong {
+		color: #f8fafc;
+		font-weight: 600;
+	}
+
+	.hint {
+		display: inline-block;
+		color: #94a3b8;
+		font-size: 12px;
+		font-style: italic;
+		margin-left: 4px;
 	}
 
 	.share-icon {
 		display: inline-block;
-		font-size: 18px;
+		font-size: 20px;
 		vertical-align: middle;
-		margin: 0 4px;
+		margin: 0 6px;
+		color: #3b82f6;
+		font-weight: bold;
+	}
+
+	.share-icon.pulse {
+		animation: pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.2);
+			opacity: 0.8;
+		}
+	}
+
+	.modal-footer {
+		margin-top: 24px;
+		padding-top: 20px;
+		border-top: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.footer-note {
+		color: #94a3b8;
+		font-size: 13px;
+		text-align: center;
+		margin: 0 0 16px 0;
 	}
 
 	.close-btn {
