@@ -327,15 +327,9 @@
 			</div>
 		</div>
 
-<<<<<<< HEAD
-		<!-- Broadcast Section (only for new promotions) -->
-		{#if !editingPromotion}
-			<div class="broadcast-section">
-=======
 		<!-- Broadcast Section (for both new and existing promotions) -->
 		<div class="broadcast-section">
->>>>>>> origin/claude/analyze-loyalty-system-3uddM
-				<div class="broadcast-header">
+			<div class="broadcast-header">
 					<label class="broadcast-toggle">
 						<input type="checkbox" bind:checked={sendBroadcast} />
 						<span>📣 Отправить рассылку об этой акции</span>
@@ -371,10 +365,6 @@
 					</div>
 				{/if}
 			</div>
-<<<<<<< HEAD
-		{/if}
-=======
->>>>>>> origin/claude/analyze-loyalty-system-3uddM
 
 		<!-- Error -->
 		{#if error}
