@@ -82,7 +82,7 @@ export const categories = sqliteTable('categories', {
 	slug: text('slug').notNull().unique(),
 	description: text('description'),
 	image: text('image'),
-	parent_id: integer('parent_id').references((): ReturnType<typeof integer> => categories.id, { onDelete: 'set null' }),
+	parent_id: integer('parent_id'), // Self-reference без .references() для избежания circular dependency
 	position: integer('position').notNull().default(0),
 	is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
