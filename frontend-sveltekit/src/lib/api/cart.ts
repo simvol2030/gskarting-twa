@@ -5,9 +5,17 @@
 
 import { API_BASE_URL } from '$lib/config';
 
+export interface CartItemVariation {
+	id: number;
+	name: string;
+	price: number;
+	oldPrice: number | null;
+}
+
 export interface CartItem {
 	id: number;
 	productId: number;
+	variationId: number | null;
 	quantity: number;
 	product: {
 		name: string;
@@ -16,7 +24,9 @@ export interface CartItem {
 		image: string;
 		category: string;
 		quantityInfo: string | null;
+		variationAttribute: string | null;
 	};
+	variation: CartItemVariation | null;
 	itemTotal: number;
 }
 
@@ -63,10 +73,10 @@ export const cartAPI = {
 	/**
 	 * Add item to cart
 	 */
-	async add(productId: number, quantity: number = 1): Promise<{ id: number; quantity: number; cartItemCount: number }> {
+	async add(productId: number, quantity: number = 1, variationId?: number): Promise<{ id: number; quantity: number; cartItemCount: number }> {
 		const response = await fetchWithCredentials(`${API_BASE_URL}/cart/add`, {
 			method: 'POST',
-			body: JSON.stringify({ productId, quantity })
+			body: JSON.stringify({ productId, quantity, variationId })
 		});
 		return response.data;
 	},

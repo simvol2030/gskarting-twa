@@ -63,11 +63,11 @@ function createCartStore() {
 		/**
 		 * Add item to cart
 		 */
-		async addItem(productId: number, quantity: number = 1) {
+		async addItem(productId: number, quantity: number = 1, variationId?: number) {
 			update(state => ({ ...state, loading: true, error: null }));
 
 			try {
-				const result = await cartAPI.add(productId, quantity);
+				const result = await cartAPI.add(productId, quantity, variationId);
 				// Refresh cart to get updated items and summary
 				const data = await cartAPI.get();
 				update(state => ({

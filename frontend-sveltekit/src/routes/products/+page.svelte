@@ -9,11 +9,23 @@
 		image: string | null;
 	}
 
+	interface ProductVariation {
+		id: number;
+		name: string;
+		price: number;
+		oldPrice: number | null;
+		sku: string | null;
+		isDefault: boolean;
+	}
+
 	let { data } = $props();
 
 	let searchValue = $state(data.filters.search);
 	let selectedCategory = $state(data.filters.category);
 	let addingToCart = $state<number | null>(null); // Track which product is being added
+
+	// Track selected variation per product
+	let selectedVariations = $state<Record<number, number>>({});
 
 	// Категории с новой структурой (slug/name/image)
 	const categoriesNew = data.categories as CategoryItem[];
@@ -43,6 +55,37 @@
 		return category?.name || slug;
 	}
 
+	// Получить выбранную вариацию для продукта
+	function getSelectedVariation(product: typeof data.products[0]): ProductVariation | null {
+		if (!product.hasVariations || !product.variations.length) return null;
+
+		const selectedId = selectedVariations[product.id];
+		if (selectedId) {
+			return product.variations.find(v => v.id === selectedId) || product.variations[0];
+		}
+		// По умолчанию - дефолтная или первая
+		return product.variations.find(v => v.isDefault) || product.variations[0];
+	}
+
+	// Получить текущую цену для продукта (с учётом выбранной вариации)
+	function getCurrentPrice(product: typeof data.products[0]): number {
+		const variation = getSelectedVariation(product);
+		return variation ? variation.price : product.price;
+	}
+
+	// Получить старую цену для продукта (с учётом выбранной вариации)
+	function getCurrentOldPrice(product: typeof data.products[0]): number | null {
+		const variation = getSelectedVariation(product);
+		return variation ? variation.oldPrice : product.old_price;
+	}
+
+	// Обработчик изменения вариации
+	function handleVariationChange(e: Event, productId: number) {
+		e.stopPropagation();
+		const select = e.target as HTMLSelectElement;
+		selectedVariations[productId] = parseInt(select.value);
+	}
+
 	// Добавление товара в корзину
 	async function handleAddToCart(e: Event, productId: number) {
 		e.stopPropagation(); // Prevent card click
@@ -50,7 +93,10 @@
 
 		addingToCart = productId;
 		try {
-			await cart.addItem(productId, 1);
+			const product = data.products.find(p => p.id === productId);
+			const variation = product ? getSelectedVariation(product) : null;
+
+			await cart.addItem(productId, 1, variation?.id);
 			// Visual feedback - show briefly that item was added
 			setTimeout(() => {
 				addingToCart = null;
@@ -115,12 +161,15 @@
 
 	<div class="products-grid">
 		{#each data.products as product}
+			{@const currentPrice = getCurrentPrice(product)}
+			{@const currentOldPrice = getCurrentOldPrice(product)}
+			{@const selectedVariation = getSelectedVariation(product)}
 			<article class="product-card">
 				<div class="product-image-wrapper">
 					<img src={product.image} alt={product.name} class="product-image" />
-					{#if product.old_price}
+					{#if currentOldPrice && currentOldPrice > currentPrice}
 						<span class="discount-badge">
-							-{Math.round((1 - product.price / product.old_price) * 100)}%
+							-{Math.round((1 - currentPrice / currentOldPrice) * 100)}%
 						</span>
 					{/if}
 				</div>
@@ -129,12 +178,28 @@
 					<h3 class="product-name">{product.name}</h3>
 					<span class="product-category">{product.category}</span>
 
+					{#if product.hasVariations && product.variations.length > 0}
+						<div class="variation-selector">
+							<select
+								class="variation-select"
+								value={selectedVariation?.id || ''}
+								onchange={(e) => handleVariationChange(e, product.id)}
+							>
+								{#each product.variations as variation}
+									<option value={variation.id}>
+										{variation.name} — {variation.price.toLocaleString('ru-RU')} ₽
+									</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
 					<div class="product-footer">
 						<div class="product-pricing">
-							{#if product.old_price}
-								<span class="old-price">{product.old_price.toLocaleString('ru-RU')} ₽</span>
+							{#if currentOldPrice && currentOldPrice > currentPrice}
+								<span class="old-price">{currentOldPrice.toLocaleString('ru-RU')} ₽</span>
 							{/if}
-							<span class="price">{product.price.toLocaleString('ru-RU')} ₽</span>
+							<span class="price">{currentPrice.toLocaleString('ru-RU')} ₽</span>
 						</div>
 
 						<button
@@ -364,6 +429,31 @@
 		color: var(--text-secondary);
 		display: block;
 		margin-bottom: 8px;
+	}
+
+	.variation-selector {
+		margin-bottom: 8px;
+	}
+
+	.variation-select {
+		width: 100%;
+		padding: 6px 8px;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-white);
+		font-size: 12px;
+		color: var(--text-primary);
+		cursor: pointer;
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 8px center;
+		padding-right: 24px;
+	}
+
+	.variation-select:focus {
+		outline: none;
+		border-color: var(--primary-orange);
 	}
 
 	.product-footer {

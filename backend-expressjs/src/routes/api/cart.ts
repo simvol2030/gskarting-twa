@@ -6,9 +6,10 @@
 
 import { Router } from 'express';
 import { db } from '../../db/client';
-import { cartItems, products } from '../../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { cartItems, products, productVariations } from '../../db/schema';
+import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { getVariationById } from '../../db/queries/productVariations';
 
 const router = Router();
 
@@ -33,11 +34,12 @@ router.get('/', async (req, res) => {
 	try {
 		const sessionId = getSessionId(req, res);
 
-		// Get cart items with product details
+		// Get cart items with product and variation details
 		const items = await db
 			.select({
 				id: cartItems.id,
 				productId: cartItems.product_id,
+				variationId: cartItems.variation_id,
 				quantity: cartItems.quantity,
 				createdAt: cartItems.created_at,
 				// Product details
@@ -47,19 +49,30 @@ router.get('/', async (req, res) => {
 				productImage: products.image,
 				productCategory: products.category,
 				productQuantityInfo: products.quantity_info,
-				productIsActive: products.is_active
+				productIsActive: products.is_active,
+				productVariationAttribute: products.variation_attribute,
+				// Variation details (left join)
+				variationName: productVariations.name,
+				variationPrice: productVariations.price,
+				variationOldPrice: productVariations.old_price,
+				variationIsActive: productVariations.is_active
 			})
 			.from(cartItems)
 			.leftJoin(products, eq(cartItems.product_id, products.id))
+			.leftJoin(productVariations, eq(cartItems.variation_id, productVariations.id))
 			.where(eq(cartItems.session_id, sessionId))
 			.orderBy(desc(cartItems.created_at));
 
-		// Filter out items where product is no longer active
-		const activeItems = items.filter(item => item.productIsActive);
+		// Filter out items where product is no longer active or variation is inactive
+		const activeItems = items.filter(item =>
+			item.productIsActive &&
+			(item.variationId === null || item.variationIsActive)
+		);
 
-		// Calculate totals
+		// Calculate totals (use variation price if available)
 		const subtotal = activeItems.reduce((sum, item) => {
-			return sum + (item.productPrice || 0) * item.quantity;
+			const price = item.variationPrice ?? item.productPrice ?? 0;
+			return sum + price * item.quantity;
 		}, 0);
 
 		const itemCount = activeItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -67,20 +80,33 @@ router.get('/', async (req, res) => {
 		res.json({
 			success: true,
 			data: {
-				items: activeItems.map(item => ({
-					id: item.id,
-					productId: item.productId,
-					quantity: item.quantity,
-					product: {
-						name: item.productName,
-						price: item.productPrice,
-						oldPrice: item.productOldPrice,
-						image: item.productImage,
-						category: item.productCategory,
-						quantityInfo: item.productQuantityInfo
-					},
-					itemTotal: (item.productPrice || 0) * item.quantity
-				})),
+				items: activeItems.map(item => {
+					const price = item.variationPrice ?? item.productPrice ?? 0;
+					const oldPrice = item.variationOldPrice ?? item.productOldPrice;
+
+					return {
+						id: item.id,
+						productId: item.productId,
+						variationId: item.variationId,
+						quantity: item.quantity,
+						product: {
+							name: item.productName,
+							price: price,
+							oldPrice: oldPrice,
+							image: item.productImage,
+							category: item.productCategory,
+							quantityInfo: item.productQuantityInfo,
+							variationAttribute: item.productVariationAttribute
+						},
+						variation: item.variationId ? {
+							id: item.variationId,
+							name: item.variationName,
+							price: item.variationPrice,
+							oldPrice: item.variationOldPrice
+						} : null,
+						itemTotal: price * item.quantity
+					};
+				}),
 				summary: {
 					itemCount,
 					subtotal,
@@ -102,7 +128,7 @@ router.get('/', async (req, res) => {
 router.post('/add', async (req, res) => {
 	try {
 		const sessionId = getSessionId(req, res);
-		const { productId, quantity = 1 } = req.body;
+		const { productId, variationId, quantity = 1 } = req.body;
 
 		if (!productId) {
 			return res.status(400).json({ success: false, error: 'Product ID is required' });
@@ -123,14 +149,32 @@ router.post('/add', async (req, res) => {
 			return res.status(404).json({ success: false, error: 'Product not found or not available' });
 		}
 
-		// Check if item already in cart
+		// If variationId provided, validate it
+		let variation = null;
+		if (variationId) {
+			variation = await getVariationById(variationId);
+			if (!variation || variation.product_id !== productId || !variation.is_active) {
+				return res.status(400).json({ success: false, error: 'Invalid or inactive variation' });
+			}
+		}
+
+		// Check if item already in cart (same product + variation combination)
+		const existingItemConditions = [
+			eq(cartItems.session_id, sessionId),
+			eq(cartItems.product_id, productId)
+		];
+
+		// Match variation: if variationId is null, match null; otherwise match the specific id
+		if (variationId) {
+			existingItemConditions.push(eq(cartItems.variation_id, variationId));
+		} else {
+			existingItemConditions.push(isNull(cartItems.variation_id));
+		}
+
 		const existingItem = await db
 			.select()
 			.from(cartItems)
-			.where(and(
-				eq(cartItems.session_id, sessionId),
-				eq(cartItems.product_id, productId)
-			))
+			.where(and(...existingItemConditions))
 			.limit(1);
 
 		let cartItem;
@@ -153,6 +197,7 @@ router.post('/add', async (req, res) => {
 				.values({
 					session_id: sessionId,
 					product_id: productId,
+					variation_id: variationId || null,
 					quantity
 				})
 				.returning();
@@ -172,8 +217,14 @@ router.post('/add', async (req, res) => {
 			data: {
 				id: cartItem.id,
 				productId: cartItem.product_id,
+				variationId: cartItem.variation_id,
 				quantity: cartItem.quantity,
-				cartItemCount: totalItems
+				cartItemCount: totalItems,
+				variation: variation ? {
+					id: variation.id,
+					name: variation.name,
+					price: variation.price
+				} : null
 			},
 			message: 'Item added to cart'
 		});
@@ -232,6 +283,8 @@ router.put('/:id', async (req, res) => {
 			success: true,
 			data: {
 				id: result[0].id,
+				productId: result[0].product_id,
+				variationId: result[0].variation_id,
 				quantity: result[0].quantity
 			}
 		});
