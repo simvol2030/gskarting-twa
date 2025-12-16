@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import type { Product } from '$lib/types/loyalty';
   import LoyaltyCard from '$lib/components/loyalty/ui/LoyaltyCard.svelte';
   import StoriesCarousel from '$lib/components/loyalty/ui/StoriesCarousel.svelte';
@@ -21,6 +23,19 @@
   const closeProductDetail = () => {
     productSheetOpen = false;
   };
+
+  // Redirect to Telegram bot if not running inside Telegram WebApp
+  onMount(() => {
+    if (browser) {
+      // Check if we're running inside Telegram WebApp
+      const isInTelegramWebApp = window.Telegram?.WebApp?.initData;
+
+      if (!isInTelegramWebApp) {
+        // Redirect to Telegram bot
+        window.location.href = 'https://t.me/granat_loyalty_bot';
+      }
+    }
+  });
 </script>
 
 <!-- 1. Карта лояльности -->

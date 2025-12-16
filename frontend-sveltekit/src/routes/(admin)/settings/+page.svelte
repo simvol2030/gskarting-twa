@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { API_BASE_URL } from '$lib/config';
+	import { loadCustomization } from '$lib/stores/customization';
 
 	let { data }: { data: PageData } = $props();
 
@@ -364,6 +365,10 @@
 
 				if (result.success) {
 					saveMessage = 'Настройки внешнего вида сохранены!';
+
+					// Reload customization to update all components with new settings
+					await loadCustomization(API_BASE_URL);
+
 					setTimeout(() => saveMessage = '', 3000);
 				} else {
 					saveMessage = 'Ошибка: ' + result.error;
