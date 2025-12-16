@@ -1,15 +1,22 @@
 import type { PageServerLoad } from './$types';
 
-const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:3007';
+const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:3012';
 
 export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	const sessionCookie = cookies.get('session');
 
+	console.log('[Stories Admin] API_BASE_URL:', API_BASE_URL);
+
 	try {
 		// Fetch highlights
-		const highlightsResponse = await fetch(`${API_BASE_URL}/api/admin/stories/highlights?includeInactive=true`, {
+		const highlightsURL = `${API_BASE_URL}/api/admin/stories/highlights?includeInactive=true`;
+		console.log('[Stories Admin] Fetching highlights from:', highlightsURL);
+
+		const highlightsResponse = await fetch(highlightsURL, {
 			headers: sessionCookie ? { Cookie: `session=${sessionCookie}` } : {}
 		});
+
+		console.log('[Stories Admin] Highlights response status:', highlightsResponse.status);
 
 		// Fetch settings
 		const settingsResponse = await fetch(`${API_BASE_URL}/api/admin/stories/settings`, {
