@@ -152,6 +152,7 @@ export async function initializeDatabase() {
 					customer_phone TEXT NOT NULL,
 					customer_email TEXT,
 					delivery_type TEXT NOT NULL,
+					delivery_city TEXT,
 					delivery_address TEXT,
 					delivery_entrance TEXT,
 					delivery_floor TEXT,

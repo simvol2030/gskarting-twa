@@ -18,7 +18,12 @@ interface OrderNotificationData {
 	customerPhone: string;
 	customerEmail?: string;
 	deliveryType: 'pickup' | 'delivery';
+	deliveryCity?: string;
 	deliveryAddress?: string;
+	deliveryEntrance?: string;
+	deliveryFloor?: string;
+	deliveryApartment?: string;
+	deliveryIntercom?: string;
 	storeName?: string;
 	items: { name: string; quantity: number; price: number }[];
 	subtotal: number;
@@ -128,7 +133,24 @@ function buildOrderMessage(order: OrderNotificationData): string {
 
 	// Delivery info
 	if (order.deliveryType === 'delivery') {
-		message += `🚚 <b>Доставка:</b> ${order.deliveryAddress}\n\n`;
+		message += `🚚 <b>Доставка:</b>\n`;
+		if (order.deliveryCity) {
+			message += `г. ${order.deliveryCity}\n`;
+		}
+		message += `${order.deliveryAddress}`;
+		if (order.deliveryEntrance) {
+			message += `, подъезд ${order.deliveryEntrance}`;
+		}
+		if (order.deliveryFloor) {
+			message += `, этаж ${order.deliveryFloor}`;
+		}
+		if (order.deliveryApartment) {
+			message += `, кв. ${order.deliveryApartment}`;
+		}
+		if (order.deliveryIntercom) {
+			message += `\nДомофон: ${order.deliveryIntercom}`;
+		}
+		message += '\n\n';
 	} else {
 		message += `🏪 <b>Самовывоз:</b> ${order.storeName || 'Не указано'}\n\n`;
 	}

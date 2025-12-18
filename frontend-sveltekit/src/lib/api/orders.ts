@@ -38,6 +38,7 @@ export interface OrderData {
 	customerPhone: string;
 	customerEmail?: string;
 	deliveryType: 'pickup' | 'delivery';
+	deliveryCity?: string;
 	deliveryAddress?: string;
 	deliveryEntrance?: string;
 	deliveryFloor?: string;

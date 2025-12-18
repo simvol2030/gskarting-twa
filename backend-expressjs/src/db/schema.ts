@@ -502,6 +502,7 @@ export const orders = sqliteTable('orders', {
 
 	// Доставка
 	delivery_type: text('delivery_type', { enum: ['pickup', 'delivery'] }).notNull(),
+	delivery_city: text('delivery_city'),
 	delivery_address: text('delivery_address'),
 	delivery_entrance: text('delivery_entrance'),
 	delivery_floor: text('delivery_floor'),

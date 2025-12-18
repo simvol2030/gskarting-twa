@@ -15,6 +15,7 @@
 	let customerPhone = $state('+7 (9');
 	let customerEmail = $state('');
 	let deliveryType = $state<'pickup' | 'delivery'>('delivery');
+	let deliveryCity = $state('');
 	let deliveryAddress = $state('');
 	let deliveryEntrance = $state('');
 	let deliveryFloor = $state('');
@@ -119,6 +120,7 @@
 			};
 
 			if (deliveryType === 'delivery') {
+				orderData.deliveryCity = deliveryCity.trim() || undefined;
 				orderData.deliveryAddress = deliveryAddress.trim();
 				orderData.deliveryEntrance = deliveryEntrance.trim() || undefined;
 				orderData.deliveryFloor = deliveryFloor.trim() || undefined;
@@ -252,6 +254,16 @@
 				<!-- Delivery Address -->
 				{#if deliveryType === 'delivery'}
 					<div class="address-fields">
+						<div class="form-group">
+							<label for="city">Город / населенный пункт</label>
+							<input
+								type="text"
+								id="city"
+								bind:value={deliveryCity}
+								placeholder="Например: Пермь"
+							/>
+						</div>
+
 						<div class="form-group">
 							<label for="address">Адрес *</label>
 							<input
