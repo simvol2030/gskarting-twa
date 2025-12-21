@@ -310,7 +310,8 @@ router.post('/', async (req, res) => {
 			subtotal: toRubles(subtotal),
 			deliveryCost: toRubles(deliveryCost),
 			total: toRubles(total),
-			notes: notes || undefined
+			notes: notes || undefined,
+			telegramUserId: telegramUserId || undefined
 		}).catch(err => console.error('Failed to send notification:', err));
 
 		// Return order details

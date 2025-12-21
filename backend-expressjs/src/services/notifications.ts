@@ -30,6 +30,7 @@ interface OrderNotificationData {
 	deliveryCost: number;
 	total: number;
 	notes?: string;
+	telegramUserId?: number; // For "Request Review" button
 }
 
 interface StatusChangeData {
@@ -77,19 +78,30 @@ async function getSettings() {
 /**
  * Send Telegram message
  */
-async function sendTelegramMessage(botToken: string, chatId: string, message: string): Promise<boolean> {
+async function sendTelegramMessage(
+	botToken: string,
+	chatId: string,
+	message: string,
+	replyMarkup?: any
+): Promise<boolean> {
 	try {
 		const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 		console.log('[Telegram API] Sending message to chat:', chatId);
 
+		const payload: any = {
+			chat_id: chatId,
+			text: message,
+			parse_mode: 'HTML'
+		};
+
+		if (replyMarkup) {
+			payload.reply_markup = replyMarkup;
+		}
+
 		const response = await fetch(url, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				chat_id: chatId,
-				text: message,
-				parse_mode: 'HTML'
-			})
+			body: JSON.stringify(payload)
 		});
 
 		console.log('[Telegram API] Response status:', response.status);
@@ -227,6 +239,31 @@ function buildCustomerStatusMessage(data: StatusChangeData): string {
 }
 
 /**
+ * Build inline keyboard for order notification
+ */
+function buildOrderKeyboard(orderNumber: string, customerPhone: string, telegramUserId?: number): any {
+	// First row: status buttons
+	const buttons = [
+		[
+			{ text: '🟡 Принят', callback_data: `status:accepted:${orderNumber}:${customerPhone}` },
+			{ text: '🟢 Готов', callback_data: `status:ready:${orderNumber}:${customerPhone}` },
+			{ text: '🚗 Выехал', callback_data: `status:departed:${orderNumber}:${customerPhone}` }
+		]
+	];
+
+	// Second row: request review button (only if telegramUserId available)
+	if (telegramUserId && telegramUserId > 0) {
+		buttons.push([
+			{ text: '⭐ Запросить отзыв', callback_data: `request_review:${telegramUserId}:${orderNumber}` }
+		]);
+	}
+
+	return {
+		inline_keyboard: buttons
+	};
+}
+
+/**
  * Notify about new order
  */
 export async function notifyNewOrder(order: OrderNotificationData): Promise<void> {
@@ -254,12 +291,15 @@ export async function notifyNewOrder(order: OrderNotificationData): Promise<void
 		) {
 			console.log('[Notifications] Sending Telegram notification to group:', settings.telegram_group_id);
 			const message = buildOrderMessage(order);
+			const keyboard = buildOrderKeyboard(order.orderNumber, order.customerPhone, order.telegramUserId);
 			console.log('[Notifications] Message built, length:', message.length);
+			console.log('[Notifications] Keyboard built:', JSON.stringify(keyboard));
 
 			const result = await sendTelegramMessage(
 				settings.telegram_bot_token,
 				settings.telegram_group_id,
-				message
+				message,
+				keyboard
 			);
 
 			console.log('[Notifications] Telegram send result:', result ? 'SUCCESS' : 'FAILED');
@@ -328,6 +368,102 @@ export async function notifyStatusChange(
 		}
 	} catch (error) {
 		console.error('Error sending status change notification:', error);
+	}
+}
+
+/**
+ * Build rating notification message for Telegram
+ */
+function buildRatingMessage(data: {
+	rating: string;
+	phone?: string;
+	cause?: string;
+	feedback?: string;
+	timestamp: string;
+}): string {
+	const ratingEmojis: Record<string, string> = {
+		'Отлично': '⭐⭐⭐⭐⭐',
+		'Хорошо': '⭐⭐⭐⭐',
+		'Удовлетворительно': '⭐⭐⭐',
+		'Неудовлетворительно': '⭐'
+	};
+
+	let message = `📊 <b>Новый отзыв</b>\n\n`;
+	message += `${ratingEmojis[data.rating] || '⭐'} <b>${data.rating}</b>\n\n`;
+
+	if (data.phone) {
+		message += `📱 Телефон: ${data.phone}\n`;
+	}
+
+	if (data.cause) {
+		message += `📝 Причина: ${data.cause}\n`;
+	}
+
+	if (data.feedback) {
+		message += `💬 Комментарий: ${data.feedback}\n`;
+	}
+
+	const date = new Date(data.timestamp);
+	message += `\n🕐 ${date.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`;
+
+	return message;
+}
+
+/**
+ * Send rating to Telegram group
+ */
+export async function sendRatingToGroup(data: {
+	rating: string;
+	phone?: string;
+	cause?: string;
+	feedback?: string;
+	timestamp: string;
+}): Promise<boolean> {
+	try {
+		console.log('[Notifications] sendRatingToGroup called for rating:', data.rating);
+
+		const settings = await getSettings();
+		console.log('[Notifications] Settings loaded:', {
+			hasSettings: !!settings,
+			notificationsEnabled: settings?.telegram_notifications_enabled,
+			hasToken: !!settings?.telegram_bot_token,
+			hasGroupId: !!settings?.telegram_group_id
+		});
+
+		if (!settings) {
+			console.warn('[Notifications] No settings found, aborting');
+			return false;
+		}
+
+		// Telegram notification to admin group
+		if (
+			settings.telegram_notifications_enabled &&
+			settings.telegram_bot_token &&
+			settings.telegram_group_id
+		) {
+			console.log('[Notifications] Sending rating notification to group:', settings.telegram_group_id);
+			const message = buildRatingMessage(data);
+			console.log('[Notifications] Message built, length:', message.length);
+
+			const result = await sendTelegramMessage(
+				settings.telegram_bot_token,
+				settings.telegram_group_id,
+				message
+			);
+
+			console.log('[Notifications] Telegram send result:', result ? 'SUCCESS' : 'FAILED');
+			return result;
+		} else {
+			console.warn('[Notifications] Telegram notification conditions not met:', {
+				enabled: settings.telegram_notifications_enabled,
+				hasToken: !!settings.telegram_bot_token,
+				hasGroupId: !!settings.telegram_group_id
+			});
+			return false;
+		}
+	} catch (error) {
+		console.error('Error sending rating notification:', error);
+		return false;
 	}
 }
 

@@ -28,6 +28,7 @@ import profileRouter from './routes/profile';
 import catalogRouter from './routes/api/catalog'; // Shop extension: Public catalog
 import cartRouter from './routes/api/cart'; // Shop extension: Shopping cart
 import ordersRouter from './routes/api/orders'; // Shop extension: Orders
+import ratingsRouter from './routes/api/ratings'; // Ratings/Reviews API
 
 // Bot API routes (public, no auth required)
 import botWelcomeMessagesRouter from './routes/bot/welcome-messages';
@@ -132,6 +133,7 @@ app.use('/api/seller', sellerRouter); // Seller PWA authentication
 app.use('/api/catalog', catalogRouter); // Public catalog (categories & products)
 app.use('/api/cart', cartRouter); // Shopping cart
 app.use('/api/orders', ordersRouter); // Orders
+app.use('/api/ratings', ratingsRouter); // Ratings/Reviews
 app.use('/api/feed', feedRouter); // Feed/Лента public API
 app.use('/api/stories', storiesRouter); // Web Stories (public)
 

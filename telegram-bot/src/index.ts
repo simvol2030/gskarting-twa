@@ -443,6 +443,94 @@ app.post('/send-campaign-message', async (req, res) => {
 	}
 });
 
+// ===== CALLBACK QUERY HANDLERS =====
+
+/**
+ * Handle order status button clicks
+ * Format: status:accepted|ready|departed:orderNumber:phone
+ */
+bot.on('callback_query:data', async (ctx) => {
+	const data = ctx.callbackQuery.data;
+	console.log('📝 Callback query received:', data);
+
+	try {
+		// Parse callback data
+		const parts = data.split(':');
+		const action = parts[0];
+
+		if (action === 'status') {
+			// Status button clicked
+			const status = parts[1]; // accepted, ready, departed
+			const orderNumber = parts[2];
+			const phone = parts[3];
+
+			const statusEmojis: Record<string, string> = {
+				accepted: '🟡',
+				ready: '🟢',
+				departed: '🚗'
+			};
+
+			const statusLabels: Record<string, string> = {
+				accepted: 'Принят',
+				ready: 'Готов',
+				departed: 'Выехал'
+			};
+
+			const emoji = statusEmojis[status] || '📋';
+			const label = statusLabels[status] || status;
+
+			// Answer callback to remove loading state
+			await ctx.answerCallbackQuery(`✅ Статус обновлён: ${label}`);
+
+			// Edit message to show updated status
+			const originalMessage = ctx.callbackQuery.message?.text || '';
+			const updatedMessage = `${originalMessage}\n\n${emoji} <b>Статус обновлён: ${label}</b>\n⏰ ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`;
+
+			// Update message and remove keyboard
+			await ctx.editMessageText(updatedMessage, {
+				parse_mode: 'HTML'
+			});
+
+			console.log(`✅ Status updated: ${status} for order ${orderNumber}`);
+
+		} else if (action === 'request_review') {
+			// Request review button clicked
+			const telegramUserId = parts[1];
+			const orderNumber = parts[2];
+
+			// Build reputation page URL with pre-filled phone
+			const reviewUrl = `${WEB_APP_URL}/reputation`;
+
+			// Send review request to customer
+			await bot.api.sendMessage(
+				parseInt(telegramUserId),
+				`⭐ <b>Оцените нас!</b>\n\nВаш заказ #${orderNumber} выполнен.\n\nПожалуйста, поделитесь своим мнением о нашем сервисе и продуктах.`,
+				{
+					parse_mode: 'HTML',
+					reply_markup: new InlineKeyboard().webApp('⭐ Оставить отзыв', reviewUrl)
+				}
+			);
+
+			// Answer callback
+			await ctx.answerCallbackQuery('✅ Запрос на отзыв отправлен клиенту');
+
+			// Edit original message to show request was sent
+			const originalMessage = ctx.callbackQuery.message?.text || '';
+			const updatedMessage = `${originalMessage}\n\n⭐ <b>Запрос на отзыв отправлен</b>\n⏰ ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`;
+
+			await ctx.editMessageText(updatedMessage, {
+				parse_mode: 'HTML'
+			});
+
+			console.log(`✅ Review request sent to user ${telegramUserId} for order ${orderNumber}`);
+		}
+
+	} catch (error) {
+		console.error('❌ Error handling callback query:', error);
+		await ctx.answerCallbackQuery('❌ Произошла ошибка');
+	}
+});
+
 // Health check
 app.get('/health', (req, res) => {
 	res.json({
