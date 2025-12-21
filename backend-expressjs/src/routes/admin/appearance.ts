@@ -389,19 +389,9 @@ router.post('/logo', requireRole('super-admin', 'editor'), upload.single('logo')
 		}
 
 		const uploadedPath = req.file.path;
-		const filename = req.file.filename;
 
-		// Process image with sharp (resize and optimize)
-		const outputFilename = `logo-${Date.now()}.webp`;
-		const outputPath = path.join(process.cwd(), 'uploads', 'branding', outputFilename);
-
-		await sharp(uploadedPath)
-			.resize(200, 200, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
-			.webp({ quality: 90 })
-			.toFile(outputPath);
-
-		// BUG FIX: Also save to static/logo.png to prevent logo flashing on page load
-		// This ensures the default logo is always the latest uploaded one
+		// BUG FIX V2: Always save to static/logo.png ONLY (no timestamped files)
+		// This prevents logo flashing because URL never changes (/logo.png)
 		const staticLogoPath = path.join(process.cwd(), '..', 'frontend-sveltekit', 'static', 'logo.png');
 		await sharp(uploadedPath)
 			.resize(200, 200, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
@@ -411,39 +401,25 @@ router.post('/logo', requireRole('super-admin', 'editor'), upload.single('logo')
 		// Delete original uploaded file
 		fs.unlinkSync(uploadedPath);
 
-		// Get old logo URL to delete later
-		const currentSettings = await db.select().from(appCustomization).where(eq(appCustomization.id, 1)).limit(1);
-		const oldLogoUrl = currentSettings.length > 0 ? currentSettings[0].logo_url : null;
-
-		// Update logo URL in database
-		const newLogoUrl = `/api/uploads/branding/${outputFilename}`;
+		// Update logo URL in database to /logo.png (always same URL)
 		await db.update(appCustomization)
 			.set({
-				logo_url: newLogoUrl,
+				logo_url: '/logo.png',
 				updated_at: new Date().toISOString()
 			})
 			.where(eq(appCustomization.id, 1));
-
-		// Delete old logo file if it's not the default
-		if (oldLogoUrl && oldLogoUrl.startsWith('/api/uploads/branding/')) {
-			const oldFilename = path.basename(oldLogoUrl);
-			const oldPath = path.join(process.cwd(), 'uploads', 'branding', oldFilename);
-			if (fs.existsSync(oldPath)) {
-				fs.unlinkSync(oldPath);
-			}
-		}
 
 		// Invalidate public API cache
 		invalidateCustomizationCache();
 
 		// Log upload
 		const adminName = (req as any).user?.name || 'Unknown Admin';
-		console.log(`[LOGO UPLOAD] Admin (${adminName}) uploaded new logo: ${outputFilename}`);
+		console.log(`[LOGO UPLOAD] Admin (${adminName}) uploaded new logo to /static/logo.png`);
 
 		res.json({
 			success: true,
 			data: {
-				logoUrl: newLogoUrl
+				logoUrl: '/logo.png'
 			}
 		});
 	} catch (error: any) {
@@ -458,35 +434,16 @@ router.post('/logo', requireRole('super-admin', 'editor'), upload.single('logo')
  */
 router.delete('/logo', requireRole('super-admin', 'editor'), async (req, res) => {
 	try {
-		// Get current logo URL
-		const currentSettings = await db.select().from(appCustomization).where(eq(appCustomization.id, 1)).limit(1);
-		const oldLogoUrl = currentSettings.length > 0 ? currentSettings[0].logo_url : null;
-
-		// Reset to default logo
-		await db.update(appCustomization)
-			.set({
-				logo_url: '/logo.png',
-				updated_at: new Date().toISOString()
-			})
-			.where(eq(appCustomization.id, 1));
-
-		// Delete old logo file if it's not the default
-		if (oldLogoUrl && oldLogoUrl.startsWith('/api/uploads/branding/')) {
-			const oldFilename = path.basename(oldLogoUrl);
-			const oldPath = path.join(process.cwd(), 'uploads', 'branding', oldFilename);
-			if (fs.existsSync(oldPath)) {
-				fs.unlinkSync(oldPath);
-			}
-		}
-
-		// Invalidate public API cache
-		invalidateCustomizationCache();
+		// NOTE: Logo reset is not meaningful anymore since we only use /logo.png
+		// This endpoint is kept for API compatibility but does nothing
+		// To reset logo, admin should upload original logo file
 
 		res.json({
 			success: true,
 			data: {
 				logoUrl: '/logo.png'
-			}
+			},
+			message: 'Для сброса логотипа загрузите оригинальный файл'
 		});
 	} catch (error: any) {
 		console.error('Error resetting logo:', error);
