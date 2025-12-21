@@ -394,8 +394,8 @@ router.post('/logo', requireRole('super-admin', 'editor'), upload.single('logo')
 		// This prevents logo flashing because URL never changes (/logo.png)
 		const staticLogoPath = path.join(process.cwd(), '..', 'frontend-sveltekit', 'static', 'logo.png');
 		await sharp(uploadedPath)
-			.resize(200, 200, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
-			.png({ quality: 90 })
+			.resize(512, 512, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+			.png({ quality: 95 })
 			.toFile(staticLogoPath);
 
 		// Delete original uploaded file
