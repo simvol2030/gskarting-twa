@@ -3,6 +3,7 @@
 	import { cart, cartTotal } from '$lib/stores/cart';
 	import { ordersAPI, type ShopSettings, type OrderData } from '$lib/api/orders';
 	import { onMount } from 'svelte';
+	import CityAutocomplete from '$lib/components/shop/CityAutocomplete.svelte';
 
 	// State
 	let loading = $state(true);
@@ -16,6 +17,8 @@
 	let customerEmail = $state('');
 	let deliveryType = $state<'pickup' | 'delivery'>('delivery');
 	let deliveryCity = $state('');
+	let deliveryLocationId = $state<number | null>(null);
+	let deliveryLocationPrice = $state(0);
 	let deliveryAddress = $state('');
 	let deliveryEntrance = $state('');
 	let deliveryFloor = $state('');
@@ -34,6 +37,12 @@
 		if (!settings) return 0;
 		if (deliveryType === 'pickup') return 0;
 		if (settings.freeDeliveryFrom && subtotal >= settings.freeDeliveryFrom) return 0;
+
+		// Use location-specific price if available, otherwise use global delivery cost
+		if (deliveryLocationId !== null && deliveryLocationPrice > 0) {
+			return deliveryLocationPrice / 100; // Convert kopeks to rubles
+		}
+
 		return settings.deliveryCost;
 	});
 
@@ -103,6 +112,13 @@
 		}
 	}
 
+	// City autocomplete handler
+	function handleCitySelection(cityName: string, locationId: number | null, price: number) {
+		deliveryCity = cityName;
+		deliveryLocationId = locationId;
+		deliveryLocationPrice = price;
+	}
+
 	// Submit order
 	async function handleSubmit() {
 		if (!isFormValid() || !minOrderMet() || submitting) return;
@@ -126,6 +142,9 @@
 				orderData.deliveryFloor = deliveryFloor.trim() || undefined;
 				orderData.deliveryApartment = deliveryApartment.trim() || undefined;
 				orderData.deliveryIntercom = deliveryIntercom.trim() || undefined;
+				if (deliveryLocationId !== null) {
+					orderData.deliveryLocationId = deliveryLocationId;
+				}
 			} else {
 				orderData.storeId = selectedStoreId!;
 			}
@@ -256,12 +275,18 @@
 					<div class="address-fields">
 						<div class="form-group">
 							<label for="city">Город / населенный пункт</label>
-							<input
-								type="text"
-								id="city"
+							<CityAutocomplete
 								bind:value={deliveryCity}
-								placeholder="Например: Пермь"
+								bind:selectedLocationId={deliveryLocationId}
+								bind:deliveryPrice={deliveryLocationPrice}
+								oninput={handleCitySelection}
+								placeholder="Начните вводить название..."
 							/>
+							{#if deliveryLocationId !== null && deliveryLocationPrice > 0}
+								<span class="delivery-price-hint">
+									Доставка: {(deliveryLocationPrice / 100).toLocaleString('ru-RU')} ₽
+								</span>
+							{/if}
 						</div>
 
 						<div class="form-group">
@@ -758,5 +783,13 @@
 	.submit-btn:disabled {
 		background: var(--text-tertiary);
 		cursor: not-allowed;
+	}
+
+	.delivery-price-hint {
+		display: block;
+		margin-top: 8px;
+		font-size: 13px;
+		color: var(--primary-orange);
+		font-weight: 600;
 	}
 </style>

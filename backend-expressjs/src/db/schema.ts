@@ -502,6 +502,7 @@ export const orders = sqliteTable('orders', {
 
 	// Доставка
 	delivery_type: text('delivery_type', { enum: ['pickup', 'delivery'] }).notNull(),
+	delivery_location_id: integer('delivery_location_id').references(() => deliveryLocations.id, { onDelete: 'set null' }),
 	delivery_city: text('delivery_city'),
 	delivery_address: text('delivery_address'),
 	delivery_entrance: text('delivery_entrance'),
@@ -527,7 +528,8 @@ export const orders = sqliteTable('orders', {
 	userIdx: index('idx_orders_user').on(table.user_id),
 	statusIdx: index('idx_orders_status').on(table.status),
 	createdIdx: index('idx_orders_created').on(table.created_at),
-	storeIdx: index('idx_orders_store').on(table.store_id)
+	storeIdx: index('idx_orders_store').on(table.store_id),
+	deliveryLocationIdx: index('idx_orders_delivery_location').on(table.delivery_location_id)
 }));
 
 /**
@@ -675,6 +677,23 @@ export const shopSettings = sqliteTable('shop_settings', {
 
 	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
+
+/**
+ * Delivery Locations table - пункты доставки с ценами
+ * Locations from delivery-price.yml with customizable pricing
+ */
+export const deliveryLocations = sqliteTable('delivery_locations', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull(), // Название населенного пункта (например, "Пушкино (центр/арманд/запад)")
+	price: integer('price').notNull(), // Цена доставки в копейках (700 руб = 70000 копеек)
+	is_enabled: integer('is_enabled', { mode: 'boolean' }).notNull().default(true),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	nameIdx: index('idx_delivery_locations_name').on(table.name),
+	enabledIdx: index('idx_delivery_locations_enabled').on(table.is_enabled),
+	enabledNameIdx: index('idx_delivery_locations_enabled_name').on(table.is_enabled, table.name)
+}));
 
 /**
  * Order Status History table - история изменений статуса заказа
@@ -833,6 +852,9 @@ export type NewOrderItem = typeof orderItems.$inferInsert;
 
 export type ShopSettings = typeof shopSettings.$inferSelect;
 export type NewShopSettings = typeof shopSettings.$inferInsert;
+
+export type DeliveryLocation = typeof deliveryLocations.$inferSelect;
+export type NewDeliveryLocation = typeof deliveryLocations.$inferInsert;
 
 export type OrderStatusHistory = typeof orderStatusHistory.$inferSelect;
 export type NewOrderStatusHistory = typeof orderStatusHistory.$inferInsert;

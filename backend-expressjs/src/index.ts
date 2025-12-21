@@ -29,6 +29,7 @@ import catalogRouter from './routes/api/catalog'; // Shop extension: Public cata
 import cartRouter from './routes/api/cart'; // Shop extension: Shopping cart
 import ordersRouter from './routes/api/orders'; // Shop extension: Orders
 import ratingsRouter from './routes/api/ratings'; // Ratings/Reviews API
+import shopRouter from './routes/api/shop'; // Shop settings and delivery locations
 
 // Bot API routes (public, no auth required)
 import botWelcomeMessagesRouter from './routes/bot/welcome-messages';
@@ -53,6 +54,7 @@ import adminShopSettingsRouter from './routes/admin/shop-settings'; // Shop exte
 import adminWelcomeMessagesRouter from './routes/admin/welcome-messages'; // Welcome messages for Telegram bot
 import adminFeedRouter from './routes/admin/feed'; // Feed admin API
 import adminStoriesRouter from './routes/admin/stories'; // Web Stories management
+import adminDeliveryLocationsRouter from './routes/admin/delivery-locations'; // Delivery locations management
 
 // Public Stories API
 import storiesRouter from './routes/stories';
@@ -134,6 +136,7 @@ app.use('/api/catalog', catalogRouter); // Public catalog (categories & products
 app.use('/api/cart', cartRouter); // Shopping cart
 app.use('/api/orders', ordersRouter); // Orders
 app.use('/api/ratings', ratingsRouter); // Ratings/Reviews
+app.use('/api/shop', shopRouter); // Shop settings and delivery locations
 app.use('/api/feed', feedRouter); // Feed/Лента public API
 app.use('/api/stories', storiesRouter); // Web Stories (public)
 
@@ -160,6 +163,7 @@ app.use('/api/admin/shop-settings', adminShopSettingsRouter); // Shop extension:
 app.use('/api/admin/welcome-messages', adminWelcomeMessagesRouter); // Welcome messages for bot
 app.use('/api/admin/feed', adminFeedRouter); // Feed/Лента admin API
 app.use('/api/admin/stories', adminStoriesRouter); // Web Stories management
+app.use('/api/admin/delivery-locations', adminDeliveryLocationsRouter); // Delivery locations management
 
 // Обработка 404
 app.use((req, res) => {

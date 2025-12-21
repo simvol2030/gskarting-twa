@@ -44,6 +44,7 @@ export interface OrderData {
 	deliveryFloor?: string;
 	deliveryApartment?: string;
 	deliveryIntercom?: string;
+	deliveryLocationId?: number;
 	storeId?: number;
 	notes?: string;
 }
