@@ -400,6 +400,14 @@ router.post('/logo', requireRole('super-admin', 'editor'), upload.single('logo')
 			.webp({ quality: 90 })
 			.toFile(outputPath);
 
+		// BUG FIX: Also save to static/logo.png to prevent logo flashing on page load
+		// This ensures the default logo is always the latest uploaded one
+		const staticLogoPath = path.join(process.cwd(), '..', 'frontend-sveltekit', 'static', 'logo.png');
+		await sharp(uploadedPath)
+			.resize(200, 200, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+			.png({ quality: 90 })
+			.toFile(staticLogoPath);
+
 		// Delete original uploaded file
 		fs.unlinkSync(uploadedPath);
 
