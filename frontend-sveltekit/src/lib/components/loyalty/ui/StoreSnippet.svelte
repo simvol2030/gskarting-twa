@@ -52,7 +52,7 @@
   <div class="snippet-content">
     <div class="info-row">
       <span class="info-icon">📍</span>
-      <span class="info-text">{store.address}</span>
+      <span class="info-text">Наш адрес: {store.address}</span>
     </div>
 
     <div class="info-row clickable" role="button" tabindex="0" onclick={handlePhoneCall} onkeydown={(e) => e.key === 'Enter' && handlePhoneCall(e as any)}>
