@@ -1,10 +1,69 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { cart } from '$lib/stores/cart';
+	import type { Product } from '$lib/types/loyalty';
+	import ProductDetailSheet from '$lib/components/loyalty/ui/ProductDetailSheet.svelte';
+
+	interface CategoryItem {
+		id: number;
+		name: string;
+		slug: string;
+		image: string | null;
+	}
+
+	interface ProductVariation {
+		id: number;
+		name: string;
+		price: number;
+		oldPrice: number | null;
+		sku: string | null;
+		isDefault: boolean;
+	}
 
 	let { data } = $props();
 
 	let searchValue = $state(data.filters.search);
 	let selectedCategory = $state(data.filters.category);
+	let addingToCart = $state<number | null>(null); // Track which product is being added
+
+	// Track selected variation per product
+	let selectedVariations = $state<Record<number, number>>({});
+
+	// Product detail sheet state
+	let selectedProduct = $state<Product | null>(null);
+	let productSheetOpen = $state(false);
+
+	const openProductDetail = (product: typeof data.products[0]) => {
+		// Convert to Product type for the detail sheet
+		selectedProduct = {
+			id: product.id,
+			name: product.name,
+			description: product.description || null,
+			price: product.price,
+			oldPrice: product.old_price || undefined,
+			quantityInfo: product.quantity_info || null,
+			image: product.image,
+			category: product.category,
+			variationAttribute: product.variation_attribute || null,
+			variations: product.variations?.map(v => ({
+				id: v.id,
+				name: v.name,
+				price: v.price,
+				oldPrice: v.oldPrice || undefined,
+				sku: v.sku || undefined,
+				isDefault: v.isDefault,
+				isActive: true
+			}))
+		};
+		productSheetOpen = true;
+	};
+
+	const closeProductDetail = () => {
+		productSheetOpen = false;
+	};
+
+	// Категории с новой структурой (slug/name/image)
+	const categoriesNew = data.categories as CategoryItem[];
 
 	function handleSearch() {
 		const params = new URLSearchParams();
@@ -13,8 +72,8 @@
 		goto(`/products?${params.toString()}`);
 	}
 
-	function handleCategoryChange(category: string) {
-		selectedCategory = category;
+	function handleCategoryChange(categorySlug: string) {
+		selectedCategory = categorySlug;
 		handleSearch();
 	}
 
@@ -23,16 +82,75 @@
 		selectedCategory = 'all';
 		goto('/products');
 	}
+
+	// Получаем название категории по slug для отображения
+	function getCategoryName(slug: string): string {
+		if (slug === 'all') return 'Все';
+		const category = categoriesNew.find(c => c.slug === slug);
+		return category?.name || slug;
+	}
+
+	// Получить выбранную вариацию для продукта
+	function getSelectedVariation(product: typeof data.products[0]): ProductVariation | null {
+		if (!product.hasVariations || !product.variations.length) return null;
+
+		const selectedId = selectedVariations[product.id];
+		if (selectedId) {
+			return product.variations.find(v => v.id === selectedId) || product.variations[0];
+		}
+		// По умолчанию - дефолтная или первая
+		return product.variations.find(v => v.isDefault) || product.variations[0];
+	}
+
+	// Получить текущую цену для продукта (с учётом выбранной вариации)
+	function getCurrentPrice(product: typeof data.products[0]): number {
+		const variation = getSelectedVariation(product);
+		return variation ? variation.price : product.price;
+	}
+
+	// Получить старую цену для продукта (с учётом выбранной вариации)
+	function getCurrentOldPrice(product: typeof data.products[0]): number | null {
+		const variation = getSelectedVariation(product);
+		return variation ? variation.oldPrice : product.old_price;
+	}
+
+	// Обработчик изменения вариации
+	function handleVariationChange(e: Event, productId: number) {
+		e.stopPropagation();
+		const select = e.target as HTMLSelectElement;
+		selectedVariations[productId] = parseInt(select.value);
+	}
+
+	// Добавление товара в корзину
+	async function handleAddToCart(e: Event, productId: number) {
+		e.stopPropagation(); // Prevent card click
+		if (addingToCart === productId) return; // Prevent double click
+
+		addingToCart = productId;
+		try {
+			const product = data.products.find(p => p.id === productId);
+			const variation = product ? getSelectedVariation(product) : null;
+
+			await cart.addItem(productId, 1, variation?.id);
+			// Visual feedback - show briefly that item was added
+			setTimeout(() => {
+				addingToCart = null;
+			}, 500);
+		} catch (error) {
+			console.error('Failed to add to cart:', error);
+			addingToCart = null;
+		}
+	}
 </script>
 
 <svelte:head>
-	<title>Каталог товаров - Мурзико</title>
+	<title>Меню доставки и самовывоза - Мурзико</title>
 </svelte:head>
 
 <div class="products-page">
 	<header class="page-header">
-		<h1>🛍️ Каталог товаров</h1>
-		<p class="subtitle">Найдите то, что нужно вашему питомцу</p>
+		<h1>🛍️ Меню доставки и для самовывоза</h1>
+		<p class="subtitle">Изображения блюд представлены в ознакомительных целях и могут отличаться от фактической подачи</p>
 	</header>
 
 	<div class="filters-section">
@@ -58,13 +176,13 @@
 			>
 				Все
 			</button>
-			{#each data.categories as category}
+			{#each categoriesNew as category (category.id)}
 				<button
 					class="category-btn"
-					class:active={selectedCategory === category}
-					onclick={() => handleCategoryChange(category)}
+					class:active={selectedCategory === category.slug}
+					onclick={() => handleCategoryChange(category.slug)}
 				>
-					{category}
+					{category.name}
 				</button>
 			{/each}
 		</div>
@@ -78,25 +196,59 @@
 
 	<div class="products-grid">
 		{#each data.products as product}
+			{@const currentPrice = getCurrentPrice(product)}
+			{@const currentOldPrice = getCurrentOldPrice(product)}
+			{@const selectedVariation = getSelectedVariation(product)}
 			<article class="product-card">
-				<div class="product-image-wrapper">
+				<div class="product-image-wrapper" onclick={() => openProductDetail(product)} role="button" tabindex="0">
 					<img src={product.image} alt={product.name} class="product-image" />
-					{#if product.old_price}
+					{#if currentOldPrice && currentOldPrice > currentPrice}
 						<span class="discount-badge">
-							-{Math.round((1 - product.price / product.old_price) * 100)}%
+							-{Math.round((1 - currentPrice / currentOldPrice) * 100)}%
 						</span>
 					{/if}
 				</div>
 
 				<div class="product-info">
-					<h3 class="product-name">{product.name}</h3>
+					<h3 class="product-name" onclick={() => openProductDetail(product)} role="button" tabindex="0">{product.name}</h3>
 					<span class="product-category">{product.category}</span>
 
-					<div class="product-pricing">
-						{#if product.old_price}
-							<span class="old-price">{product.old_price.toLocaleString('ru-RU')} ₽</span>
-						{/if}
-						<span class="price">{product.price.toLocaleString('ru-RU')} ₽</span>
+					{#if product.hasVariations && product.variations.length > 0}
+						<div class="variation-selector">
+							<select
+								class="variation-select"
+								value={selectedVariation?.id || ''}
+								onchange={(e) => handleVariationChange(e, product.id)}
+							>
+								{#each product.variations as variation}
+									<option value={variation.id}>
+										{variation.name} — {variation.price.toLocaleString('ru-RU')} ₽
+									</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					<div class="product-footer">
+						<div class="product-pricing">
+							{#if currentOldPrice && currentOldPrice > currentPrice}
+								<span class="old-price">{currentOldPrice.toLocaleString('ru-RU')} ₽</span>
+							{/if}
+							<span class="price">{currentPrice.toLocaleString('ru-RU')} ₽</span>
+						</div>
+
+						<button
+							class="add-to-cart-btn"
+							class:adding={addingToCart === product.id}
+							onclick={(e) => handleAddToCart(e, product.id)}
+							aria-label="Добавить в корзину"
+						>
+							{#if addingToCart === product.id}
+								<span class="check-icon">✓</span>
+							{:else}
+								<span class="cart-plus-icon">🛒</span>
+							{/if}
+						</button>
 					</div>
 				</div>
 			</article>
@@ -112,6 +264,13 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Product Detail Sheet -->
+<ProductDetailSheet
+	product={selectedProduct}
+	open={productSheetOpen}
+	onClose={closeProductDetail}
+/>
 
 <style>
 	.products-page {
@@ -314,15 +473,46 @@
 		margin-bottom: 8px;
 	}
 
+	.variation-selector {
+		margin-bottom: 8px;
+	}
+
+	.variation-select {
+		width: 100%;
+		padding: 6px 8px;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-white);
+		font-size: 12px;
+		color: var(--text-primary);
+		cursor: pointer;
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 8px center;
+		padding-right: 24px;
+	}
+
+	.variation-select:focus {
+		outline: none;
+		border-color: var(--primary-orange);
+	}
+
+	.product-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-end;
+		gap: 8px;
+	}
+
 	.product-pricing {
 		display: flex;
-		align-items: center;
-		gap: 6px;
-		flex-wrap: wrap;
+		flex-direction: column;
+		gap: 2px;
 	}
 
 	.old-price {
-		font-size: 13px;
+		font-size: 12px;
 		color: var(--text-secondary);
 		text-decoration: line-through;
 	}
@@ -331,6 +521,51 @@
 		font-size: 16px;
 		font-weight: 700;
 		color: var(--primary-orange);
+	}
+
+	.add-to-cart-btn {
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
+		background: var(--primary-orange);
+		border: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		flex-shrink: 0;
+	}
+
+	.add-to-cart-btn:hover {
+		background: var(--primary-orange-dark);
+		transform: scale(1.05);
+	}
+
+	.add-to-cart-btn:active {
+		transform: scale(0.95);
+	}
+
+	.add-to-cart-btn.adding {
+		background: var(--accent-green, #22c55e);
+		animation: pulse 0.3s ease-out;
+	}
+
+	@keyframes pulse {
+		0% { transform: scale(1); }
+		50% { transform: scale(1.2); }
+		100% { transform: scale(1); }
+	}
+
+	.cart-plus-icon {
+		font-size: 16px;
+		filter: grayscale(1) brightness(10);
+	}
+
+	.check-icon {
+		font-size: 18px;
+		color: white;
+		font-weight: bold;
 	}
 
 	.empty-state {

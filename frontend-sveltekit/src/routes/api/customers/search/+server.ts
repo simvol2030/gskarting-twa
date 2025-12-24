@@ -2,18 +2,23 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 // Server-side proxy должен использовать ВНУТРЕННИЙ backend URL (не PUBLIC_BACKEND_URL!)
-const BACKEND_URL = 'http://localhost:3015';
+const BACKEND_URL = 'http://localhost:3007';
 
 export const GET: RequestHandler = async ({ url, fetch }) => {
 	const card = url.searchParams.get('card');
 	const storeId = url.searchParams.get('storeId');
 
-	if (!card || !storeId) {
-		return json({ error: 'Missing card or storeId parameter' }, { status: 400 });
+	if (!card) {
+		return json({ error: 'Missing card parameter' }, { status: 400 });
 	}
 
 	try {
-		const backendUrl = `${BACKEND_URL}/api/customers/search?card=${card}&storeId=${storeId}`;
+		// storeId теперь опционален (для seller PWA)
+		let backendUrl = `${BACKEND_URL}/api/customers/search?card=${card}`;
+		if (storeId) {
+			backendUrl += `&storeId=${storeId}`;
+		}
+
 		console.log('[API Proxy] Proxying customer search to:', backendUrl);
 
 		const response = await fetch(backendUrl);
@@ -24,8 +29,9 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 			return json({ error: 'Customer not found' }, { status: response.status });
 		}
 
-		const customer = await response.json();
-		return json(customer);
+		const data = await response.json();
+		// Оборачиваем в { customer } для единообразия
+		return json({ customer: data });
 	} catch (error) {
 		console.error('[API Proxy] Error:', error);
 		return json({ error: 'Internal server error' }, { status: 500 });

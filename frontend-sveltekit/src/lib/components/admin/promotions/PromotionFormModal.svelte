@@ -2,6 +2,7 @@
 	import type { Promotion, PromotionFormData } from '$lib/types/admin';
 	import { Modal, Button, Input, Textarea } from '$lib/components/ui';
 	import { promotionsAPI } from '$lib/api/admin/promotions';
+	import { campaignsAPI } from '$lib/api/admin/campaigns';
 
 	interface Props {
 		isOpen: boolean;
@@ -22,6 +23,15 @@
 		showOnHome: false
 	});
 
+	// Broadcast state
+	let sendBroadcast = $state(false);
+	let broadcastMessage = $state('');
+	let audienceCount = $state<number | null>(null);
+	let loadingAudience = $state(false);
+	let broadcastSending = $state(false);
+	let broadcastResult = $state<{ success: boolean; sent: number; failed: number; message: string } | null>(null);
+	let savedPromotionId = $state<number | null>(null);
+
 	let imagePreview = $state<string | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -38,6 +48,11 @@
 				showOnHome: editingPromotion.showOnHome
 			};
 			imagePreview = editingPromotion.image; // Also string | null
+			savedPromotionId = editingPromotion.id;
+			// Reset broadcast for editing (don't auto-send for existing)
+			sendBroadcast = false;
+			broadcastMessage = '';
+			broadcastResult = null;
 		} else if (isOpen && !editingPromotion) {
 			formData = {
 				title: '',
@@ -48,8 +63,40 @@
 				showOnHome: false
 			};
 			imagePreview = null;
+			savedPromotionId = null;
+			// Reset broadcast
+			sendBroadcast = false;
+			broadcastMessage = '';
+			broadcastResult = null;
 		}
 	});
+
+	// Load audience count when broadcast is enabled
+	$effect(() => {
+		if (sendBroadcast && audienceCount === null) {
+			loadAudienceCount();
+		}
+	});
+
+	// Auto-generate broadcast message from title/description
+	$effect(() => {
+		if (sendBroadcast && !broadcastMessage && formData.title) {
+			broadcastMessage = `🎉 ${formData.title}\n\n${formData.description || ''}\n\n⏰ Срок: ${formData.deadline || 'Успейте воспользоваться!'}`;
+		}
+	});
+
+	const loadAudienceCount = async () => {
+		loadingAudience = true;
+		try {
+			const result = await campaignsAPI.previewAudience('all');
+			audienceCount = result.count;
+		} catch (err) {
+			console.error('Error loading audience count:', err);
+			audienceCount = 0;
+		} finally {
+			loadingAudience = false;
+		}
+	};
 
 	const isFormValid = $derived(() => {
 		if (!formData.title || formData.title.length < 3) return false;
@@ -59,6 +106,15 @@
 		// H-002 FIX: Accept text deadline (e.g. "30 ноября", "Постоянная акция")
 		if (!formData.deadline || formData.deadline.length < 3) return false;
 
+		return true;
+	});
+
+	// Can send broadcast: either have message or can auto-generate from title
+	const canSendBroadcast = $derived(() => {
+		if (broadcastSending) return false;
+		if (!savedPromotionId) return false;
+		// Can send if we have message OR if we have title to generate message
+		if (!broadcastMessage && !formData.title) return false;
 		return true;
 	});
 
@@ -131,18 +187,83 @@
 		error = null;
 
 		try {
+			let savedPromotion: Promotion;
+
 			if (editingPromotion) {
-				await promotionsAPI.update(editingPromotion.id, formData);
+				savedPromotion = await promotionsAPI.update(editingPromotion.id, formData);
 			} else {
-				await promotionsAPI.create(formData);
+				savedPromotion = await promotionsAPI.create(formData);
 			}
 
+			// Save the promotion ID for broadcast
+			savedPromotionId = savedPromotion.id;
+
 			onSuccess?.();
-			onClose();
+
+			// If broadcast is enabled, don't close modal - let user send broadcast
+			if (!sendBroadcast) {
+				onClose();
+			}
 		} catch (err: any) {
 			error = err.message || 'Ошибка при сохранении акции';
 		} finally {
 			loading = false;
+		}
+	};
+
+	const handleSendBroadcast = async () => {
+		if (!savedPromotionId) {
+			error = 'Сначала сохраните акцию';
+			return;
+		}
+
+		// Auto-generate message if empty
+		let messageToSend = broadcastMessage;
+		if (!messageToSend && formData.title) {
+			messageToSend = `🎉 ${formData.title}\n\n${formData.description || ''}\n\n⏰ Срок: ${formData.deadline || 'Успейте воспользоваться!'}`;
+			broadcastMessage = messageToSend;
+		}
+
+		if (!messageToSend) {
+			error = 'Заполните текст рассылки';
+			return;
+		}
+
+		broadcastSending = true;
+		broadcastResult = null;
+		error = null;
+
+		try {
+			// Create campaign with promotion link
+			const campaign = await campaignsAPI.create({
+				title: `Рассылка: ${formData.title}`,
+				messageText: messageToSend,
+				messageImage: formData.image || undefined,
+				buttonText: 'Подробнее',
+				buttonUrl: `/offers`, // Link to offers page (promotions page in TWA)
+				targetType: 'all',
+				triggerType: 'manual'
+			});
+
+			// Send immediately and get result
+			const result = await campaignsAPI.send(campaign.id);
+
+			broadcastResult = {
+				success: true,
+				sent: result.sent || audienceCount || 0,
+				failed: result.failed || 0,
+				message: `Рассылка успешно отправлена!`
+			};
+		} catch (broadcastErr: any) {
+			console.error('Broadcast error:', broadcastErr);
+			broadcastResult = {
+				success: false,
+				sent: 0,
+				failed: audienceCount || 0,
+				message: broadcastErr.message || 'Ошибка при отправке рассылки'
+			};
+		} finally {
+			broadcastSending = false;
 		}
 	};
 
@@ -260,6 +381,100 @@
 				</label>
 			</div>
 		</div>
+
+		<!-- Broadcast Section (for both new and existing promotions) -->
+		<div class="broadcast-section">
+				<div class="broadcast-header">
+					<label class="broadcast-toggle">
+						<input type="checkbox" bind:checked={sendBroadcast} />
+						<span>📣 Отправить рассылку об этой акции</span>
+					</label>
+					{#if sendBroadcast}
+						<span class="audience-badge">
+							{#if loadingAudience}
+								⏳ Загрузка...
+							{:else if audienceCount !== null}
+								👥 {audienceCount.toLocaleString('ru-RU')} получателей
+							{/if}
+						</span>
+					{/if}
+				</div>
+
+				{#if sendBroadcast}
+					<div class="broadcast-content">
+						<Textarea
+							label="Текст рассылки"
+							placeholder="Текст сообщения для рассылки в Telegram"
+							bind:value={broadcastMessage}
+							rows={6}
+						/>
+						<small class="broadcast-hint">
+							💡 Текст сгенерирован автоматически на основе данных акции. Вы можете его отредактировать.
+						</small>
+
+						{#if formData.image}
+							<div class="broadcast-preview">
+								<span class="preview-label">🖼️ Изображение акции будет приложено к рассылке</span>
+							</div>
+						{/if}
+
+						<!-- Send Broadcast Button -->
+						<div class="broadcast-actions">
+							{#if !broadcastResult?.success}
+								<button
+									type="button"
+									class="send-broadcast-btn"
+									onclick={handleSendBroadcast}
+									disabled={!canSendBroadcast()}
+								>
+									{#if broadcastSending}
+										<span class="spinner"></span>
+										Отправка...
+									{:else if !savedPromotionId}
+										Сначала сохраните акцию
+									{:else}
+										📣 Отправить рассылку
+									{/if}
+								</button>
+							{/if}
+
+							{#if !savedPromotionId && !editingPromotion}
+								<small class="broadcast-save-hint">⚠️ Сначала сохраните акцию, затем отправьте рассылку</small>
+							{/if}
+						</div>
+
+						<!-- Broadcast Result Log -->
+						{#if broadcastResult}
+							<div class="broadcast-result" class:success={broadcastResult.success} class:error={!broadcastResult.success}>
+								<div class="result-header">
+									{#if broadcastResult.success}
+										✅ {broadcastResult.message}
+									{:else}
+										❌ {broadcastResult.message}
+									{/if}
+								</div>
+								<div class="result-stats">
+									<span class="stat">
+										<span class="stat-value">{broadcastResult.sent}</span>
+										<span class="stat-label">отправлено</span>
+									</span>
+									{#if broadcastResult.failed > 0}
+										<span class="stat error">
+											<span class="stat-value">{broadcastResult.failed}</span>
+											<span class="stat-label">ошибок</span>
+										</span>
+									{/if}
+								</div>
+								{#if broadcastResult.success}
+									<button type="button" class="close-modal-btn" onclick={onClose}>
+										Закрыть
+									</button>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
 
 		<!-- Error -->
 		{#if error}
@@ -444,5 +659,209 @@
 		justify-content: flex-end;
 		gap: 0.75rem;
 		margin-top: 0.5rem;
+	}
+
+	/* Broadcast Section */
+	.broadcast-section {
+		background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+		border: 1px solid #bae6fd;
+		border-radius: 0.75rem;
+		padding: 1.25rem;
+	}
+
+	.broadcast-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.broadcast-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: #0369a1;
+		cursor: pointer;
+	}
+
+	.broadcast-toggle input[type='checkbox'] {
+		width: 1.25rem;
+		height: 1.25rem;
+		cursor: pointer;
+		accent-color: #0284c7;
+	}
+
+	.audience-badge {
+		background: #0284c7;
+		color: white;
+		padding: 0.375rem 0.875rem;
+		border-radius: 9999px;
+		font-size: 0.8rem;
+		font-weight: 500;
+	}
+
+	.broadcast-content {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid #bae6fd;
+	}
+
+	.broadcast-hint {
+		display: block;
+		margin-top: 0.5rem;
+		color: #0369a1;
+		font-size: 0.8rem;
+	}
+
+	.broadcast-preview {
+		margin-top: 0.75rem;
+		padding: 0.75rem;
+		background: white;
+		border-radius: 0.5rem;
+		border: 1px dashed #bae6fd;
+	}
+
+	.preview-label {
+		color: #0369a1;
+		font-size: 0.875rem;
+	}
+
+	/* Broadcast Actions */
+	.broadcast-actions {
+		margin-top: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.send-broadcast-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.875rem 1.5rem;
+		background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+		color: white;
+		border: none;
+		border-radius: 0.5rem;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.send-broadcast-btn:hover:not(:disabled) {
+		background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(3, 105, 161, 0.3);
+	}
+
+	.send-broadcast-btn:disabled {
+		background: #9ca3af;
+		cursor: not-allowed;
+		opacity: 0.7;
+	}
+
+	.broadcast-save-hint {
+		display: block;
+		color: #b45309;
+		font-size: 0.8rem;
+		text-align: center;
+	}
+
+	/* Broadcast Result */
+	.broadcast-result {
+		margin-top: 1rem;
+		padding: 1rem;
+		border-radius: 0.5rem;
+		border: 1px solid;
+	}
+
+	.broadcast-result.success {
+		background: #ecfdf5;
+		border-color: #10b981;
+	}
+
+	.broadcast-result.error {
+		background: #fef2f2;
+		border-color: #ef4444;
+	}
+
+	.result-header {
+		font-size: 1rem;
+		font-weight: 600;
+		margin-bottom: 0.75rem;
+	}
+
+	.broadcast-result.success .result-header {
+		color: #059669;
+	}
+
+	.broadcast-result.error .result-header {
+		color: #dc2626;
+	}
+
+	.result-stats {
+		display: flex;
+		gap: 1.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.stat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.stat-value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: #059669;
+	}
+
+	.stat.error .stat-value {
+		color: #dc2626;
+	}
+
+	.stat-label {
+		font-size: 0.75rem;
+		color: #6b7280;
+		text-transform: uppercase;
+	}
+
+	.close-modal-btn {
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: #10b981;
+		color: white;
+		border: none;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+
+	.close-modal-btn:hover {
+		background: #059669;
+	}
+
+	/* Spinner */
+	.spinner {
+		width: 1rem;
+		height: 1rem;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

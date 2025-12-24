@@ -68,17 +68,57 @@
 					<span class="icon">🎁</span>
 					<span>Акции</span>
 				</a>
+				<a href="/campaigns" class:active={$page.url.pathname.startsWith('/campaigns')} onclick={closeMobileMenu}>
+					<span class="icon">📨</span>
+					<span>Рассылки</span>
+				</a>
+			<a href="/campaigns/welcome" class:active={$page.url.pathname.startsWith('/campaigns/welcome')} onclick={closeMobileMenu}>
+				<span class="icon">👋</span>
+				<span>Приветственные сообщения</span>
+			</a>
+				<a href="/triggers" class:active={$page.url.pathname.startsWith('/triggers')} onclick={closeMobileMenu}>
+					<span class="icon">⚡</span>
+					<span>Триггеры</span>
+				</a>
+				<a href="/feed-admin" class:active={$page.url.pathname.startsWith('/feed-admin')} onclick={closeMobileMenu}>
+					<span class="icon">📰</span>
+					<span>Лента</span>
+				</a>
+				<a href="/stories" class:active={$page.url.pathname.startsWith('/stories')} onclick={closeMobileMenu}>
+					<span class="icon">📸</span>
+					<span>Истории</span>
+				</a>
 				<a href="/products-admin" class:active={$page.url.pathname.startsWith('/products-admin')} onclick={closeMobileMenu}>
 					<span class="icon">🛍️</span>
 					<span>Товары</span>
+				</a>
+				<a href="/categories" class:active={$page.url.pathname.startsWith('/categories')} onclick={closeMobileMenu}>
+					<span class="icon">📁</span>
+					<span>Категории</span>
+				</a>
+				<a href="/orders" class:active={$page.url.pathname.startsWith('/orders')} onclick={closeMobileMenu}>
+					<span class="icon">📋</span>
+					<span>Заказы</span>
 				</a>
 				<a href="/store-list" class:active={$page.url.pathname.startsWith('/store-list')} onclick={closeMobileMenu}>
 					<span class="icon">🏪</span>
 					<span>Магазины</span>
 				</a>
+				<a href="/sellers" class:active={$page.url.pathname.startsWith('/sellers')} onclick={closeMobileMenu}>
+					<span class="icon">👤</span>
+					<span>Продавцы</span>
+				</a>
 				<a href="/statistics" class:active={$page.url.pathname.startsWith('/statistics')} onclick={closeMobileMenu}>
 					<span class="icon">📈</span>
 					<span>Статистика</span>
+				</a>
+				<a href="/shop-settings" class:active={$page.url.pathname === '/shop-settings'} onclick={closeMobileMenu}>
+					<span class="icon">🛒</span>
+					<span>Настройки магазина</span>
+				</a>
+				<a href="/delivery-locations" class:active={$page.url.pathname.startsWith('/delivery-locations')} onclick={closeMobileMenu}>
+					<span class="icon">🚚</span>
+					<span>Локации доставки</span>
 				</a>
 				{#if data.user?.role === 'super-admin'}
 					<a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeMobileMenu}>

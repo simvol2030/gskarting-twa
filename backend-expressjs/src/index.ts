@@ -18,9 +18,22 @@ import migrateRouter from './routes/migrate';
 import storesRouter from './routes/stores';
 import transactionsRouter from './routes/transactions';
 import contentRouter from './routes/content';
+import sellerRouter from './routes/seller';
+import feedRouter from './routes/feed'; // Feed public API
 
 // Public API routes
 import loyaltyRouter from './routes/api/loyalty';
+import customizationRouter from './routes/api/customization';
+import profileRouter from './routes/profile';
+import catalogRouter from './routes/api/catalog'; // Shop extension: Public catalog
+import cartRouter from './routes/api/cart'; // Shop extension: Shopping cart
+import ordersRouter from './routes/api/orders'; // Shop extension: Orders
+import ratingsRouter from './routes/api/ratings'; // Ratings/Reviews API
+import shopRouter from './routes/api/shop'; // Shop settings and delivery locations
+
+// Bot API routes (public, no auth required)
+import botWelcomeMessagesRouter from './routes/bot/welcome-messages';
+import botRegisterRouter from './routes/bot/register';
 
 // Admin routes
 import adminClientsRouter from './routes/admin/clients';
@@ -31,6 +44,20 @@ import adminStatisticsRouter from './routes/admin/statistics';
 import adminSettingsRouter from './routes/admin/settings';
 import adminDashboardRouter from './routes/admin/dashboard'; // Sprint 5 Task 4.1
 import adminStoreImagesRouter from './routes/admin/store-images';
+import adminAppearanceRouter from './routes/admin/appearance';
+import adminCampaignsRouter from './routes/admin/campaigns';
+import adminTriggersRouter from './routes/admin/triggers';
+import adminSellersRouter from './routes/admin/sellers';
+import adminCategoriesRouter from './routes/admin/categories'; // Shop extension: Categories
+import adminOrdersRouter from './routes/admin/orders'; // Shop extension: Orders management
+import adminShopSettingsRouter from './routes/admin/shop-settings'; // Shop extension: Shop settings
+import adminWelcomeMessagesRouter from './routes/admin/welcome-messages'; // Welcome messages for Telegram bot
+import adminFeedRouter from './routes/admin/feed'; // Feed admin API
+import adminStoriesRouter from './routes/admin/stories'; // Web Stories management
+import adminDeliveryLocationsRouter from './routes/admin/delivery-locations'; // Delivery locations management
+
+// Public Stories API
+import storiesRouter from './routes/stories';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -84,7 +111,8 @@ app.get('/', (req, res) => {
 			stores: '/api/stores',
 			transactions: '/api/transactions',
 			'1c-integration': '/api/1c',
-			content: '/api/content'
+			content: '/api/content',
+			feed: '/api/feed'
 		}
 	});
 });
@@ -101,6 +129,20 @@ app.use('/api/stores', storesRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/loyalty', loyaltyRouter); // Public loyalty settings endpoint
+app.use('/api/customization', customizationRouter); // Public app customization endpoint
+app.use('/api/profile', profileRouter); // User profile (birthday, etc.)
+app.use('/api/seller', sellerRouter); // Seller PWA authentication
+app.use('/api/catalog', catalogRouter); // Public catalog (categories & products)
+app.use('/api/cart', cartRouter); // Shopping cart
+app.use('/api/orders', ordersRouter); // Orders
+app.use('/api/ratings', ratingsRouter); // Ratings/Reviews
+app.use('/api/shop', shopRouter); // Shop settings and delivery locations
+app.use('/api/feed', feedRouter); // Feed/Лента public API
+app.use('/api/stories', storiesRouter); // Web Stories (public)
+
+// Bot API routes (public, no auth required)
+app.use('/api/bot/welcome-messages', botWelcomeMessagesRouter); // Welcome messages for bot
+app.use('/api/bot', botRegisterRouter); // User registration via bot
 
 // Admin API routes
 app.use('/api/admin/clients', adminClientsRouter);
@@ -111,6 +153,17 @@ app.use('/api/admin/statistics', adminStatisticsRouter);
 app.use('/api/admin/settings', adminSettingsRouter);
 app.use('/api/admin/dashboard', adminDashboardRouter); // Sprint 5 Task 4.1
 app.use('/api/admin/stores', adminStoreImagesRouter); // Store images (nested under stores)
+app.use('/api/admin/settings/appearance', adminAppearanceRouter); // App appearance/branding settings
+app.use('/api/admin/campaigns', adminCampaignsRouter); // Campaigns & mailings
+app.use('/api/admin/triggers', adminTriggersRouter); // Trigger templates
+app.use('/api/admin/sellers', adminSellersRouter); // Seller management
+app.use('/api/admin/categories', adminCategoriesRouter); // Shop extension: Categories
+app.use('/api/admin/orders', adminOrdersRouter); // Shop extension: Orders management
+app.use('/api/admin/shop-settings', adminShopSettingsRouter); // Shop extension: Shop settings
+app.use('/api/admin/welcome-messages', adminWelcomeMessagesRouter); // Welcome messages for bot
+app.use('/api/admin/feed', adminFeedRouter); // Feed/Лента admin API
+app.use('/api/admin/stories', adminStoriesRouter); // Web Stories management
+app.use('/api/admin/delivery-locations', adminDeliveryLocationsRouter); // Delivery locations management
 
 // Обработка 404
 app.use((req, res) => {

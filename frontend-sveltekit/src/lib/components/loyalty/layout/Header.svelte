@@ -1,20 +1,28 @@
 <script lang="ts">
   import { theme, toggleTheme } from '$lib/stores/loyalty';
+  import { appName, appSlogan, logoUrl } from '$lib/stores/customization';
+  import CartIcon from '$lib/components/loyalty/ui/CartIcon.svelte';
 
   interface Props {
     onMenuClick: () => void;
+    onCartClick?: () => void;
   }
 
-  let { onMenuClick }: Props = $props();
+  let { onMenuClick, onCartClick }: Props = $props();
+
+  // Phone call handler for iOS Safari compatibility
+  function handlePhoneCall() {
+    window.location.href = 'tel:+79328883388';
+  }
 </script>
 
 <header class="app-header">
   <div class="header-left">
-    <img src="/logo.png" alt="Мурзико" class="app-logo" />
+    <img src={$logoUrl} alt={$appName} class="app-logo" />
     <div class="header-title">
-      <span class="store-name">Мурзико</span>
+      <span class="store-name">{$appName}</span>
       <span class="header-divider">|</span>
-      <span class="section-name">Лояльность</span>
+      <span class="section-name">{$appSlogan}</span>
     </div>
   </div>
 
@@ -22,6 +30,14 @@
     <button class="theme-toggle" onclick={toggleTheme} aria-label="Переключить тему">
       <span class="theme-icon">{$theme === 'light' ? '🌙' : '☀️'}</span>
     </button>
+
+    <button class="phone-button" onclick={handlePhoneCall} aria-label="Позвонить">
+      <svg class="phone-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+      </svg>
+    </button>
+
+    <CartIcon onClick={onCartClick} />
 
     <button class="hamburger-button" onclick={onMenuClick} aria-label="Открыть меню">
       <svg class="hamburger-icon" fill="currentColor" viewBox="0 0 24 24">
@@ -97,6 +113,7 @@
   }
 
   .theme-toggle,
+  .phone-button,
   .hamburger-button {
     width: 40px;
     height: 40px;
@@ -111,13 +128,24 @@
     flex-shrink: 0;
   }
 
+  .phone-button {
+    text-decoration: none;
+    /* iOS Safari fix for clickable links */
+    -webkit-tap-highlight-color: rgba(16, 185, 129, 0.3);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   .theme-toggle:hover,
+  .phone-button:hover,
   .hamburger-button:hover {
     background: var(--bg-tertiary);
     transform: scale(1.05);
   }
 
   .theme-toggle:active,
+  .phone-button:active,
   .hamburger-button:active {
     transform: scale(0.95);
   }
@@ -126,10 +154,17 @@
     font-size: 20px;
   }
 
+  .phone-icon,
   .hamburger-icon {
     width: 24px;
     height: 24px;
     color: var(--text-primary);
+  }
+
+  /* Critical fix for iOS Safari - prevent SVG from blocking clicks */
+  .phone-icon,
+  .phone-icon * {
+    pointer-events: none;
   }
 
   @media (max-width: 480px) {

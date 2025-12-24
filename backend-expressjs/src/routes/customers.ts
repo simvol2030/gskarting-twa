@@ -94,4 +94,74 @@ router.get('/search', async (req: Request, res: Response) => {
 	}
 });
 
+// ==================== GET /api/customers/:id ====================
+/**
+ * Получить клиента по ID
+ *
+ * Params:
+ * - id: number - ID клиента
+ *
+ * Response:
+ * {
+ *   "customer": {
+ *     "id": 1,
+ *     "card_number": "654321",
+ *     "first_name": "Иван",
+ *     "last_name": "Петров",
+ *     "current_balance": 500.0,
+ *     ...
+ *   }
+ * }
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+	try {
+		const customerId = parseInt(req.params.id);
+
+		if (isNaN(customerId)) {
+			return res.status(400).json({
+				error: 'Invalid customer ID'
+			});
+		}
+
+		const customer = await db.query.loyaltyUsers.findFirst({
+			where: eq(loyaltyUsers.id, customerId)
+		});
+
+		if (!customer) {
+			return res.status(404).json({
+				error: 'Customer not found',
+				customerId
+			});
+		}
+
+		if (!customer.is_active) {
+			return res.status(403).json({
+				error: 'Customer account is inactive',
+				customerId
+			});
+		}
+
+		console.log(`[CUSTOMER API] Fetched customer: id=${customerId}, balance=${customer.current_balance}₽`);
+
+		return res.json({
+			customer: {
+				id: customer.id,
+				card_number: customer.card_number,
+				first_name: customer.first_name,
+				last_name: customer.last_name,
+				current_balance: customer.current_balance,
+				total_purchases: customer.total_purchases,
+				total_saved: customer.total_saved,
+				registration_date: customer.registration_date
+			}
+		});
+
+	} catch (error) {
+		console.error('[CUSTOMER API] Error fetching customer:', error);
+		return res.status(500).json({
+			error: 'Internal server error'
+		});
+	}
+});
+
 export default router;

@@ -1,16 +1,53 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
+  import type { Product } from '$lib/types/loyalty';
   import LoyaltyCard from '$lib/components/loyalty/ui/LoyaltyCard.svelte';
+  import StoriesCarousel from '$lib/components/loyalty/ui/StoriesCarousel.svelte';
   import RecommendationCard from '$lib/components/loyalty/ui/RecommendationCard.svelte';
   import OfferCardCompact from '$lib/components/loyalty/ui/OfferCardCompact.svelte';
   import ProductCard from '$lib/components/loyalty/ui/ProductCard.svelte';
+  import ProductDetailSheet from '$lib/components/loyalty/ui/ProductDetailSheet.svelte';
 
   let { data } = $props();
+
+  // Product detail sheet state
+  let selectedProduct = $state<Product | null>(null);
+  let productSheetOpen = $state(false);
+
+  const openProductDetail = (product: Product) => {
+    selectedProduct = product;
+    productSheetOpen = true;
+  };
+
+  const closeProductDetail = () => {
+    productSheetOpen = false;
+  };
+
+  // TEMPORARY FIX: Redirect disabled for iPhone testing without Telegram
+  // TODO: Re-enable after phone button is fixed and tested
+  /* TEMPORARILY DISABLED FOR TESTING
+  onMount(() => {
+    if (browser) {
+      // Check if we're running inside Telegram WebApp
+      const isInTelegramWebApp = window.Telegram?.WebApp?.initData;
+
+      if (!isInTelegramWebApp) {
+        // Redirect to Telegram bot
+        window.location.href = 'https://t.me/granat_loyalty_bot';
+      }
+    }
+  });
+  */
 </script>
 
 <!-- 1. Карта лояльности -->
 <LoyaltyCard user={data.user} loyaltyRules={data.loyaltyRules} />
 
-<!-- 2. Акции месяца -->
+<!-- 2. Web Stories -->
+<StoriesCarousel userId={data.user?.id} />
+
+<!-- 3. Акции месяца -->
 <section class="section-content">
   <h2 class="section-header centered">
     <span>🎉</span>
@@ -38,7 +75,7 @@
   </h2>
   <div class="products-grid">
     {#each data.topProducts as product}
-      <ProductCard {product} />
+      <ProductCard {product} onclick={openProductDetail} />
     {/each}
   </div>
   <a href="/products" class="see-all-link">
@@ -50,11 +87,10 @@
 <!-- Section Divider -->
 <div class="section-divider"></div>
 
-<!-- 4. Рекомендации для вашего питомца -->
+<!-- 4. Рекомендации для Вас -->
 <section class="section-content">
   <h2 class="section-header centered">
-    <span>🐾</span>
-    <span>Рекомендации для вашего питомца</span>
+    <span>Рекомендации для Вас</span>
   </h2>
   <div class="recommendations-list">
     {#each data.recommendations as recommendation}
@@ -62,6 +98,13 @@
     {/each}
   </div>
 </section>
+
+<!-- Product Detail Sheet -->
+<ProductDetailSheet
+  product={selectedProduct}
+  open={productSheetOpen}
+  onClose={closeProductDetail}
+/>
 
 <style>
   .section-content {
