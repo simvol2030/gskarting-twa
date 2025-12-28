@@ -47,6 +47,7 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+		height: 100%;
 	}
 
 	.product-card.small {
@@ -56,9 +57,10 @@
 	.product-image-wrapper {
 		position: relative;
 		width: 100%;
-		padding-top: 100%; /* 1:1 aspect ratio */
+		padding-top: 65%; /* Уменьшено с 70% */
 		background: var(--bg-primary, #1E1E1E);
 		overflow: hidden;
+		flex-shrink: 0;
 	}
 
 	.product-image {
@@ -71,66 +73,70 @@
 	}
 
 	.product-info {
-		padding: 12px;
+		padding: 6px 8px;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 1px;
 		flex: 1;
-	}
-
-	.small .product-info {
-		padding: 8px;
-	}
-
-	.product-name {
-		font-size: 16px;
-		font-weight: 600;
-		color: var(--text-primary, #FFFFFF);
-		margin: 0;
-		line-height: 1.3;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
+		min-height: 0;
 		overflow: hidden;
 	}
 
+	.small .product-info {
+		padding: 4px 6px;
+	}
+
+	.product-name {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-primary, #FFFFFF);
+		margin: 0;
+		line-height: 1.2;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
 	.small .product-name {
-		font-size: 14px;
+		font-size: 11px;
 	}
 
 	.quantity-info {
-		font-size: 12px;
+		font-size: 10px;
 		color: var(--text-secondary, #8E8E93);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.small .quantity-info {
-		font-size: 10px;
+		font-size: 9px;
 	}
 
 	.price-row {
 		display: flex;
 		align-items: baseline;
-		gap: 8px;
+		gap: 4px;
 		margin-top: auto;
 	}
 
 	.old-price {
-		font-size: 14px;
+		font-size: 11px;
 		color: var(--text-secondary, #8E8E93);
 		text-decoration: line-through;
 	}
 
 	.small .old-price {
-		font-size: 12px;
+		font-size: 10px;
 	}
 
 	.price {
-		font-size: 20px;
+		font-size: 15px;
 		font-weight: 700;
 		color: var(--price, #4CAF50);
 	}
 
 	.small .price {
-		font-size: 16px;
+		font-size: 13px;
 	}
 </style>

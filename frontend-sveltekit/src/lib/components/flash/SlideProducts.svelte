@@ -25,10 +25,12 @@
 	.products-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		grid-template-rows: repeat(2, 1fr); /* 2 ряда вместо 3 */
+		grid-template-rows: repeat(2, 1fr);
+		grid-auto-rows: 0; /* Скрыть лишние ряды */
 		gap: 1rem;
 		flex: 1;
-		align-content: center;
+		overflow: hidden; /* Обрезать выходящие за пределы */
+		align-content: start;
 	}
 
 	/* Для больших экранов TV - ограничиваем ширину колонок */
