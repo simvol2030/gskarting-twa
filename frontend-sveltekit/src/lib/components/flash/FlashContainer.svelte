@@ -13,17 +13,15 @@
 	let { slides: backendSlides, config }: { slides: Slide[]; config: FlashConfig } = $props();
 
 	let currentIndex = $state(0);
-	let intervalId: ReturnType<typeof setInterval> | null = $state(null);
 	let viewportWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1920);
+	
+	// Интервал хранится вне реактивности чтобы избежать циклов
+	let intervalId: ReturnType<typeof setInterval> | null = null;
 
 	// Расчёт capacity (сколько товаров помещается на экран)
-	// Синхронизировано с CSS breakpoints в SlideProducts.svelte
 	function calculateCapacity(width: number): number {
-		// TV 1920px+: 8 колонок × 2 ряда = 16 товаров
 		if (width >= 1920) return 16;
-		// Большие мониторы 1400px+: 6 колонок × 2 ряда = 12 товаров
 		if (width >= 1400) return 12;
-		// Средние экраны: динамический расчёт
 		const cardMinWidth = 160;
 		const gap = 16;
 		const padding = 40;
@@ -38,7 +36,6 @@
 
 		for (const slide of backendSlides) {
 			if (slide.type === 'sets') {
-				// Сеты: оставляем как есть, генерируем уникальный ID
 				virtualSlides.push({
 					...slide,
 					virtualId: `sets-${slide.title}-${slide.items.map(i => i.id).join(',')}`
@@ -46,7 +43,6 @@
 				continue;
 			}
 
-			// Products: разбиваем по capacity с уникальными ID
 			const items = slide.items;
 			for (let i = 0; i < items.length; i += capacity) {
 				const sliceItems = items.slice(i, i + capacity);
@@ -65,56 +61,53 @@
 	const capacity = $derived(calculateCapacity(viewportWidth));
 	const slides = $derived(createVirtualSlides(backendSlides, capacity));
 
-	// Безопасный индекс (защита от undefined)
+	// Безопасный индекс
 	const safeIndex = $derived(
 		slides.length === 0 ? 0 : Math.min(currentIndex, slides.length - 1)
 	);
 
-	// Текущий слайд (теперь безопасный)
+	// Текущий слайд
 	const currentSlide = $derived(slides[safeIndex]);
 
-	// При изменении количества слайдов - сбросить индекс если вышли за пределы
+	// Сброс индекса при изменении количества слайдов
 	$effect(() => {
-		if (currentIndex >= slides.length && slides.length > 0) {
+		const len = slides.length;
+		if (currentIndex >= len && len > 0) {
 			currentIndex = 0;
 		}
 	});
 
-	// Автопереключение с корректным cleanup
-	$effect(() => {
-		const slideCount = slides.length;
-		
-		// Очищаем предыдущий интервал
+	// Функция запуска интервала
+	function startInterval() {
+		stopInterval();
+		if (slides.length > 1) {
+			intervalId = setInterval(() => {
+				currentIndex = (currentIndex + 1) % slides.length;
+			}, config.interval);
+		}
+	}
+
+	// Функция остановки интервала
+	function stopInterval() {
 		if (intervalId !== null) {
 			clearInterval(intervalId);
 			intervalId = null;
 		}
-
-		// Создаём новый интервал если слайдов больше 1
-		if (slideCount > 1) {
-			const id = setInterval(() => {
-				currentIndex = (currentIndex + 1) % slideCount;
-			}, config.interval);
-			intervalId = id;
-		}
-
-		// Cleanup при размонтировании или пересоздании эффекта
-		return () => {
-			if (intervalId !== null) {
-				clearInterval(intervalId);
-				intervalId = null;
-			}
-		};
-	});
+	}
 
 	onMount(() => {
+		// Запустить автопереключение
+		startInterval();
+
 		// Слушать resize
 		function handleResize() {
 			viewportWidth = window.innerWidth;
+			// Перезапустить интервал при resize
+			startInterval();
 		}
 		window.addEventListener('resize', handleResize);
 
-		// Keyboard navigation для тестирования
+		// Keyboard navigation
 		function handleKeydown(e: KeyboardEvent) {
 			if (e.key === 'ArrowRight') {
 				currentIndex = (currentIndex + 1) % slides.length;
@@ -127,24 +120,21 @@
 		return () => {
 			window.removeEventListener('resize', handleResize);
 			window.removeEventListener('keydown', handleKeydown);
+			stopInterval();
 		};
 	});
 
 	onDestroy(() => {
-		if (intervalId !== null) {
-			clearInterval(intervalId);
-		}
+		stopInterval();
 	});
 </script>
 
 <div class="flash-container">
-	<!-- Header с названием группы и индикатором -->
 	<header class="flash-header">
 		<h1 class="category-title">{currentSlide?.title || ''}</h1>
 		<SlideIndicator total={slides.length} current={safeIndex} />
 	</header>
 
-	<!-- Слайды с уникальными ключами -->
 	<div class="slides-wrapper">
 		{#each slides as slide (slide.virtualId)}
 			<div class="slide" class:active={slide.virtualId === currentSlide?.virtualId}>
@@ -167,8 +157,6 @@
 		position: relative;
 		display: flex;
 		flex-direction: column;
-
-		/* CSS Variables - Telegram Dark Theme */
 		--bg-primary: #1E1E1E;
 		--bg-card: #2A2A2A;
 		--text-primary: #FFFFFF;
