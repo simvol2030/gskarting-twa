@@ -2,6 +2,10 @@
  * Flash Screens API Routes
  * TV-меню слайды для кафе
  *
+ * v2: Непрерывный поток товаров (без разбивки по категориям)
+ * - Сеты остаются отдельными слайдами
+ * - Все продукты идут единым массивом с categoryName
+ *
  * GET /api/flash/:screen - получить слайды для экрана (1 или 2)
  */
 
@@ -21,6 +25,7 @@ interface ProductItem {
 	image: string;
 	quantityInfo: string | null;
 	description: string | null;
+	categoryName: string; // Название категории для лейбла на карточке
 }
 
 interface Slide {
@@ -38,20 +43,20 @@ interface FlashResponse {
 	};
 }
 
-// Конфигурация категорий (без группировки!)
+// Конфигурация категорий
 interface CategoryConfig {
 	id: number;
 	layout: 'products' | 'sets';
 }
 
-// Flash-1: Мангал (каждая категория отдельно)
+// Flash-1: Мангал
 const FLASH1_CATEGORIES: CategoryConfig[] = [
-	{ id: 7, layout: 'sets' },     // Сеты
+	{ id: 7, layout: 'sets' },     // Сеты - отдельные слайды!
 	{ id: 5, layout: 'products' }, // Шашлык
 	{ id: 6, layout: 'products' }, // Кебаб
 ];
 
-// Flash-2: Остальное меню (каждая категория отдельно)
+// Flash-2: Остальное меню
 const FLASH2_CATEGORIES: CategoryConfig[] = [
 	{ id: 3, layout: 'products' },  // Салаты
 	{ id: 4, layout: 'products' },  // Супы
@@ -66,11 +71,10 @@ const FLASH2_CATEGORIES: CategoryConfig[] = [
 	{ id: 14, layout: 'products' }, // Напитки
 ];
 
-const ITEMS_PER_SLIDE = 16; // Увеличено: 8x2 для TV 1920px
 const SETS_PER_SLIDE = 3;
 
-// Форматирование продукта
-function formatProduct(p: typeof products.$inferSelect): ProductItem {
+// Форматирование продукта с названием категории
+function formatProduct(p: typeof products.$inferSelect, categoryName: string): ProductItem {
 	return {
 		id: p.id,
 		name: p.name,
@@ -78,35 +82,9 @@ function formatProduct(p: typeof products.$inferSelect): ProductItem {
 		oldPrice: p.old_price,
 		image: p.image,
 		quantityInfo: p.quantity_info,
-		description: p.description
+		description: p.description,
+		categoryName: categoryName
 	};
-}
-
-// Генерация слайдов для категории
-function generateSlidesForCategory(
-	categoryName: string,
-	layout: 'products' | 'sets',
-	categoryProducts: ProductItem[]
-): Slide[] {
-	const slides: Slide[] = [];
-
-	if (categoryProducts.length === 0) {
-		return slides;
-	}
-
-	const title = categoryName.toUpperCase();
-	const itemsPerSlide = layout === 'sets' ? SETS_PER_SLIDE : ITEMS_PER_SLIDE;
-	const slideType = layout;
-
-	for (let i = 0; i < categoryProducts.length; i += itemsPerSlide) {
-		slides.push({
-			type: slideType,
-			title: title,
-			items: categoryProducts.slice(i, i + itemsPerSlide)
-		});
-	}
-
-	return slides;
 }
 
 // ==================== GET /api/flash/:screen ====================
@@ -150,25 +128,46 @@ router.get('/:screen', async (req: Request, res: Response) => {
 		const productsByCategory = new Map<number, ProductItem[]>();
 		for (const p of productList) {
 			if (!p.category_id) continue;
+			const catName = categoryNames.get(p.category_id) || 'Другое';
 			if (!productsByCategory.has(p.category_id)) {
 				productsByCategory.set(p.category_id, []);
 			}
-			productsByCategory.get(p.category_id)!.push(formatProduct(p));
+			productsByCategory.get(p.category_id)!.push(formatProduct(p, catName));
 		}
 
 		const slides: Slide[] = [];
 
-		// Генерируем слайды для каждой категории (без группировки!)
+		// Собираем сеты отдельно (по 3 на слайд)
+		// Собираем все продукты в единый массив
+		const allProducts: ProductItem[] = [];
+
 		for (const config of categoryConfigs) {
-			const categoryName = categoryNames.get(config.id) || `Категория ${config.id}`;
 			const categoryProducts = productsByCategory.get(config.id) || [];
 
-			const categorySlides = generateSlidesForCategory(
-				categoryName,
-				config.layout,
-				categoryProducts
-			);
-			slides.push(...categorySlides);
+			if (config.layout === 'sets') {
+				// Сеты - отдельные слайды по 3 штуки
+				const categoryName = categoryNames.get(config.id) || 'Сеты';
+				for (let i = 0; i < categoryProducts.length; i += SETS_PER_SLIDE) {
+					slides.push({
+						type: 'sets',
+						title: categoryName.toUpperCase(),
+						items: categoryProducts.slice(i, i + SETS_PER_SLIDE)
+					});
+				}
+			} else {
+				// Продукты - добавляем в общий массив
+				allProducts.push(...categoryProducts);
+			}
+		}
+
+		// Добавляем один слайд со ВСЕМИ продуктами
+		// Frontend сам нарежет по capacity
+		if (allProducts.length > 0) {
+			slides.push({
+				type: 'products',
+				title: '', // Заголовок не нужен - будет "1/5" на frontend
+				items: allProducts
+			});
 		}
 
 		const response: FlashResponse = {

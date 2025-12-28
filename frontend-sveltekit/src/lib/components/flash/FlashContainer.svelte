@@ -14,7 +14,7 @@
 
 	let currentIndex = $state(0);
 	let viewportWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1920);
-	
+
 	// Интервал хранится вне реактивности чтобы избежать циклов
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -33,12 +33,14 @@
 		return cols * 2;
 	}
 
-	// Создание виртуальных слайдов с уникальными ID
+	// Создание виртуальных слайдов
+	// v2: Сеты остаются как есть, продукты нарезаются по capacity
 	function createVirtualSlides(backendSlides: Slide[], capacity: number): VirtualSlide[] {
 		const virtualSlides: VirtualSlide[] = [];
 
 		for (const slide of backendSlides) {
 			if (slide.type === 'sets') {
+				// Сеты - добавляем как есть (уже нарезаны по 3 на backend)
 				virtualSlides.push({
 					...slide,
 					virtualId: `sets-${slide.title}-${slide.items.map(i => i.id).join(',')}`
@@ -46,13 +48,15 @@
 				continue;
 			}
 
+			// Products: нарезаем по capacity
 			const items = slide.items;
 			for (let i = 0; i < items.length; i += capacity) {
 				const sliceItems = items.slice(i, i + capacity);
 				virtualSlides.push({
 					...slide,
+					type: 'products',
 					items: sliceItems,
-					virtualId: `products-${slide.title}-${i}-${sliceItems.map(item => item.id).join(',')}`
+					virtualId: `products-${i}-${sliceItems.map(item => item.id).join(',')}`
 				});
 			}
 		}
@@ -72,6 +76,16 @@
 	// Текущий слайд
 	const currentSlide = $derived(slides[safeIndex]);
 
+	// Заголовок: для сетов показываем title, для products - "1 / 5"
+	const headerTitle = $derived(() => {
+		if (!currentSlide) return '';
+		if (currentSlide.type === 'sets') {
+			return currentSlide.title;
+		}
+		// Для products показываем номер слайда
+		return `${safeIndex + 1} / ${slides.length}`;
+	});
+
 	// Сброс индекса при изменении количества слайдов
 	$effect(() => {
 		const len = slides.length;
@@ -79,6 +93,15 @@
 			currentIndex = 0;
 		}
 	});
+
+	// Функция перехода к слайду (для кликабельных индикаторов)
+	function goToSlide(index: number) {
+		if (index >= 0 && index < slides.length) {
+			currentIndex = index;
+			// Перезапустить интервал чтобы не было быстрого переключения
+			startInterval();
+		}
+	}
 
 	// Функция запуска интервала
 	function startInterval() {
@@ -134,8 +157,8 @@
 
 <div class="flash-container">
 	<header class="flash-header">
-		<h1 class="category-title">{currentSlide?.title || ''}</h1>
-		<SlideIndicator total={slides.length} current={safeIndex} />
+		<h1 class="category-title">{headerTitle()}</h1>
+		<SlideIndicator total={slides.length} current={safeIndex} onSelect={goToSlide} />
 	</header>
 
 	<div class="slides-wrapper">

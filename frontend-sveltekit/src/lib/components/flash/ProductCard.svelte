@@ -18,6 +18,9 @@
 
 <div class="product-card" class:small={size === 'small'}>
 	<div class="product-image-wrapper">
+		{#if product.categoryName}
+			<span class="category-label">{product.categoryName}</span>
+		{/if}
 		<img
 			src={product.image || placeholderImage}
 			alt={product.name}
@@ -47,7 +50,6 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
-		/* height: 100%; - убрано чтобы карточки не растягивались */
 	}
 
 	.product-card.small {
@@ -57,10 +59,37 @@
 	.product-image-wrapper {
 		position: relative;
 		width: 100%;
-		padding-top: 65%; /* Уменьшено с 70% */
+		padding-top: 65%;
 		background: var(--bg-primary, #1E1E1E);
 		overflow: hidden;
 		flex-shrink: 0;
+	}
+
+	/* Лейбл категории поверх фото */
+	.category-label {
+		position: absolute;
+		top: 6px;
+		left: 6px;
+		z-index: 2;
+		background: rgba(0, 0, 0, 0.65);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 600;
+		padding: 3px 6px;
+		border-radius: 4px;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		white-space: nowrap;
+		max-width: calc(100% - 12px);
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.small .category-label {
+		font-size: 8px;
+		padding: 2px 4px;
+		top: 4px;
+		left: 4px;
 	}
 
 	.product-image {
@@ -68,7 +97,7 @@
 		top: 0;
 		left: 0;
 		width: 100%;
-		/* height: 100%; - убрано чтобы карточки не растягивались */
+		height: 100%;
 		object-fit: cover;
 	}
 

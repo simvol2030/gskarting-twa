@@ -11,6 +11,7 @@ export interface ProductItem {
 	image: string;
 	quantityInfo: string | null;
 	description: string | null;
+	categoryName?: string; // Название категории для лейбла на карточке
 }
 
 export interface Slide {
