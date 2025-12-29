@@ -204,6 +204,114 @@ router.delete('/images/:imageId', requireRole('super-admin'), async (req, res) =
 	}
 });
 
+/**
+ * POST /api/admin/campaigns/test-send - Тестовая отправка рассылки
+ * Отправить тестовое сообщение по telegram_id или номеру карты
+ * ONLY: super-admin, editor
+ */
+router.post('/test-send', requireRole('super-admin', 'editor'), async (req, res) => {
+	try {
+		const { telegramId, cardNumber, messageText, messageImage, buttonText, buttonUrl } = req.body;
+
+		if (!telegramId && !cardNumber) {
+			return res.status(400).json({
+				success: false,
+				error: 'Укажите telegramId или cardNumber'
+			});
+		}
+
+		if (!messageText) {
+			return res.status(400).json({
+				success: false,
+				error: 'Укажите текст сообщения (messageText)'
+			});
+		}
+
+		// Find user by telegramId or cardNumber
+		let chatId: number | null = null;
+		let userName: string = '';
+
+		if (telegramId) {
+			// Direct telegram ID
+			chatId = parseInt(telegramId);
+			userName = `Telegram ID: ${telegramId}`;
+		} else if (cardNumber) {
+			// Find by card number
+			const { db } = await import('../../db/client');
+			const { loyaltyUsers } = await import('../../db/schema');
+			const { eq } = await import('drizzle-orm');
+
+			const user = await db
+				.select({ chat_id: loyaltyUsers.chat_id, first_name: loyaltyUsers.first_name })
+				.from(loyaltyUsers)
+				.where(eq(loyaltyUsers.card_number, cardNumber))
+				.limit(1);
+
+			if (user.length === 0) {
+				return res.status(404).json({
+					success: false,
+					error: `Пользователь с картой ${cardNumber} не найден`
+				});
+			}
+
+			if (!user[0].chat_id) {
+				return res.status(400).json({
+					success: false,
+					error: `У пользователя ${cardNumber} нет telegram chat_id`
+				});
+			}
+
+			chatId = user[0].chat_id;
+			userName = user[0].first_name || `Карта: ${cardNumber}`;
+		}
+
+		if (!chatId) {
+			return res.status(400).json({
+				success: false,
+				error: 'Не удалось определить получателя'
+			});
+		}
+
+		// Send test message via bot
+		const TELEGRAM_BOT_URL = process.env.TELEGRAM_BOT_URL || 'http://localhost:3014';
+
+		const response = await fetch(`${TELEGRAM_BOT_URL}/send-campaign-message`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				chatId,
+				text: messageText,
+				imageUrl: messageImage || null,
+				buttonText: buttonText || null,
+				buttonUrl: buttonUrl || null
+			})
+		});
+
+		const result = await response.json();
+
+		if (!response.ok || !result.success) {
+			return res.status(400).json({
+				success: false,
+				error: result.error || 'Ошибка отправки сообщения',
+				details: result
+			});
+		}
+
+		res.json({
+			success: true,
+			message: `Тестовое сообщение отправлено: ${userName}`,
+			data: {
+				chatId,
+				userName
+			}
+		});
+
+	} catch (error: any) {
+		console.error('Error sending test campaign:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
 // ==================== CAMPAIGNS LIST & CREATE ====================
 
 /**

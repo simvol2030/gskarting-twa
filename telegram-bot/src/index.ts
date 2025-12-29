@@ -376,14 +376,28 @@ app.post('/send-campaign-message', async (req, res) => {
 		let keyboard: InlineKeyboard | undefined;
 		if (buttonText && buttonUrl) {
 			keyboard = new InlineKeyboard();
-			// Check if it's a web app URL or regular URL
-			if (buttonUrl.startsWith('https://') && buttonUrl.includes(WEB_APP_URL.replace('https://', ''))) {
-				keyboard.webApp(buttonText, buttonUrl);
-			} else {
-				keyboard.url(buttonText, buttonUrl);
+
+			// Normalize relative URLs to full URLs
+			let fullUrl = buttonUrl;
+			if (buttonUrl.startsWith('/')) {
+				// Relative path - prepend WEB_APP_URL
+				fullUrl = WEB_APP_URL + buttonUrl;
 			}
-		} else if (NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
-			// Default button to open web app
+
+			// Check if it's a web app URL or regular URL
+			if (fullUrl.startsWith('https://') && fullUrl.includes(WEB_APP_URL.replace('https://', ''))) {
+				keyboard.webApp(buttonText, fullUrl);
+			} else if (fullUrl.startsWith('http://') || fullUrl.startsWith('https://')) {
+				keyboard.url(buttonText, fullUrl);
+			} else {
+				// Invalid URL - skip button
+				console.warn(`⚠️ Invalid button URL: ${buttonUrl}, skipping button`);
+				keyboard = undefined;
+			}
+		}
+
+		// Add default web app button if no custom button and in production
+		if (!keyboard && NODE_ENV === 'production' && WEB_APP_URL.startsWith('https://')) {
 			keyboard = new InlineKeyboard().webApp('Мурзи-коины', WEB_APP_URL);
 		}
 
