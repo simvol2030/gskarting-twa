@@ -61,6 +61,7 @@
                                 !$page.url.pathname.startsWith('/settings') &&
                                 !$page.url.pathname.startsWith('/feed-admin') &&
                                 !$page.url.pathname.startsWith('/delivery-locations') &&
+                                !$page.url.pathname.startsWith('/delivery-settings') &&
                                 !$page.url.pathname.startsWith('/login') &&
                                 !$page.url.pathname.startsWith('/logout') &&
                                 !$page.url.pathname.startsWith('/cashier') &&
