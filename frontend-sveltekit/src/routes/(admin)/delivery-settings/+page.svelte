@@ -166,7 +166,7 @@
 							<textarea
 								id="widgetText"
 								bind:value={widgetText}
-								placeholder="При заказе от {threshold}₽ доставка бесплатная"
+								placeholder={"При заказе от {threshold}₽ доставка бесплатная"}
 								rows="2"
 							></textarea>
 							<small>Используйте <code>{'{threshold}'}</code> для подстановки порога</small>
@@ -217,7 +217,7 @@
 							<textarea
 								id="toastText"
 								bind:value={toastText}
-								placeholder="Добавьте ещё на {remaining}₽..."
+								placeholder={"Добавьте ещё на {remaining}₽..."}
 								rows="2"
 							></textarea>
 							<small>Используйте <code>{'{remaining}'}</code> для подстановки оставшейся суммы</small>
