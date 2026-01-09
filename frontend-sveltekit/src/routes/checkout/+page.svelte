@@ -343,6 +343,10 @@
 								/>
 							</div>
 
+							<!-- TEMPORARILY HIDDEN: Floor and Apartment fields -->
+							<!-- Reason: Delivery is to entrance only (до подъезда) -->
+							<!-- To restore: uncomment the two form-group blocks below -->
+							<!--
 							<div class="form-group small">
 								<label for="floor">Этаж</label>
 								<input
@@ -362,6 +366,7 @@
 									placeholder="42"
 								/>
 							</div>
+							-->
 						</div>
 
 						<div class="form-group">
