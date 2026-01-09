@@ -573,7 +573,7 @@
 	}
 
 	.table-container {
-		background: white;
+		background: var(--card-bg, var(--bg-white));
 		border-radius: 12px;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 		overflow: hidden;
@@ -760,7 +760,7 @@
 	}
 
 	.modal-content {
-		background: white;
+		background: var(--card-bg, var(--bg-white));
 		border-radius: 16px;
 		padding: 24px;
 		max-width: 500px;

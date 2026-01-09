@@ -349,7 +349,7 @@
 	}
 
 	.settings-section {
-		background: white;
+		background: var(--card-bg, var(--bg-white));
 		border-radius: 12px;
 		padding: 24px;
 		margin-bottom: 24px;
@@ -421,7 +421,7 @@
 	}
 
 	.form-group small code {
-		background: #f1f5f9;
+		background: var(--bg-tertiary, #f1f5f9);
 		padding: 2px 6px;
 		border-radius: 4px;
 		font-family: monospace;
@@ -460,7 +460,7 @@
 	}
 
 	.preview-box {
-		background: #f8fafc;
+		background: var(--bg-light, #f8fafc);
 		border-radius: 12px;
 		padding: 16px;
 		margin-top: 16px;
@@ -527,7 +527,7 @@
 		align-items: center;
 		gap: 12px;
 		padding: 12px 16px;
-		background: #f8fafc;
+		background: var(--bg-light, #f8fafc);
 		border-radius: 8px;
 	}
 
@@ -560,7 +560,7 @@
 	.empty-locations {
 		text-align: center;
 		padding: 24px;
-		background: #f8fafc;
+		background: var(--bg-light, #f8fafc);
 		border-radius: 8px;
 	}
 

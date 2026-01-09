@@ -778,13 +778,18 @@
 	}
 
 	.min-order-warning {
-		background: #fff3cd;
-		color: #856404;
+		background: var(--warning-bg, #fff3cd);
+		color: var(--warning-text, #856404);
 		padding: 12px 16px;
 		border-radius: 12px;
 		margin-bottom: 16px;
 		font-size: 14px;
 		text-align: center;
+	}
+
+	:global(.dark) .min-order-warning {
+		background: #78350f;
+		color: #fef3c7;
 	}
 
 	.submit-btn {
@@ -836,6 +841,11 @@
 		font-weight: 500;
 	}
 
+	:global(.dark) .free-delivery-hint {
+		background: linear-gradient(135deg, #78350f, #92400e);
+		color: #fef3c7;
+	}
+
 	.free-delivery-active {
 		display: block;
 		margin-top: 8px;
@@ -845,5 +855,10 @@
 		font-size: 13px;
 		color: #065f46;
 		font-weight: 600;
+	}
+
+	:global(.dark) .free-delivery-active {
+		background: linear-gradient(135deg, #064e3b, #065f46);
+		color: #d1fae5;
 	}
 </style>
