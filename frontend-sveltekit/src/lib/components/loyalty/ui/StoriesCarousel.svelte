@@ -5,8 +5,8 @@
 	import StoryViewer from './StoryViewer.svelte';
 	import { storiesSettings } from '$lib/stores/customization';
 
-	// Props
-	let { userId = null }: { userId?: number | null } = $props();
+	// Props - borderColorOverride bypasses store for SSR-correct data from server
+	let { userId = null, borderColorOverride = null }: { userId?: number | null; borderColorOverride?: string | null } = $props();
 
 	// State
 	let storiesData = $state<StoriesData | null>(null);
@@ -22,8 +22,8 @@
 	let highlights = $derived(storiesData?.highlights || []);
 	let hasStories = $derived(storiesData?.enabled && highlights.length > 0);
 
-	// Reactive border color - always use customization store (populated from SSR or API)
-	let borderColor = $derived($storiesSettings.borderColor);
+	// Reactive border color - prefer SSR override, fallback to store
+	let borderColor = $derived(borderColorOverride || $storiesSettings.borderColor);
 
 	// Load stories on mount
 	onMount(async () => {

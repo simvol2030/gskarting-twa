@@ -47,7 +47,7 @@
 <LoyaltyCard user={data.user} loyaltyRules={data.loyaltyRules} />
 
 <!-- 2. Web Stories -->
-<StoriesCarousel userId={data.user?.id} />
+<StoriesCarousel userId={data.user?.id} borderColorOverride={data.customization?.stories?.borderColor} />
 
 <!-- 2.5. Free Delivery Widget -->
 {#if data.freeDeliveryInfo?.enabled && data.freeDeliveryInfo?.widget?.enabled}
