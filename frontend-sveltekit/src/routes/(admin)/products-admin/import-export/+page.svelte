@@ -289,7 +289,7 @@
 								/>
 								<span class="checkbox-label">
 									{category.name}
-									<span class="category-count">({category.productsCount || 0})</span>
+									<span class="category-count">({category.count || 0})</span>
 								</span>
 							</label>
 						{/each}
