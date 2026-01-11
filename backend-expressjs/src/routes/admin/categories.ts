@@ -395,11 +395,11 @@ router.delete('/:id', requireRole('super-admin'), async (req, res) => {
 		const categoryId = parseInt(req.params.id);
 		const { soft = 'true' } = req.query;
 
-		// Check if category has products
+		// Check if category has ACTIVE products (hidden products shouldn't block deletion)
 		const [productCount] = await db
 			.select({ count: sql<number>`COUNT(*)` })
 			.from(products)
-			.where(eq(products.category_id, categoryId));
+			.where(and(eq(products.category_id, categoryId), eq(products.is_active, true)));
 
 		if (Number(productCount.count) > 0 && soft === 'false') {
 			return res.status(400).json({
