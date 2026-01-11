@@ -863,7 +863,8 @@ function normalizeRow(row: ImportProductRow) {
 		price: parseNumber(row.price),
 		oldPrice: parseNumber(row.oldPrice ?? row.old_price),
 		quantityInfo: (row.quantityInfo ?? row.quantity_info)?.trim() || null,
-		image: normalizeImagePath(row.image),
+		// Don't normalize image path here - let import logic handle it for ZIP extraction
+		image: row.image?.trim() || null,
 		category: row.category?.trim() || null,
 		categoryId: parseNumber(row.categoryId ?? row.category_id),
 		sku: row.sku?.trim() || null,
@@ -971,9 +972,8 @@ router.post('/import', requireRole('super-admin', 'editor'), importUpload.single
 				const categoryPath = normalized.category || defaultCategory || '';
 				const { categoryId, categoryName } = await findOrCreateCategoryByPath(categoryPath);
 				// Use normalized image, or defaultImage if provided, or placeholder
-				const image = (normalized.image !== PLACEHOLDER_IMAGE ? normalized.image : null)
-					|| normalizeImagePath(defaultImage)
-					|| PLACEHOLDER_IMAGE;
+				const image = normalizeImagePath(normalized.image)
+					|| normalizeImagePath(defaultImage);
 
 				const productData = {
 					name: normalized.name,
@@ -1428,7 +1428,8 @@ router.post('/import-zip', requireRole('super-admin', 'editor'), zipImportUpload
 				// Apply defaults and auto-create category
 				const categoryPath = normalized.category || defaultCategory || '';
 				const { categoryId, categoryName } = await findOrCreateCategoryByPath(categoryPath);
-				const image = imageUrl || '/api/uploads/products/placeholder.webp';
+				// Normalize the final image path (processAndSaveImage already returns full path)
+				const image = normalizeImagePath(imageUrl);
 
 				const productData = {
 					name: normalized.name,
