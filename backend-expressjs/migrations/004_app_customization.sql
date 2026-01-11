@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS app_customization (
     dark_border_color TEXT NOT NULL DEFAULT '#2b3943',
 
     -- === НАВИГАЦИЯ ===
-    bottom_nav_items TEXT NOT NULL DEFAULT '[{"id":"home","href":"/","label":"Главная","icon":"home","visible":true},{"id":"offers","href":"/offers","label":"Акции","icon":"tag","visible":true},{"id":"stores","href":"/stores","label":"Магазины","icon":"location","visible":true},{"id":"history","href":"/history","label":"Бонусы","icon":"coins","visible":true},{"id":"profile","href":"/profile","label":"Профиль","icon":"user","visible":true}]',
+    bottom_nav_items TEXT NOT NULL DEFAULT '[{"id":"home","href":"/","label":"Главная","icon":"home","visible":true},{"id":"offers","href":"/offers","label":"Акции","icon":"tag","visible":true},{"id":"products","href":"/products","label":"Меню","icon":"cart","visible":true},{"id":"history","href":"/history","label":"Бонусы","icon":"coins","visible":true},{"id":"profile","href":"/profile","label":"Профиль","icon":"user","visible":true}]',
 
     sidebar_menu_items TEXT NOT NULL DEFAULT '[{"id":"home","href":"/","label":"Главная","icon":"📊","visible":true,"isExternal":false},{"id":"products","href":"/products","label":"Товары","icon":"🛍️","visible":true,"isExternal":false},{"id":"offers","href":"/offers","label":"Акции","icon":"🎁","visible":true,"isExternal":false},{"id":"stores","href":"/stores","label":"Магазины","icon":"🏪","visible":true,"isExternal":false},{"id":"history","href":"/history","label":"История","icon":"📜","visible":true,"isExternal":false},{"id":"profile","href":"/profile","label":"Профиль","icon":"👤","visible":true,"isExternal":false}]',
 
