@@ -405,9 +405,15 @@ app.post('/send-campaign-message', async (req, res) => {
 		if (imageUrl) {
 			// Send photo with caption
 			// Determine if imageUrl is local or remote
-			const photoUrl = imageUrl.startsWith('http')
-				? imageUrl
-				: `${process.env.BACKEND_URL || 'http://localhost:3000'}${imageUrl}`;
+			// IMPORTANT: Telegram can't access localhost - always use public WEB_APP_URL for images
+			let photoUrl = imageUrl;
+			if (imageUrl.startsWith('/')) {
+				// Relative path - use public URL
+				photoUrl = `${WEB_APP_URL}${imageUrl}`;
+			} else if (imageUrl.includes('localhost')) {
+				// Localhost URL - replace with public URL
+				photoUrl = imageUrl.replace(/http:\/\/localhost:\d+/, WEB_APP_URL);
+			}
 
 			await bot.api.sendPhoto(chatId, photoUrl, {
 				caption: text,
