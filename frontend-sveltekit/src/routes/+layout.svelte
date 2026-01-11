@@ -32,6 +32,7 @@
       ...(serverData.faviconUrl !== undefined && { faviconUrl: serverData.faviconUrl }),
       ...(serverData.productsLabel !== undefined && { productsLabel: serverData.productsLabel }),
       ...(serverData.productsIcon !== undefined && { productsIcon: serverData.productsIcon }),
+      ...(serverData.headerPhone !== undefined && { headerPhone: serverData.headerPhone }),
       // Deep merge nested objects
       colors: { ...defaultCustomization.colors, ...(serverData.colors || {}) },
       darkTheme: { ...defaultCustomization.darkTheme, ...(serverData.darkTheme || {}) },
