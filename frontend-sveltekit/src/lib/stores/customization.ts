@@ -47,6 +47,12 @@ export interface LoyaltyCardSettings {
 	showShimmer: boolean;
 }
 
+export interface StoriesSettings {
+	borderColor: string;        // Цвет обводки хайлайтов
+	titleColorLight: string;    // Цвет текста (светлая тема)
+	titleColorDark: string;     // Цвет текста (тёмная тема)
+}
+
 export interface CustomizationData {
 	appName: string;
 	appSlogan: string;
@@ -59,6 +65,7 @@ export interface CustomizationData {
 		sidebarMenu: NavItem[];
 	};
 	loyaltyCard: LoyaltyCardSettings;
+	stories: StoriesSettings;  // Stories (Highlights) customization
 	productsLabel: string; // Customizable label for Products section
 	productsIcon: string; // Customizable icon for Products section (cart, shopping-bag, heart, star)
 	headerPhone: string; // Phone number displayed in header (call button)
@@ -116,6 +123,11 @@ const defaultCustomization: CustomizationData = {
 		borderRadius: 24,
 		showShimmer: true
 	},
+	stories: {
+		borderColor: '#ff6b00',
+		titleColorLight: '#374151',
+		titleColorDark: '#ffffff'
+	},
 	productsLabel: 'Меню',
 	productsIcon: 'cart',
 	headerPhone: '+7 (800) 000-00-00'
@@ -161,6 +173,8 @@ export const productsLabel = derived(customization, $c => $c?.productsLabel || d
 export const productsIcon = derived(customization, $c => $c?.productsIcon || defaultCustomization.productsIcon);
 // BUG-3 FIX: Add fallback for loyaltyCard if undefined (defensive programming)
 export const loyaltyCardSettings = derived(customization, $c => $c?.loyaltyCard || defaultCustomization.loyaltyCard);
+// Stories (Highlights) customization
+export const storiesSettings = derived(customization, $c => $c?.stories || defaultCustomization.stories);
 // Phone number for header call button
 export const headerPhone = derived(customization, $c => $c?.headerPhone || defaultCustomization.headerPhone);
 
@@ -191,7 +205,8 @@ export async function loadCustomization(apiBaseUrl: string = '/api'): Promise<vo
 					bottomNav: result.data.navigation?.bottomNav || defaultCustomization.navigation.bottomNav,
 					sidebarMenu: result.data.navigation?.sidebarMenu || defaultCustomization.navigation.sidebarMenu
 				},
-				loyaltyCard: { ...defaultCustomization.loyaltyCard, ...(result.data.loyaltyCard || {}) }
+				loyaltyCard: { ...defaultCustomization.loyaltyCard, ...(result.data.loyaltyCard || {}) },
+				stories: { ...defaultCustomization.stories, ...(result.data.stories || {}) }
 			};
 			customization.set(mergedData);
 			applyCustomStyles(mergedData);

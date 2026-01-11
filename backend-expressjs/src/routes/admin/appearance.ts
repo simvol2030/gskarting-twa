@@ -85,7 +85,9 @@ function validateAppearanceData(data: any): string | null {
 		'darkBgPrimary', 'darkBgSecondary', 'darkBgTertiary',
 		'darkPrimaryColor', 'darkTextPrimary', 'darkTextSecondary', 'darkBorderColor',
 		'loyaltyCardGradientStart', 'loyaltyCardGradientEnd', 'loyaltyCardTextColor',
-		'loyaltyCardAccentColor', 'loyaltyCardBadgeText'
+		'loyaltyCardAccentColor', 'loyaltyCardBadgeText',
+		// Stories (Highlights)
+		'storiesBorderColor', 'storiesTitleColorLight', 'storiesTitleColorDark'
 	];
 
 	// Validate RGBA color (for badge background)
@@ -243,6 +245,11 @@ router.get('/', async (req, res) => {
 				// Contacts
 				headerPhone: s.header_phone,
 
+				// Stories (Highlights)
+				storiesBorderColor: s.stories_border_color || '#ff6b00',
+				storiesTitleColorLight: s.stories_title_color_light || '#374151',
+				storiesTitleColorDark: s.stories_title_color_dark || '#ffffff',
+
 				// Meta
 				updatedAt: s.updated_at
 			}
@@ -330,6 +337,11 @@ router.put('/', requireRole('super-admin', 'editor'), async (req, res) => {
 		// Contacts
 		if (data.headerPhone !== undefined) updates.header_phone = data.headerPhone.trim();
 
+		// Stories (Highlights)
+		if (data.storiesBorderColor !== undefined) updates.stories_border_color = data.storiesBorderColor;
+		if (data.storiesTitleColorLight !== undefined) updates.stories_title_color_light = data.storiesTitleColorLight;
+		if (data.storiesTitleColorDark !== undefined) updates.stories_title_color_dark = data.storiesTitleColorDark;
+
 		// Update settings
 		await db.update(appCustomization).set(updates).where(eq(appCustomization.id, 1));
 
@@ -377,6 +389,10 @@ router.put('/', requireRole('super-admin', 'editor'), async (req, res) => {
 				loyaltyCardShowShimmer: Boolean(s.loyalty_card_show_shimmer),
 				// Contacts
 				headerPhone: s.header_phone,
+				// Stories (Highlights)
+				storiesBorderColor: s.stories_border_color || '#ff6b00',
+				storiesTitleColorLight: s.stories_title_color_light || '#374151',
+				storiesTitleColorDark: s.stories_title_color_dark || '#ffffff',
 				updatedAt: s.updated_at
 			}
 		});

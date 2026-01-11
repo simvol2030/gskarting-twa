@@ -89,7 +89,12 @@
 		productsIcon: data.settings.appearance.productsIcon || 'cart',
 
 		// Contacts
-		headerPhone: data.settings.appearance.headerPhone || '+7 (800) 000-00-00'
+		headerPhone: data.settings.appearance.headerPhone || '+7 (800) 000-00-00',
+
+		// Stories (Highlights)
+		storiesBorderColor: data.settings.appearance.storiesBorderColor || '#ff6b00',
+		storiesTitleColorLight: data.settings.appearance.storiesTitleColorLight || '#374151',
+		storiesTitleColorDark: data.settings.appearance.storiesTitleColorDark || '#ffffff'
 	});
 
 	// Preset icons for bottom nav
@@ -182,7 +187,10 @@
 			loyaltyCardBadgeText: data.settings.appearance.loyaltyCardBadgeText || '#e55d00',
 			loyaltyCardBorderRadius: data.settings.appearance.loyaltyCardBorderRadius ?? 24,
 			loyaltyCardShowShimmer: data.settings.appearance.loyaltyCardShowShimmer ?? true,
-			headerPhone: data.settings.appearance.headerPhone || '+7 (800) 000-00-00'
+			headerPhone: data.settings.appearance.headerPhone || '+7 (800) 000-00-00',
+			storiesBorderColor: data.settings.appearance.storiesBorderColor || '#ff6b00',
+			storiesTitleColorLight: data.settings.appearance.storiesTitleColorLight || '#374151',
+			storiesTitleColorDark: data.settings.appearance.storiesTitleColorDark || '#ffffff'
 		};
 	}
 
@@ -353,7 +361,10 @@
 						loyaltyCardShowShimmer: appearanceForm.loyaltyCardShowShimmer,
 						productsLabel: appearanceForm.productsLabel,
 						productsIcon: appearanceForm.productsIcon,
-						headerPhone: appearanceForm.headerPhone
+						headerPhone: appearanceForm.headerPhone,
+						storiesBorderColor: appearanceForm.storiesBorderColor,
+						storiesTitleColorLight: appearanceForm.storiesTitleColorLight,
+						storiesTitleColorDark: appearanceForm.storiesTitleColorDark
 					}),
 					credentials: 'include'
 				});
@@ -880,6 +891,51 @@
 								<input type="checkbox" bind:checked={appearanceForm.loyaltyCardShowShimmer} />
 								Анимация блеска (shimmer)
 							</label>
+						</div>
+					</div>
+				</div>
+
+				<!-- Stories (Highlights) Widget -->
+				<div class="appearance-section">
+					<h3>Истории (хайлайты)</h3>
+					<p class="section-description">Настройте внешний вид кружков с историями на главной странице</p>
+
+					<!-- Stories Preview -->
+					<div class="stories-preview">
+						<div class="story-item-preview" style="--border-color: {appearanceForm.storiesBorderColor}">
+							<div class="story-circle"></div>
+							<span class="story-title-light" style="color: {appearanceForm.storiesTitleColorLight}">Светлая</span>
+						</div>
+						<div class="story-item-preview dark" style="--border-color: {appearanceForm.storiesBorderColor}">
+							<div class="story-circle"></div>
+							<span class="story-title-dark" style="color: {appearanceForm.storiesTitleColorDark}">Тёмная</span>
+						</div>
+					</div>
+
+					<div class="color-grid">
+						<div class="color-picker-group">
+							<label>Цвет обводки</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.storiesBorderColor} />
+								<input type="text" bind:value={appearanceForm.storiesBorderColor} class="color-text" />
+							</div>
+							<small>Цвет кольца вокруг хайлайтов</small>
+						</div>
+						<div class="color-picker-group">
+							<label>Текст (светлая тема)</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.storiesTitleColorLight} />
+								<input type="text" bind:value={appearanceForm.storiesTitleColorLight} class="color-text" />
+							</div>
+							<small>Цвет названия в светлой теме</small>
+						</div>
+						<div class="color-picker-group">
+							<label>Текст (тёмная тема)</label>
+							<div class="color-input-wrapper">
+								<input type="color" bind:value={appearanceForm.storiesTitleColorDark} />
+								<input type="text" bind:value={appearanceForm.storiesTitleColorDark} class="color-text" />
+							</div>
+							<small>Цвет названия в тёмной теме</small>
 						</div>
 					</div>
 				</div>
@@ -1424,6 +1480,45 @@
 	.checkbox-inline input[type="checkbox"] {
 		width: 1.25rem;
 		height: 1.25rem;
+	}
+
+	/* Stories Preview */
+	.stories-preview {
+		display: flex;
+		gap: 2rem;
+		padding: 1.5rem;
+		margin-bottom: 1.5rem;
+		border-radius: 12px;
+		background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+	}
+
+	.story-item-preview {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.story-item-preview.dark {
+		background: #1e293b;
+		padding: 1rem;
+		border-radius: 12px;
+	}
+
+	.story-circle {
+		width: 64px;
+		height: 64px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+		border: 3px solid var(--border-color, #ff6b00);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	}
+
+	.story-title-light,
+	.story-title-dark {
+		font-size: 0.75rem;
+		font-weight: 500;
+		text-align: center;
 	}
 
 	@media (max-width: 768px) {

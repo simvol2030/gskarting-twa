@@ -60,7 +60,11 @@ export const load: PageServerLoad = async ({ cookies }) => {
 			{ id: 'stores', href: '/stores', label: 'Магазины', icon: '🏪', visible: true, isExternal: false },
 			{ id: 'history', href: '/history', label: 'История', icon: '📜', visible: true, isExternal: false },
 			{ id: 'profile', href: '/profile', label: 'Профиль', icon: '👤', visible: true, isExternal: false }
-		]
+		],
+		// Stories (Highlights) defaults
+		storiesBorderColor: '#ff6b00',
+		storiesTitleColorLight: '#374151',
+		storiesTitleColorDark: '#ffffff'
 	};
 
 	// Структура данных для формы

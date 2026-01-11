@@ -106,7 +106,14 @@ router.get('/', async (req, res) => {
 			productsIcon: s.products_icon,
 
 			// Contacts
-			headerPhone: s.header_phone
+			headerPhone: s.header_phone,
+
+			// Stories (Highlights)
+			stories: {
+				borderColor: s.stories_border_color || '#ff6b00',
+				titleColorLight: s.stories_title_color_light || '#374151',
+				titleColorDark: s.stories_title_color_dark || '#ffffff'
+			}
 		};
 
 		// Update cache

@@ -3,6 +3,7 @@
 	import type { StoriesData, StoryHighlight, StoriesSettings } from '$lib/api/stories';
 	import { fetchStories } from '$lib/api/stories';
 	import StoryViewer from './StoryViewer.svelte';
+	import { storiesSettings } from '$lib/stores/customization';
 
 	// Props
 	let { userId = null }: { userId?: number | null } = $props();
@@ -64,7 +65,7 @@
 		}
 	}
 
-	// Compute gradient style
+	// Compute gradient style - uses customization settings for border color
 	function getBorderStyle(settings: StoriesSettings | null): string {
 		if (!settings) return '';
 		if (settings.borderWidth === 0) return 'border: none;';
@@ -73,12 +74,14 @@
 			return `background: linear-gradient(${settings.borderGradient.angle}deg, ${settings.borderGradient.colors.join(', ')});`;
 		}
 
-		return `background: ${settings.borderColor};`;
+		// Use customization border color as primary, fallback to stories settings
+		const borderColor = $storiesSettings.borderColor || settings.borderColor;
+		return `background: ${borderColor};`;
 	}
 </script>
 
 {#if hasStories && settings}
-	<div class="stories-carousel" style="--highlight-size: {settings.highlightSize}px">
+	<div class="stories-carousel" style="--highlight-size: {settings.highlightSize}px; --title-color-light: {$storiesSettings.titleColorLight}; --title-color-dark: {$storiesSettings.titleColorDark}">
 		<div class="stories-scroll">
 			{#each highlights as highlight, index}
 				<button
@@ -236,13 +239,18 @@
 
 	.highlight-title {
 		font-size: 0.6875rem;
-		color: #374151;
+		color: var(--title-color-light, #374151);
 		text-align: center;
 		max-width: var(--highlight-size);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		line-height: 1.2;
+	}
+
+	/* Dark theme support for title color */
+	:global([data-theme="dark"]) .highlight-title {
+		color: var(--title-color-dark, #ffffff);
 	}
 
 	.highlight-title.inside {

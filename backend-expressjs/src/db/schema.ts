@@ -840,6 +840,11 @@ export const appCustomization = sqliteTable('app_customization', {
 	// === КОНТАКТЫ ===
 	header_phone: text('header_phone').notNull().default('+7 (800) 000-00-00'),  // Телефон в header (кнопка звонка)
 
+	// === STORIES (Хайлайты) ===
+	stories_border_color: text('stories_border_color').notNull().default('#ff6b00'),  // Цвет обводки хайлайтов
+	stories_title_color_light: text('stories_title_color_light').notNull().default('#374151'),  // Цвет текста (светлая тема)
+	stories_title_color_dark: text('stories_title_color_dark').notNull().default('#ffffff'),  // Цвет текста (тёмная тема)
+
 	// === ВИДЖЕТ ЛОЯЛЬНОСТИ (карточка баланса) ===
 	loyalty_card_gradient_start: text('loyalty_card_gradient_start').notNull().default('#ff6b00'),  // Начало градиента
 	loyalty_card_gradient_end: text('loyalty_card_gradient_end').notNull().default('#dc2626'),     // Конец градиента
