@@ -22,6 +22,9 @@
 	let highlights = $derived(storiesData?.highlights || []);
 	let hasStories = $derived(storiesData?.enabled && highlights.length > 0);
 
+	// Reactive border color - prioritize customization settings over stories API settings
+	let borderColor = $derived($storiesSettings.borderColor || settings?.borderColor || '#ff6b00');
+
 	// Load stories on mount
 	onMount(async () => {
 		try {
@@ -65,8 +68,8 @@
 		}
 	}
 
-	// Compute gradient style - uses customization settings for border color
-	function getBorderStyle(settings: StoriesSettings | null): string {
+	// Compute gradient style - now uses reactive borderColor
+	function getBorderStyle(settings: StoriesSettings | null, color: string): string {
 		if (!settings) return '';
 		if (settings.borderWidth === 0) return 'border: none;';
 
@@ -74,9 +77,7 @@
 			return `background: linear-gradient(${settings.borderGradient.angle}deg, ${settings.borderGradient.colors.join(', ')});`;
 		}
 
-		// Use customization border color as primary, fallback to stories settings
-		const borderColor = $storiesSettings.borderColor || settings.borderColor;
-		return `background: ${borderColor};`;
+		return `background: ${color};`;
 	}
 </script>
 
@@ -92,7 +93,7 @@
 				>
 					<div
 						class="highlight-border"
-						style="{getBorderStyle(settings)} --border-width: {settings.borderWidth}px;"
+						style="{getBorderStyle(settings, borderColor)} --border-width: {settings.borderWidth}px;"
 					>
 						<div class="highlight-inner">
 							{#if highlight.coverImage}
