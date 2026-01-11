@@ -158,7 +158,8 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
         sidebarMenu: JSON.parse(s.sidebar_menu_items || '[]')
       },
       productsLabel: s.products_label,
-      productsIcon: s.products_icon
+      productsIcon: s.products_icon,
+      headerPhone: s.header_phone
     };
   }
 
