@@ -95,7 +95,7 @@
 <section class="section-content">
   <h2 class="section-header centered">
     <span>⭐</span>
-    <span>Топовые товары</span>
+    <span>Топовые {(data.customization?.productsLabel || 'товары').toLowerCase()}</span>
   </h2>
   <div class="products-grid">
     {#each data.topProducts as product}
@@ -103,7 +103,7 @@
     {/each}
   </div>
   <a href="/products" class="see-all-link">
-    <span>Все товары</span>
+    <span>Все {(data.customization?.productsLabel || 'товары').toLowerCase()}</span>
     <span>→</span>
   </a>
 </section>
