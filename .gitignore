@@ -78,3 +78,8 @@ coverage/
 *.temp
 tmp/
 temp/
+
+# Claude Code local files (NOT for git)
+.claude/database.db
+.claude/mcp_settings.json
+.claude/playwright-config.json
