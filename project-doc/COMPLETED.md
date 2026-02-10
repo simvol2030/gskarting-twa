@@ -29,4 +29,11 @@
 | changes-2-admin-dashboard | Frontend: Dashboard + Timeline View + Хронометраж | DONE | — |
 | changes-3-admin-management | Frontend: Таблица бронирований + Ручное создание + Слоты + Настройки | DONE | — |
 
+### session-3: Live Schedule + Bot Notifications + Action Log
+
+| Change | Summary | Status | Deployed |
+|--------|---------|--------|----------|
+| changes-1-live-schedule | Backend: Shift API (cascade) + Frontend: Shift UI + Action Log | PENDING | — |
+| changes-2-bot-notifications | Telegram bot: notifications + inline buttons + scheduler + notification settings | PENDING | — |
+
 **Статусы:** DONE | IN_PROGRESS | PENDING
