@@ -16,9 +16,9 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 	const csp = [
 		"default-src 'self'",
 		"script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org", // Telegram Web App SDK
-		"style-src 'self' 'unsafe-inline'", // unsafe-inline для inline стилей Svelte
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // unsafe-inline для inline стилей Svelte + Google Fonts
 		"img-src 'self' data: https:",
-		"font-src 'self' data:",
+		"font-src 'self' data: https://fonts.gstatic.com",
 		// В dev разрешаем localhost:3000 (backend), localhost:3015 (backend alt), и localhost:3333 (agent), в prod только HTTPS
 		isDev
 			? "connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 http://localhost:3015 http://127.0.0.1:3015 http://localhost:3333 http://127.0.0.1:3333 https://api.telegram.org https://*.telegram.org"
