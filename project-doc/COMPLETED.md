@@ -25,8 +25,8 @@
 
 | Change | Summary | Status | Deployed |
 |--------|---------|--------|----------|
-| changes-1-admin-api | Backend: 10 Admin API endpoints (dashboard, CRUD, slots, config) | PENDING | — |
-| changes-2-admin-dashboard | Frontend: Dashboard + Timeline View + Хронометраж | PENDING | — |
-| changes-3-admin-management | Frontend: Таблица бронирований + Ручное создание + Слоты + Настройки | PENDING | — |
+| changes-1-admin-api | Backend: 10 Admin API endpoints (dashboard, CRUD, slots, config) | DONE | — |
+| changes-2-admin-dashboard | Frontend: Dashboard + Timeline View + Хронометраж | DONE | — |
+| changes-3-admin-management | Frontend: Таблица бронирований + Ручное создание + Слоты + Настройки | DONE | — |
 
 **Статусы:** DONE | IN_PROGRESS | PENDING
