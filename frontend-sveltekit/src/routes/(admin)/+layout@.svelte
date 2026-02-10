@@ -104,6 +104,10 @@
 					<span class="icon">📋</span>
 					<span>Заказы</span>
 				</a>
+				<a href="/bookings" class:active={$page.url.pathname.startsWith('/bookings')} onclick={closeMobileMenu}>
+					<span class="icon">🏎️</span>
+					<span>Бронирования</span>
+				</a>
 				<a href="/store-list" class:active={$page.url.pathname.startsWith('/store-list')} onclick={closeMobileMenu}>
 					<span class="icon">🏪</span>
 					<span>Магазины</span>
