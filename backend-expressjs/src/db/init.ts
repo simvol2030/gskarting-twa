@@ -125,6 +125,8 @@ export async function initializeDatabase() {
 			}
 		} catch (error) {
 			console.log('ℹ️ Transaction seller columns already exist or error:', error);
+		}
+
 		// Create shop e-commerce tables
 		try {
 			nativeClient.exec(`
@@ -361,7 +363,6 @@ export async function initializeDatabase() {
 		}
 	}
 	console.log('✅ Database tables initialized (managed by Drizzle ORM)');
-}
 }
 
 /**
