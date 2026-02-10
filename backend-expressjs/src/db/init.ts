@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { db, nativeClient } from './client';
-import { users, posts, admins, shopSettings } from './schema';
+import { users, posts, admins, shopSettings, bookingConfig } from './schema';
 import { count, eq } from 'drizzle-orm';
 
 /**
@@ -229,6 +229,136 @@ export async function initializeDatabase() {
 		} catch (error) {
 			console.log('ℹ️ Shop e-commerce tables already exist or error:', error);
 		}
+
+		// Create booking system tables
+		try {
+			nativeClient.exec(`
+				-- Booking Config (singleton)
+				CREATE TABLE IF NOT EXISTS booking_config (
+					id INTEGER PRIMARY KEY DEFAULT 1,
+					working_hours TEXT NOT NULL DEFAULT '{}',
+					slot_interval_minutes INTEGER NOT NULL DEFAULT 15,
+					buffer_minutes INTEGER NOT NULL DEFAULT 5,
+					slot_durations TEXT NOT NULL DEFAULT '[10,15,20]',
+					default_duration INTEGER NOT NULL DEFAULT 10,
+					max_participants INTEGER NOT NULL DEFAULT 8,
+					pricing_adult TEXT NOT NULL DEFAULT '{"10":800,"15":1100,"20":1400}',
+					pricing_child TEXT NOT NULL DEFAULT '{"10":600,"15":850,"20":1100}',
+					currency TEXT NOT NULL DEFAULT 'RUB',
+					group_discount_min INTEGER NOT NULL DEFAULT 5,
+					group_discount_percent INTEGER NOT NULL DEFAULT 10,
+					adult_min_age INTEGER NOT NULL DEFAULT 14,
+					child_min_age INTEGER NOT NULL DEFAULT 6,
+					child_max_age INTEGER NOT NULL DEFAULT 13,
+					booking_horizon_days INTEGER NOT NULL DEFAULT 90,
+					auto_confirm INTEGER NOT NULL DEFAULT 1,
+					reminder_enabled INTEGER NOT NULL DEFAULT 1,
+					reminder_hours_before INTEGER NOT NULL DEFAULT 24,
+					shift_notification_threshold INTEGER NOT NULL DEFAULT 5,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					CHECK (id = 1)
+				);
+
+				-- Booking Schedule Overrides
+				CREATE TABLE IF NOT EXISTS booking_schedule_overrides (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					date TEXT NOT NULL,
+					is_closed INTEGER NOT NULL DEFAULT 0,
+					custom_open TEXT,
+					custom_close TEXT,
+					reason TEXT,
+					created_by_admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_booking_overrides_date ON booking_schedule_overrides(date);
+
+				-- Booking Slots
+				CREATE TABLE IF NOT EXISTS booking_slots (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					date TEXT NOT NULL,
+					start_time TEXT NOT NULL,
+					end_time TEXT NOT NULL,
+					participant_type TEXT NOT NULL DEFAULT 'adult',
+					max_participants INTEGER NOT NULL,
+					booked_participants INTEGER NOT NULL DEFAULT 0,
+					status TEXT NOT NULL DEFAULT 'available',
+					original_start_time TEXT,
+					shift_minutes INTEGER NOT NULL DEFAULT 0,
+					shift_reason TEXT,
+					is_blocked INTEGER NOT NULL DEFAULT 0,
+					blocked_by_admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+					blocked_reason TEXT,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_booking_slots_date ON booking_slots(date);
+				CREATE INDEX IF NOT EXISTS idx_booking_slots_date_type ON booking_slots(date, participant_type);
+				CREATE INDEX IF NOT EXISTS idx_booking_slots_status ON booking_slots(date, status);
+
+				-- Bookings
+				CREATE TABLE IF NOT EXISTS bookings (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					slot_id INTEGER NOT NULL REFERENCES booking_slots(id) ON DELETE CASCADE,
+					date TEXT NOT NULL,
+					start_time TEXT NOT NULL,
+					duration INTEGER NOT NULL,
+					participant_type TEXT NOT NULL,
+					participant_count INTEGER NOT NULL,
+					contact_name TEXT NOT NULL,
+					contact_phone TEXT NOT NULL,
+					contact_email TEXT,
+					telegram_user_id TEXT,
+					source TEXT NOT NULL,
+					created_by_admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+					status TEXT NOT NULL DEFAULT 'pending',
+					total_price INTEGER NOT NULL,
+					notes TEXT,
+					admin_notes TEXT,
+					reminder_sent INTEGER NOT NULL DEFAULT 0,
+					reminder_confirmed INTEGER,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					confirmed_at TEXT,
+					cancelled_at TEXT,
+					cancel_reason TEXT
+				);
+				CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings(slot_id);
+				CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
+				CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+				CREATE INDEX IF NOT EXISTS idx_bookings_telegram ON bookings(telegram_user_id);
+
+				-- Booking Shift Log (for Session 3)
+				CREATE TABLE IF NOT EXISTS booking_shift_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					date TEXT NOT NULL,
+					trigger_slot_id INTEGER NOT NULL REFERENCES booking_slots(id) ON DELETE CASCADE,
+					shift_minutes INTEGER NOT NULL,
+					reason TEXT NOT NULL,
+					cascade_shift INTEGER NOT NULL DEFAULT 0,
+					affected_slots_count INTEGER NOT NULL DEFAULT 0,
+					notifications_sent INTEGER NOT NULL DEFAULT 0,
+					admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_booking_shift_log_date ON booking_shift_log(date);
+
+				-- Booking Action Log (for Session 3)
+				CREATE TABLE IF NOT EXISTS booking_action_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					booking_id INTEGER REFERENCES bookings(id) ON DELETE SET NULL,
+					action TEXT NOT NULL,
+					admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+					details TEXT,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_booking_action_log_booking ON booking_action_log(booking_id);
+				CREATE INDEX IF NOT EXISTS idx_booking_action_log_action ON booking_action_log(action);
+			`);
+			console.log('✅ Booking system tables initialized');
+		} catch (error) {
+			console.log('ℹ️ Booking system tables already exist or error:', error);
+		}
 	}
 	console.log('✅ Database tables initialized (managed by Drizzle ORM)');
 }
@@ -317,6 +447,41 @@ export async function seedDatabase() {
 				min_order_amount: 0
 			});
 			console.log('✅ Default shop settings created');
+		}
+		// Initialize booking config if not exists
+		const [bookingConfigCount] = await db.select({ count: count() }).from(bookingConfig);
+		if ((bookingConfigCount?.count || 0) === 0) {
+			await db.insert(bookingConfig).values({
+				id: 1,
+				working_hours: JSON.stringify({
+					0: { open: '10:00', close: '23:00' },
+					1: { open: '11:00', close: '22:00' },
+					2: { open: '11:00', close: '22:00' },
+					3: { open: '11:00', close: '22:00' },
+					4: { open: '11:00', close: '22:00' },
+					5: { open: '11:00', close: '22:00' },
+					6: { open: '10:00', close: '23:00' }
+				}),
+				slot_interval_minutes: 15,
+				buffer_minutes: 5,
+				slot_durations: JSON.stringify([10, 15, 20]),
+				default_duration: 10,
+				max_participants: 8,
+				pricing_adult: JSON.stringify({ '10': 800, '15': 1100, '20': 1400 }),
+				pricing_child: JSON.stringify({ '10': 600, '15': 850, '20': 1100 }),
+				currency: 'RUB',
+				group_discount_min: 5,
+				group_discount_percent: 10,
+				adult_min_age: 14,
+				child_min_age: 6,
+				child_max_age: 13,
+				booking_horizon_days: 90,
+				auto_confirm: true,
+				reminder_enabled: true,
+				reminder_hours_before: 24,
+				shift_notification_threshold: 5
+			});
+			console.log('✅ Default booking config created');
 		}
 	} catch (error) {
 		console.error('❌ Error seeding database:', error);
