@@ -60,7 +60,7 @@
 		</form>
 
 		<div class="login-footer">
-			<p class="text-sm">Default credentials: admin@example.com / admin123</p>
+			<p class="text-sm">Введите учётные данные администратора</p>
 		</div>
 	</div>
 </div>
