@@ -5,6 +5,7 @@ import { checkScheduledCampaigns } from './checkScheduledCampaigns';
 import { processBirthdayTrigger } from './processBirthdayTrigger';
 import { processInactiveTrigger } from './processInactiveTrigger';
 import { cleanupPendingDiscounts } from './cleanupPendingDiscounts';
+import { processBookingReminders } from '../services/booking-scheduler.service';
 
 /**
  * Initialize all scheduled jobs
@@ -169,6 +170,29 @@ export function initScheduledJobs() {
 		timezone: 'UTC'
 	});
 
+	// Every 15 minutes - booking reminders and auto-completion
+	cron.schedule('*/15 * * * *', async () => {
+		try {
+			const result = await processBookingReminders(isDevelopment);
+
+			if (result.reminders_sent > 0 || result.bookings_completed > 0) {
+				if (isDevelopment) {
+					console.log(`[CRON] Booking scheduler (DRY-RUN): ${result.reminders_sent} reminders, ${result.bookings_completed} completed`);
+				} else {
+					console.log(`[CRON] Booking scheduler: ${result.reminders_sent} reminders sent, ${result.bookings_completed} bookings completed`);
+				}
+			}
+
+			if (result.errors.length > 0) {
+				console.error('[CRON] Booking scheduler errors:', result.errors);
+			}
+		} catch (error) {
+			console.error('[CRON] Booking scheduler failed:', error);
+		}
+	}, {
+		timezone: 'UTC'
+	});
+
 	console.log('[CRON] Scheduled jobs initialized');
 	console.log('[CRON] Points expiration: Daily at 2:00 AM UTC');
 	console.log('[CRON] Transaction cleanup: Daily at 3:00 AM UTC');
@@ -176,4 +200,5 @@ export function initScheduledJobs() {
 	console.log('[CRON] Birthday trigger: Daily at 9:00 AM Moscow (6:00 UTC)');
 	console.log('[CRON] Inactive customers trigger: Daily at 10:00 AM Moscow (7:00 UTC)');
 	console.log('[CRON] Pending discounts cleanup: Hourly at :15');
+	console.log('[CRON] Booking reminders: Every 15 minutes');
 }

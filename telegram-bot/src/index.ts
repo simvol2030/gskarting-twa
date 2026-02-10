@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import express from 'express';
 import * as dotenv from 'dotenv';
+import { registerBookingWebhooks, registerBookingCallbacks } from './handlers/booking.js';
 
 // Load environment variables
 dotenv.config();
@@ -576,6 +577,10 @@ bot.on('callback_query:data', async (ctx) => {
 		await ctx.answerCallbackQuery('❌ Произошла ошибка');
 	}
 });
+
+// ===== BOOKING HANDLERS =====
+registerBookingWebhooks(app, bot);
+registerBookingCallbacks(bot);
 
 // Health check
 app.get('/health', (req, res) => {

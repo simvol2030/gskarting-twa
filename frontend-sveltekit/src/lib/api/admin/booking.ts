@@ -37,6 +37,9 @@ export interface BookingSlot {
 	is_blocked: boolean | number;
 	blocked_by_admin_id: number | null;
 	blocked_reason: string | null;
+	original_start_time: string | null;
+	shift_minutes: number;
+	shift_reason: string | null;
 	bookings?: BookingItem[];
 }
 
@@ -110,6 +113,54 @@ export interface BookingScheduleOverride {
 	reason: string | null;
 	created_by_admin_id: number | null;
 	created_at: string;
+}
+
+export interface ShiftPreview {
+	trigger_slot: { id: number; start_time: string; new_start_time: string };
+	affected_slots: Array<{
+		id: number;
+		start_time: string;
+		new_start_time: string;
+		has_bookings: boolean;
+		booking_count: number;
+	}>;
+	total_affected: number;
+	bookings_affected: number;
+}
+
+export interface ShiftResult {
+	shift_log_id: number;
+	affected_slots_count: number;
+	shifted_slots: Array<{ id: number; old_start: string; new_start: string }>;
+}
+
+export interface ShiftLogEntry {
+	id: number;
+	date: string;
+	trigger_slot_id: number;
+	shift_minutes: number;
+	reason: string;
+	cascade: boolean | number;
+	affected_slots_count: number;
+	notifications_sent: number;
+	admin_id: number | null;
+	created_at: string;
+}
+
+export interface ActionLogEntry {
+	id: number;
+	booking_id: number | null;
+	action: 'created' | 'confirmed' | 'cancelled' | 'shifted' | 'edited';
+	admin_id: number | null;
+	details: string | null;
+	created_at: string;
+	booking?: {
+		id: number;
+		contact_name: string;
+		date: string;
+		start_time: string;
+		status: string;
+	} | null;
 }
 
 // API functions
@@ -217,6 +268,65 @@ export const bookingAdminAPI = {
 			method: 'PATCH',
 			body: JSON.stringify(data)
 		});
+		return result.data;
+	},
+
+	// Session 3: Shift & Action Log
+
+	async shiftSlot(slotId: number, data: {
+		shift_minutes: number;
+		reason: string;
+		cascade?: boolean;
+	}): Promise<ShiftResult> {
+		const result = await fetchAPI<{ success: boolean; data: ShiftResult }>(`${API_BASE}/slots/${slotId}/shift`, {
+			method: 'POST',
+			body: JSON.stringify(data)
+		});
+		return result.data;
+	},
+
+	async bulkShiftSlots(data: {
+		slot_ids: number[];
+		shift_minutes: number;
+		reason: string;
+	}): Promise<ShiftResult> {
+		const result = await fetchAPI<{ success: boolean; data: ShiftResult }>(`${API_BASE}/slots/bulk-shift`, {
+			method: 'POST',
+			body: JSON.stringify(data)
+		});
+		return result.data;
+	},
+
+	async previewShift(slotId: number, data: {
+		shift_minutes: number;
+		cascade?: boolean;
+	}): Promise<ShiftPreview> {
+		const result = await fetchAPI<{ success: boolean; data: ShiftPreview }>(`${API_BASE}/slots/${slotId}/shift-preview`, {
+			method: 'POST',
+			body: JSON.stringify(data)
+		});
+		return result.data;
+	},
+
+	async getShiftLog(date: string): Promise<ShiftLogEntry[]> {
+		const result = await fetchAPI<{ success: boolean; data: ShiftLogEntry[] }>(`${API_BASE}/shift-log?date=${date}`);
+		return result.data;
+	},
+
+	async getActionLog(filters?: {
+		page?: number;
+		limit?: number;
+		action?: string;
+		date?: string;
+	}): Promise<{ logs: ActionLogEntry[]; total: number; page: number; limit: number }> {
+		const params = new URLSearchParams();
+		if (filters?.page) params.set('page', String(filters.page));
+		if (filters?.limit) params.set('limit', String(filters.limit));
+		if (filters?.action) params.set('action', filters.action);
+		if (filters?.date) params.set('date', filters.date);
+
+		const query = params.toString() ? `?${params.toString()}` : '';
+		const result = await fetchAPI<{ success: boolean; data: { logs: ActionLogEntry[]; total: number; page: number; limit: number } }>(`${API_BASE}/action-log${query}`);
 		return result.data;
 	}
 };

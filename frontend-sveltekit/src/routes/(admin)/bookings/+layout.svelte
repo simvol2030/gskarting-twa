@@ -7,6 +7,7 @@
 		{ href: '/bookings', label: 'Dashboard', exact: true },
 		{ href: '/bookings/list', label: 'Список', exact: false },
 		{ href: '/bookings/slots', label: 'Слоты', exact: false },
+		{ href: '/bookings/log', label: 'Лог', exact: false },
 		{ href: '/bookings/settings', label: 'Настройки', exact: false }
 	];
 </script>
