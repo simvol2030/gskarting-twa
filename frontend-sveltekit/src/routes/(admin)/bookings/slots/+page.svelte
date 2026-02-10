@@ -160,9 +160,8 @@
 								{#each slot.bookings.filter(b => b.status !== 'cancelled').slice(0, 3) as b}
 									<span class="booking-mini">{b.contact_name} ({b.participant_count})</span>
 								{/each}
-								{@const activeCount = slot.bookings.filter(b => b.status !== 'cancelled').length}
-								{#if activeCount > 3}
-									<span class="booking-mini more">+{activeCount - 3}</span>
+								{#if slot.bookings.filter(b => b.status !== 'cancelled').length > 3}
+									<span class="booking-mini more">+{slot.bookings.filter(b => b.status !== 'cancelled').length - 3}</span>
 								{/if}
 							</div>
 						{/if}
