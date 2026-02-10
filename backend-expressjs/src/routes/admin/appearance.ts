@@ -13,6 +13,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
+import { exec } from 'child_process';
 
 const router = Router();
 
@@ -451,6 +452,17 @@ router.post('/logo', requireRole('super-admin', 'editor'), upload.single('logo')
 
 		// Invalidate public API cache
 		invalidateCustomizationCache();
+
+		// Restart frontend PM2 process to clear sirv static file cache
+		// Without this, SvelteKit serves stale file metadata (wrong content-length)
+		const frontendPm2Name = process.env.PM2_FRONTEND_NAME || 'gskarting-frontend';
+		exec(`pm2 restart ${frontendPm2Name}`, (err) => {
+			if (err) {
+				console.warn(`[LOGO UPLOAD] Could not restart frontend PM2 (${frontendPm2Name}):`, err.message);
+			} else {
+				console.log(`[LOGO UPLOAD] Restarted frontend PM2 (${frontendPm2Name}) to clear static cache`);
+			}
+		});
 
 		// Log upload
 		const adminName = (req as any).user?.name || 'Unknown Admin';
