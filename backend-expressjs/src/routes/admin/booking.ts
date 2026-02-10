@@ -16,6 +16,8 @@ import { eq, and, desc, like, or, sql } from 'drizzle-orm';
 import { authenticateSession, requireRole } from '../../middleware/session-auth';
 import { getBookingConfig, getSlotsForDate } from '../../services/booking-slot.service';
 import { createBooking, calculatePrice } from '../../services/booking.service';
+import { shiftSlot, bulkShiftSlots, previewShift, getShiftHistory } from '../../services/booking-shift.service';
+import { bookingShiftLog } from '../../db/schema';
 
 const router = Router();
 
@@ -735,6 +737,189 @@ router.patch('/config', requireRole('super-admin', 'editor'), async (req, res) =
 		});
 	} catch (error: any) {
 		console.error('Error updating booking config:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+// ============================================================
+// Session 3: Shift & Action Log endpoints
+// ============================================================
+
+/**
+ * POST /slots/:id/shift — Shift a single slot (with optional cascade)
+ */
+router.post('/slots/:id/shift', requireRole('super-admin', 'editor'), async (req, res) => {
+	try {
+		const slotId = parseInt(req.params.id);
+		const { shift_minutes, reason, cascade } = req.body;
+		const adminId = (req as any).user?.id;
+
+		if (!shift_minutes || typeof shift_minutes !== 'number') {
+			return res.status(400).json({ success: false, error: 'shift_minutes is required (number)' });
+		}
+		if (!reason || typeof reason !== 'string') {
+			return res.status(400).json({ success: false, error: 'reason is required' });
+		}
+
+		const result = await shiftSlot(slotId, shift_minutes, reason, !!cascade, adminId);
+
+		res.json({ success: true, data: result });
+	} catch (error: any) {
+		console.error('Error shifting slot:', error);
+		res.status(error.message === 'Slot not found' ? 404 : 500).json({
+			success: false, error: error.message || 'Internal server error'
+		});
+	}
+});
+
+/**
+ * POST /slots/bulk-shift — Shift multiple specific slots
+ */
+router.post('/slots/bulk-shift', requireRole('super-admin', 'editor'), async (req, res) => {
+	try {
+		const { slot_ids, shift_minutes, reason } = req.body;
+		const adminId = (req as any).user?.id;
+
+		if (!Array.isArray(slot_ids) || slot_ids.length === 0) {
+			return res.status(400).json({ success: false, error: 'slot_ids is required (non-empty array)' });
+		}
+		if (!shift_minutes || typeof shift_minutes !== 'number') {
+			return res.status(400).json({ success: false, error: 'shift_minutes is required (number)' });
+		}
+		if (!reason || typeof reason !== 'string') {
+			return res.status(400).json({ success: false, error: 'reason is required' });
+		}
+
+		const result = await bulkShiftSlots(slot_ids, shift_minutes, reason, adminId);
+
+		res.json({ success: true, data: result });
+	} catch (error: any) {
+		console.error('Error bulk shifting slots:', error);
+		res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+	}
+});
+
+/**
+ * POST /slots/:id/shift-preview — Preview shift impact (no DB changes)
+ */
+router.post('/slots/:id/shift-preview', authenticateSession, async (req, res) => {
+	try {
+		const slotId = parseInt(req.params.id);
+		const { shift_minutes, cascade } = req.body;
+
+		if (!shift_minutes || typeof shift_minutes !== 'number') {
+			return res.status(400).json({ success: false, error: 'shift_minutes is required (number)' });
+		}
+
+		const preview = await previewShift(slotId, shift_minutes, !!cascade);
+
+		res.json({ success: true, data: preview });
+	} catch (error: any) {
+		console.error('Error previewing shift:', error);
+		res.status(error.message === 'Slot not found' ? 404 : 500).json({
+			success: false, error: error.message || 'Internal server error'
+		});
+	}
+});
+
+/**
+ * GET /shift-log?date=YYYY-MM-DD — Get shift history for a date
+ */
+router.get('/shift-log', authenticateSession, async (req, res) => {
+	try {
+		const { date } = req.query;
+		if (!date || typeof date !== 'string') {
+			return res.status(400).json({ success: false, error: 'date query parameter is required' });
+		}
+
+		const history = await getShiftHistory(date);
+
+		res.json({ success: true, data: history });
+	} catch (error: any) {
+		console.error('Error getting shift log:', error);
+		res.status(500).json({ success: false, error: 'Internal server error' });
+	}
+});
+
+/**
+ * GET /action-log?page=1&limit=50&action=shifted&date=YYYY-MM-DD — Action log with filters
+ */
+router.get('/action-log', authenticateSession, async (req, res) => {
+	try {
+		const page = parseInt(req.query.page as string) || 1;
+		const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+		const offset = (page - 1) * limit;
+		const { action, date } = req.query;
+
+		// Build conditions
+		const conditions: any[] = [];
+		if (action && typeof action === 'string') {
+			conditions.push(eq(bookingActionLog.action, action as any));
+		}
+
+		// Get total count
+		let countQuery;
+		if (conditions.length > 0) {
+			countQuery = await db
+				.select({ count: sql<number>`COUNT(*)` })
+				.from(bookingActionLog)
+				.where(and(...conditions));
+		} else {
+			countQuery = await db
+				.select({ count: sql<number>`COUNT(*)` })
+				.from(bookingActionLog);
+		}
+		const total = countQuery[0]?.count || 0;
+
+		// Get logs
+		let logsQuery;
+		if (conditions.length > 0) {
+			logsQuery = await db
+				.select()
+				.from(bookingActionLog)
+				.where(and(...conditions))
+				.orderBy(desc(bookingActionLog.created_at))
+				.limit(limit)
+				.offset(offset);
+		} else {
+			logsQuery = await db
+				.select()
+				.from(bookingActionLog)
+				.orderBy(desc(bookingActionLog.created_at))
+				.limit(limit)
+				.offset(offset);
+		}
+
+		// Enrich with booking info if available
+		const enrichedLogs = [];
+		for (const log of logsQuery) {
+			let booking = null;
+			if (log.booking_id) {
+				const [b] = await db.select().from(bookings).where(eq(bookings.id, log.booking_id)).limit(1);
+				if (b) {
+					booking = {
+						id: b.id,
+						contact_name: b.contact_name,
+						date: b.date,
+						start_time: b.start_time,
+						status: b.status
+					};
+				}
+			}
+			enrichedLogs.push({ ...log, booking });
+		}
+
+		res.json({
+			success: true,
+			data: {
+				logs: enrichedLogs,
+				total,
+				page,
+				limit
+			}
+		});
+	} catch (error: any) {
+		console.error('Error getting action log:', error);
 		res.status(500).json({ success: false, error: 'Internal server error' });
 	}
 });

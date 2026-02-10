@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { bookingAdminAPI, type DashboardData, type BookingSlot, type BookingItem } from '$lib/api/admin/booking';
+	import { bookingAdminAPI, type DashboardData, type BookingSlot, type BookingItem, type ShiftPreview } from '$lib/api/admin/booking';
 
 	let dashboardData = $state<DashboardData | null>(null);
 	let loading = $state(true);
@@ -17,6 +17,16 @@
 
 	// Slot detail modal
 	let selectedSlot = $state<BookingSlot | null>(null);
+
+	// Shift modal state
+	let showShiftModal = $state(false);
+	let shiftSlotTarget = $state<BookingSlot | null>(null);
+	let shiftMinutes = $state(5);
+	let shiftReason = $state('');
+	let shiftCascade = $state(true);
+	let shiftPreviewData = $state<ShiftPreview | null>(null);
+	let shiftLoading = $state(false);
+	let shiftError = $state('');
 
 	async function loadDashboard() {
 		loading = true;
@@ -179,6 +189,61 @@
 		return price.toLocaleString('ru-RU') + ' ₽';
 	}
 
+	function openShiftModal(slot: BookingSlot) {
+		shiftSlotTarget = slot;
+		shiftMinutes = 5;
+		shiftReason = '';
+		shiftCascade = true;
+		shiftPreviewData = null;
+		shiftError = '';
+		showShiftModal = true;
+	}
+
+	async function handlePreviewShift() {
+		if (!shiftSlotTarget) return;
+		shiftLoading = true;
+		shiftError = '';
+		try {
+			shiftPreviewData = await bookingAdminAPI.previewShift(shiftSlotTarget.id, {
+				shift_minutes: shiftMinutes,
+				cascade: shiftCascade
+			});
+		} catch (e: any) {
+			shiftError = e.message || 'Preview failed';
+		} finally {
+			shiftLoading = false;
+		}
+	}
+
+	async function handleShift() {
+		if (!shiftSlotTarget || !shiftReason.trim()) return;
+		shiftLoading = true;
+		shiftError = '';
+		try {
+			await bookingAdminAPI.shiftSlot(shiftSlotTarget.id, {
+				shift_minutes: shiftMinutes,
+				reason: shiftReason.trim(),
+				cascade: shiftCascade
+			});
+			showShiftModal = false;
+			selectedSlot = null;
+			shiftSlotTarget = null;
+			shiftPreviewData = null;
+			await loadDashboard();
+		} catch (e: any) {
+			shiftError = e.message || 'Shift failed';
+		} finally {
+			shiftLoading = false;
+		}
+	}
+
+	function closeShiftModal() {
+		showShiftModal = false;
+		shiftSlotTarget = null;
+		shiftPreviewData = null;
+		shiftError = '';
+	}
+
 	function getTimeAxisLabels(): Array<{ offset: number; text: string }> {
 		const startMin = timeToMinutes(workingHoursStart);
 		const endMin = timeToMinutes(workingHoursEnd);
@@ -318,6 +383,9 @@
 							{#if slot.is_blocked}
 								<span class="slot-lock">🔒</span>
 							{/if}
+							{#if slot.shift_minutes}
+								<span class="slot-shift-badge" title="Смещён на {slot.shift_minutes} мин">⏩</span>
+							{/if}
 						</div>
 					{/each}
 				</div>
@@ -353,6 +421,9 @@
 							{#if slot.is_blocked}
 								<span>🔒 {slot.blocked_reason || 'Заблокирован'}</span>
 							{/if}
+							{#if slot.shift_minutes}
+								<span class="shift-info">⏩ Смещён на {slot.shift_minutes} мин</span>
+							{/if}
 						</div>
 						{#if slot.bookings && slot.bookings.length > 0}
 							<div class="slot-card-bookings">
@@ -367,6 +438,93 @@
 				{/each}
 			{/if}
 		</div>
+
+		<!-- Shift Modal -->
+		{#if showShiftModal && shiftSlotTarget}
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="modal-overlay" onclick={closeShiftModal}>
+				<div class="modal shift-modal" onclick={(e) => e.stopPropagation()}>
+					<header class="modal-header">
+						<h2>Сместить слот {shiftSlotTarget.start_time}</h2>
+						<button class="close-btn" onclick={closeShiftModal}>&times;</button>
+					</header>
+					<div class="modal-body">
+						{#if shiftError}
+							<div class="alert alert-error">{shiftError}</div>
+						{/if}
+
+						<div class="shift-form">
+							<div class="form-group">
+								<label>Смещение (минуты)</label>
+								<div class="shift-minutes-row">
+									<button class="btn-sm" onclick={() => shiftMinutes = Math.max(-60, shiftMinutes - 5)}>-5</button>
+									<input type="number" bind:value={shiftMinutes} min="-60" max="60" class="form-input shift-input" />
+									<button class="btn-sm" onclick={() => shiftMinutes = Math.min(60, shiftMinutes + 5)}>+5</button>
+								</div>
+								<p class="form-hint">Положительное = позже, отрицательное = раньше</p>
+							</div>
+
+							<div class="form-group">
+								<label>Причина</label>
+								<input type="text" bind:value={shiftReason} class="form-input" placeholder="Причина смещения..." />
+							</div>
+
+							<div class="form-group">
+								<label class="toggle-label">
+									<input type="checkbox" bind:checked={shiftCascade} />
+									<span>Каскадное смещение (все последующие слоты)</span>
+								</label>
+							</div>
+
+							<div class="shift-actions">
+								<button class="btn-preview" onclick={handlePreviewShift} disabled={shiftLoading}>
+									{shiftLoading ? 'Загрузка...' : 'Предпросмотр'}
+								</button>
+							</div>
+
+							{#if shiftPreviewData}
+								<div class="shift-preview">
+									<h3>Предпросмотр</h3>
+									<div class="preview-summary">
+										<p>Затронуто слотов: <strong>{shiftPreviewData.total_affected}</strong></p>
+										<p>Затронуто бронирований: <strong>{shiftPreviewData.bookings_affected}</strong></p>
+									</div>
+									<div class="preview-trigger">
+										<span class="preview-slot-tag">
+											{shiftPreviewData.trigger_slot.start_time} &rarr; {shiftPreviewData.trigger_slot.new_start_time}
+										</span>
+									</div>
+									{#if shiftPreviewData.affected_slots.length > 0}
+										<div class="preview-list">
+											{#each shiftPreviewData.affected_slots as aSlot}
+												<div class="preview-item" class:has-bookings={aSlot.has_bookings}>
+													<span>{aSlot.start_time} &rarr; {aSlot.new_start_time}</span>
+													{#if aSlot.has_bookings}
+														<span class="preview-warn">({aSlot.booking_count} бронь)</span>
+													{/if}
+												</div>
+											{/each}
+										</div>
+									{/if}
+
+									<div class="shift-confirm-actions">
+										<button class="btn-cancel" onclick={closeShiftModal}>Отмена</button>
+										<button
+											class="btn-primary"
+											onclick={handleShift}
+											disabled={shiftLoading || !shiftReason.trim()}
+										>
+											{shiftLoading ? 'Смещение...' : 'Подтвердить смещение'}
+										</button>
+									</div>
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Slot Detail Modal -->
 		{#if selectedSlot}
@@ -385,6 +543,22 @@
 							{#if selectedSlot.is_blocked}
 								<p><strong>Причина блокировки:</strong> {selectedSlot.blocked_reason || '—'}</p>
 							{/if}
+							{#if selectedSlot.shift_minutes}
+								<p class="shift-info-detail">
+									⏩ <strong>Смещён:</strong> {selectedSlot.shift_minutes > 0 ? '+' : ''}{selectedSlot.shift_minutes} мин
+									{#if selectedSlot.original_start_time}
+										(было {selectedSlot.original_start_time})
+									{/if}
+									{#if selectedSlot.shift_reason}
+										— {selectedSlot.shift_reason}
+									{/if}
+								</p>
+							{/if}
+						</div>
+						<div class="slot-actions">
+							<button class="btn-shift" onclick={() => openShiftModal(selectedSlot!)}>
+								⏩ Сместить
+							</button>
 						</div>
 
 						{#if selectedSlot.bookings && selectedSlot.bookings.length > 0}
@@ -916,5 +1090,275 @@
 		.chrono-text {
 			font-size: 0.8125rem;
 		}
+	}
+
+	/* Shift Badge on Timeline */
+	.slot-shift-badge {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		font-size: 0.5625rem;
+		line-height: 1;
+	}
+
+	/* Shift Info in Slot Card */
+	.shift-info {
+		color: #7c3aed;
+		font-weight: 500;
+	}
+
+	.shift-info-detail {
+		color: #7c3aed;
+		background: #f5f3ff;
+		padding: 0.375rem 0.5rem;
+		border-radius: 0.375rem;
+		margin-top: 0.5rem !important;
+		font-size: 0.8125rem !important;
+	}
+
+	/* Slot Actions in Detail Modal */
+	.slot-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid #e5e7eb;
+	}
+
+	.btn-shift {
+		padding: 0.375rem 0.75rem;
+		background: #7c3aed;
+		color: white;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.btn-shift:hover {
+		background: #6d28d9;
+	}
+
+	/* Shift Modal */
+	.shift-modal {
+		max-width: 500px;
+	}
+
+	.shift-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.shift-minutes-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.shift-input {
+		width: 80px;
+		text-align: center;
+	}
+
+	.btn-sm {
+		padding: 0.375rem 0.5rem;
+		background: #f3f4f6;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: #374151;
+	}
+
+	.btn-sm:hover {
+		background: #e5e7eb;
+	}
+
+	.form-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.form-group label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: #374151;
+	}
+
+	.form-input {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		color: #111827;
+	}
+
+	.form-hint {
+		margin: 0;
+		font-size: 0.75rem;
+		color: #9ca3af;
+	}
+
+	.toggle-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		color: #374151;
+	}
+
+	.toggle-label input[type="checkbox"] {
+		width: 18px;
+		height: 18px;
+		accent-color: #7c3aed;
+	}
+
+	.btn-preview {
+		padding: 0.5rem 1rem;
+		background: #f3f4f6;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #374151;
+	}
+
+	.btn-preview:hover {
+		background: #e5e7eb;
+	}
+
+	.btn-preview:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.shift-actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	/* Shift Preview */
+	.shift-preview {
+		background: #f9fafb;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.shift-preview h3 {
+		margin: 0 0 0.5rem;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: #111827;
+	}
+
+	.preview-summary {
+		margin-bottom: 0.75rem;
+	}
+
+	.preview-summary p {
+		margin: 0.125rem 0;
+		font-size: 0.8125rem;
+		color: #374151;
+	}
+
+	.preview-trigger {
+		margin-bottom: 0.5rem;
+	}
+
+	.preview-slot-tag {
+		display: inline-block;
+		padding: 0.25rem 0.5rem;
+		background: #7c3aed;
+		color: white;
+		border-radius: 0.25rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.preview-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		max-height: 200px;
+		overflow-y: auto;
+		margin-bottom: 0.75rem;
+	}
+
+	.preview-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.8125rem;
+		color: #374151;
+		border-radius: 0.25rem;
+	}
+
+	.preview-item.has-bookings {
+		background: #fef2f2;
+		border: 1px solid #fecaca;
+	}
+
+	.preview-warn {
+		color: #dc2626;
+		font-weight: 500;
+		font-size: 0.75rem;
+	}
+
+	.shift-confirm-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+	}
+
+	.btn-cancel {
+		padding: 0.5rem 1rem;
+		background: white;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		color: #374151;
+	}
+
+	.btn-cancel:hover {
+		background: #f3f4f6;
+	}
+
+	.btn-primary {
+		padding: 0.5rem 1rem;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		color: white;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+
+	.btn-primary:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	/* Alert */
+	.alert {
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+	}
+
+	.alert-error {
+		background: #fee2e2;
+		color: #991b1b;
+		border: 1px solid #fca5a5;
 	}
 </style>
