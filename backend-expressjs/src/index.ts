@@ -61,6 +61,9 @@ import adminFreeDeliverySettingsRouter from './routes/admin/free-delivery-settin
 // Public Stories API
 import storiesRouter from './routes/stories';
 
+// Booking API (public)
+import bookingRouter from './routes/booking';
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 
@@ -142,6 +145,7 @@ app.use('/api/shop', shopRouter); // Shop settings and delivery locations
 app.use('/api/feed', feedRouter); // Feed/Лента public API
 app.use('/api/stories', storiesRouter); // Web Stories (public)
 app.use('/api/flash', flashRouter); // Flash screens for TV menu
+app.use('/api/booking', bookingRouter); // Booking system (public)
 
 // Bot API routes (public, no auth required)
 app.use('/api/bot/welcome-messages', botWelcomeMessagesRouter); // Welcome messages for bot

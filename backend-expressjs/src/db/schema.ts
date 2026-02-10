@@ -1114,3 +1114,212 @@ export type NewStoriesSettings = typeof storiesSettings.$inferInsert;
 
 export type StoriesView = typeof storiesViews.$inferSelect;
 export type NewStoriesView = typeof storiesViews.$inferInsert;
+
+// =====================================================
+// BOOKING SYSTEM TABLES
+// =====================================================
+
+/**
+ * Booking Config table - настройки системы бронирования
+ * Singleton таблица (всегда 1 запись с id=1)
+ */
+export const bookingConfig = sqliteTable('booking_config', {
+	id: integer('id').primaryKey().$default(() => 1),
+
+	// Рабочие часы по дням недели (0=Вс, 1=Пн, ... 6=Сб)
+	// JSON: {"1":{"open":"11:00","close":"22:00"}, ...}
+	working_hours: text('working_hours').notNull().default(JSON.stringify({
+		0: { open: '10:00', close: '23:00' },
+		1: { open: '11:00', close: '22:00' },
+		2: { open: '11:00', close: '22:00' },
+		3: { open: '11:00', close: '22:00' },
+		4: { open: '11:00', close: '22:00' },
+		5: { open: '11:00', close: '22:00' },
+		6: { open: '10:00', close: '23:00' }
+	})),
+
+	// Интервалы и буферы
+	slot_interval_minutes: integer('slot_interval_minutes').notNull().default(15),
+	buffer_minutes: integer('buffer_minutes').notNull().default(5),
+	slot_durations: text('slot_durations').notNull().default(JSON.stringify([10, 15, 20])),
+	default_duration: integer('default_duration').notNull().default(10),
+	max_participants: integer('max_participants').notNull().default(8),
+
+	// Цены (JSON: {"10": 800, "15": 1100, "20": 1400})
+	pricing_adult: text('pricing_adult').notNull().default(JSON.stringify({ '10': 800, '15': 1100, '20': 1400 })),
+	pricing_child: text('pricing_child').notNull().default(JSON.stringify({ '10': 600, '15': 850, '20': 1100 })),
+	currency: text('currency').notNull().default('RUB'),
+
+	// Групповая скидка
+	group_discount_min: integer('group_discount_min').notNull().default(5),
+	group_discount_percent: integer('group_discount_percent').notNull().default(10),
+
+	// Возрастные ограничения
+	adult_min_age: integer('adult_min_age').notNull().default(14),
+	child_min_age: integer('child_min_age').notNull().default(6),
+	child_max_age: integer('child_max_age').notNull().default(13),
+
+	// Горизонт и подтверждение
+	booking_horizon_days: integer('booking_horizon_days').notNull().default(90),
+	auto_confirm: integer('auto_confirm', { mode: 'boolean' }).notNull().default(true),
+
+	// Напоминания
+	reminder_enabled: integer('reminder_enabled', { mode: 'boolean' }).notNull().default(true),
+	reminder_hours_before: integer('reminder_hours_before').notNull().default(24),
+
+	// Смещение
+	shift_notification_threshold: integer('shift_notification_threshold').notNull().default(5),
+
+	// Timestamps
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+/**
+ * Booking Schedule Overrides table - исключения из расписания
+ * Закрытые дни, изменённые часы работы
+ */
+export const bookingScheduleOverrides = sqliteTable('booking_schedule_overrides', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	date: text('date').notNull(), // YYYY-MM-DD
+	is_closed: integer('is_closed', { mode: 'boolean' }).notNull().default(false),
+	custom_open: text('custom_open'), // HH:MM, nullable
+	custom_close: text('custom_close'), // HH:MM, nullable
+	reason: text('reason'),
+	created_by_admin_id: integer('created_by_admin_id').references(() => admins.id, { onDelete: 'set null' }),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	dateIdx: index('idx_booking_overrides_date').on(table.date)
+}));
+
+/**
+ * Booking Slots table - слоты для бронирования
+ * Генерируются лениво при первом запросе на дату
+ */
+export const bookingSlots = sqliteTable('booking_slots', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	date: text('date').notNull(), // YYYY-MM-DD
+	start_time: text('start_time').notNull(), // HH:MM
+	end_time: text('end_time').notNull(), // HH:MM
+	participant_type: text('participant_type', { enum: ['adult', 'child'] }).notNull().default('adult'),
+	max_participants: integer('max_participants').notNull(),
+	booked_participants: integer('booked_participants').notNull().default(0),
+	status: text('status', { enum: ['available', 'limited', 'booked', 'blocked'] }).notNull().default('available'),
+
+	// Смещение (для Session 3)
+	original_start_time: text('original_start_time'),
+	shift_minutes: integer('shift_minutes').notNull().default(0),
+	shift_reason: text('shift_reason'),
+
+	// Блокировка
+	is_blocked: integer('is_blocked', { mode: 'boolean' }).notNull().default(false),
+	blocked_by_admin_id: integer('blocked_by_admin_id').references(() => admins.id, { onDelete: 'set null' }),
+	blocked_reason: text('blocked_reason'),
+
+	// Timestamps
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	dateIdx: index('idx_booking_slots_date').on(table.date),
+	dateTypeIdx: index('idx_booking_slots_date_type').on(table.date, table.participant_type),
+	statusIdx: index('idx_booking_slots_status').on(table.date, table.status)
+}));
+
+/**
+ * Bookings table - бронирования
+ */
+export const bookings = sqliteTable('bookings', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	slot_id: integer('slot_id').notNull().references(() => bookingSlots.id, { onDelete: 'cascade' }),
+	date: text('date').notNull(), // YYYY-MM-DD
+	start_time: text('start_time').notNull(), // HH:MM
+	duration: integer('duration').notNull(), // минуты
+	participant_type: text('participant_type', { enum: ['adult', 'child'] }).notNull(),
+	participant_count: integer('participant_count').notNull(),
+
+	// Контакты
+	contact_name: text('contact_name').notNull(),
+	contact_phone: text('contact_phone').notNull(),
+	contact_email: text('contact_email'),
+	telegram_user_id: text('telegram_user_id'),
+
+	// Источник и статус
+	source: text('source', { enum: ['twa', 'widget', 'admin'] }).notNull(),
+	created_by_admin_id: integer('created_by_admin_id').references(() => admins.id, { onDelete: 'set null' }),
+	status: text('status', { enum: ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'] }).notNull().default('pending'),
+
+	// Стоимость
+	total_price: integer('total_price').notNull(), // в рублях
+
+	// Комментарии
+	notes: text('notes'),
+	admin_notes: text('admin_notes'),
+
+	// Напоминания
+	reminder_sent: integer('reminder_sent', { mode: 'boolean' }).notNull().default(false),
+	reminder_confirmed: integer('reminder_confirmed', { mode: 'boolean' }),
+
+	// Timestamps
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+	confirmed_at: text('confirmed_at'),
+	cancelled_at: text('cancelled_at'),
+	cancel_reason: text('cancel_reason')
+}, (table) => ({
+	slotIdx: index('idx_bookings_slot').on(table.slot_id),
+	dateIdx: index('idx_bookings_date').on(table.date),
+	statusIdx: index('idx_bookings_status').on(table.status),
+	telegramIdx: index('idx_bookings_telegram').on(table.telegram_user_id)
+}));
+
+/**
+ * Booking Shift Log table - история смещений слотов (для Session 3)
+ */
+export const bookingShiftLog = sqliteTable('booking_shift_log', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	date: text('date').notNull(),
+	trigger_slot_id: integer('trigger_slot_id').notNull().references(() => bookingSlots.id, { onDelete: 'cascade' }),
+	shift_minutes: integer('shift_minutes').notNull(),
+	reason: text('reason').notNull(),
+	cascade: integer('cascade', { mode: 'boolean' }).notNull().default(false),
+	affected_slots_count: integer('affected_slots_count').notNull().default(0),
+	notifications_sent: integer('notifications_sent').notNull().default(0),
+	admin_id: integer('admin_id').references(() => admins.id, { onDelete: 'set null' }),
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	dateIdx: index('idx_booking_shift_log_date').on(table.date)
+}));
+
+/**
+ * Booking Action Log table - лог действий (для Session 3)
+ */
+export const bookingActionLog = sqliteTable('booking_action_log', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	booking_id: integer('booking_id').references(() => bookings.id, { onDelete: 'set null' }),
+	action: text('action', { enum: ['created', 'confirmed', 'cancelled', 'shifted', 'edited'] }).notNull(),
+	admin_id: integer('admin_id').references(() => admins.id, { onDelete: 'set null' }),
+	details: text('details'), // JSON
+	created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+	bookingIdx: index('idx_booking_action_log_booking').on(table.booking_id),
+	actionIdx: index('idx_booking_action_log_action').on(table.action)
+}));
+
+// Booking TypeScript типы
+export type BookingConfig = typeof bookingConfig.$inferSelect;
+export type NewBookingConfig = typeof bookingConfig.$inferInsert;
+
+export type BookingScheduleOverride = typeof bookingScheduleOverrides.$inferSelect;
+export type NewBookingScheduleOverride = typeof bookingScheduleOverrides.$inferInsert;
+
+export type BookingSlot = typeof bookingSlots.$inferSelect;
+export type NewBookingSlot = typeof bookingSlots.$inferInsert;
+
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;
+
+export type BookingShiftLog = typeof bookingShiftLog.$inferSelect;
+export type NewBookingShiftLog = typeof bookingShiftLog.$inferInsert;
+
+export type BookingActionLog = typeof bookingActionLog.$inferSelect;
+export type NewBookingActionLog = typeof bookingActionLog.$inferInsert;
