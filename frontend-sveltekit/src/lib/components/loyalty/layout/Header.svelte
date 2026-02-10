@@ -131,9 +131,11 @@
   }
 
   .app-logo {
-    height: 40px;
-    width: auto;
+    height: 44px;
+    width: 44px;
     flex-shrink: 0;
+    border-radius: 50%;
+    object-fit: cover;
   }
 
   .header-title {
@@ -230,7 +232,8 @@
     }
 
     .app-logo {
-      height: 36px;
+      height: 40px;
+      width: 40px;
     }
   }
 </style>
