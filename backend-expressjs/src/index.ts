@@ -57,6 +57,7 @@ import adminFeedRouter from './routes/admin/feed'; // Feed admin API
 import adminStoriesRouter from './routes/admin/stories'; // Web Stories management
 import adminDeliveryLocationsRouter from './routes/admin/delivery-locations'; // Delivery locations management
 import adminFreeDeliverySettingsRouter from './routes/admin/free-delivery-settings'; // Free delivery settings
+import adminBookingRouter from './routes/admin/booking'; // Booking management
 
 // Public Stories API
 import storiesRouter from './routes/stories';
@@ -172,6 +173,7 @@ app.use('/api/admin/feed', adminFeedRouter); // Feed/Лента admin API
 app.use('/api/admin/stories', adminStoriesRouter); // Web Stories management
 app.use('/api/admin/delivery-locations', adminDeliveryLocationsRouter); // Delivery locations management
 app.use('/api/admin/free-delivery-settings', adminFreeDeliverySettingsRouter); // Free delivery settings
+app.use('/api/admin/booking', adminBookingRouter); // Booking admin management
 
 // Обработка 404
 app.use((req, res) => {
