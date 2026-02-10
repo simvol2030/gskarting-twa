@@ -18,7 +18,7 @@
 
 | Change | Summary | Status | Deployed |
 |--------|---------|--------|----------|
-| changes-1-db-api | БД (6 таблиц Drizzle) + сервис генерации слотов + 7 Public API endpoints | PENDING | - |
-| changes-2-booking-widget | BookingWidget (5 шагов) + интеграция на главную TWA (под сторисами) + Standalone /booking (iframe-ready) | PENDING | - |
+| changes-1-db-api | БД (6 таблиц Drizzle) + сервис генерации слотов + 7 Public API endpoints | DONE | - |
+| changes-2-booking-widget | BookingWidget (5 шагов) + интеграция на главную TWA (под сторисами) + Standalone /booking (iframe-ready) | DONE | - |
 
 **Статусы:** DONE | IN_PROGRESS | PENDING

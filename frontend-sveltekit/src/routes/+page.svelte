@@ -10,8 +10,20 @@
   import ProductCard from '$lib/components/loyalty/ui/ProductCard.svelte';
   import ProductDetailSheet from '$lib/components/loyalty/ui/ProductDetailSheet.svelte';
   import FreeDeliveryWidget from '$lib/components/loyalty/ui/FreeDeliveryWidget.svelte';
+  import BookingWidget from '$lib/components/booking/BookingWidget.svelte';
+  import { getTelegramUser } from '$lib/telegram';
 
   let { data } = $props();
+
+  // Telegram user for booking widget
+  let telegramUserId = $state<string | undefined>(undefined);
+
+  onMount(() => {
+    const tgUser = getTelegramUser();
+    if (tgUser) {
+      telegramUserId = String(tgUser.id);
+    }
+  });
 
   // DEBUG: Check what customization data we have
   $effect(() => {
@@ -54,6 +66,14 @@
 
 <!-- 2. Web Stories -->
 <StoriesCarousel userId={data.user?.id} borderColorOverride={data.customization?.stories?.borderColor} />
+
+<!-- 2.1. Booking Widget -->
+<section class="section-content booking-section">
+  <BookingWidget mode="twa" {telegramUserId} />
+</section>
+
+<!-- Section Divider -->
+<div class="section-divider"></div>
 
 <!-- 2.5. Free Delivery Widget -->
 {#if data.freeDeliveryInfo?.enabled && data.freeDeliveryInfo?.widget?.enabled}
@@ -194,6 +214,11 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .booking-section {
+    padding: 0 12px;
+    margin-top: 16px;
   }
 
   @media (max-width: 480px) {
