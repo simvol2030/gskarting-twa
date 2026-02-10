@@ -29,4 +29,11 @@
 | changes-2-admin-dashboard | Frontend: Dashboard + Timeline View + Хронометраж | DONE | — |
 | changes-3-admin-management | Frontend: Таблица бронирований + Ручное создание + Слоты + Настройки | DONE | — |
 
+### session-3: Live Schedule Engine + Bot Notifications
+
+| Change | Summary | Status | Deployed |
+|--------|---------|--------|----------|
+| changes-1-live-schedule | Backend: booking-shift.service.ts (cascade shift) + 5 API endpoints. Frontend: ShiftModal + shift badges on dashboard + Action Log page | DONE | — |
+| changes-2-bot-notifications | Backend: notification service (5 types) + scheduler (cron 15min) + bot routes. Bot: Grammy handlers (cancel, confirm, shift_ok). Frontend: notification settings UI | DONE | — |
+
 **Статусы:** DONE | IN_PROGRESS | PENDING
