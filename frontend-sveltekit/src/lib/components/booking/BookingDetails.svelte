@@ -256,6 +256,7 @@
 <style>
 	.booking-details {
 		padding: 16px;
+		padding-bottom: 90px;
 	}
 
 	.details-header {

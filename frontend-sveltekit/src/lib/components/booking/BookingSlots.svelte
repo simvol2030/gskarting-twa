@@ -130,6 +130,7 @@
 <style>
 	.booking-slots {
 		padding: 16px;
+		padding-bottom: 90px;
 	}
 
 	.slots-header {

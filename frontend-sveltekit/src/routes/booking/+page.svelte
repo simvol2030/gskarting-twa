@@ -26,7 +26,7 @@
 	}
 
 	.booking-page {
-		min-height: 100vh;
+		min-height: 100dvh;
 		background: #0a0a0a;
 		font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 		display: flex;
@@ -49,13 +49,14 @@
 
 	.booking-footer {
 		text-align: center;
-		padding: 24px 16px;
+		padding: 16px;
 		margin-top: auto;
+		background: #0a0a0a;
 	}
 
 	.booking-footer p {
-		font-size: 12px;
-		color: #666;
+		font-size: 11px;
+		color: #444;
 		margin: 0;
 	}
 </style>

@@ -164,6 +164,7 @@
 <style>
 	.booking-confirm {
 		padding: 16px;
+		padding-bottom: 90px;
 	}
 
 	.confirm-header {

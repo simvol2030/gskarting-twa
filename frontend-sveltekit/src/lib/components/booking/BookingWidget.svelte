@@ -220,8 +220,8 @@
 		height: 28px;
 		border-radius: 50%;
 		background: #2a2a2a;
-		border: 2px solid #444;
-		color: #666;
+		border: 2px solid #555;
+		color: #aaa;
 		font-size: 12px;
 		font-weight: 700;
 		display: flex;
