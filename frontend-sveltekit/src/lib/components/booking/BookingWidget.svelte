@@ -174,7 +174,6 @@
 	.booking-widget.standalone {
 		max-width: 480px;
 		margin: 0 auto;
-		min-height: 400px;
 	}
 
 	.widget-title {
