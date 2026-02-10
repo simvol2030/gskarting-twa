@@ -35,6 +35,7 @@ import shopRouter from './routes/api/shop'; // Shop settings and delivery locati
 // Bot API routes (public, no auth required)
 import botWelcomeMessagesRouter from './routes/bot/welcome-messages';
 import botRegisterRouter from './routes/bot/register';
+import botBookingRouter from './routes/bot/booking';
 
 // Admin routes
 import adminClientsRouter from './routes/admin/clients';
@@ -151,6 +152,7 @@ app.use('/api/booking', bookingRouter); // Booking system (public)
 // Bot API routes (public, no auth required)
 app.use('/api/bot/welcome-messages', botWelcomeMessagesRouter); // Welcome messages for bot
 app.use('/api/bot', botRegisterRouter); // User registration via bot
+app.use('/api/bot/booking', botBookingRouter); // Booking actions via bot
 
 // Admin API routes
 app.use('/api/admin/clients', adminClientsRouter);

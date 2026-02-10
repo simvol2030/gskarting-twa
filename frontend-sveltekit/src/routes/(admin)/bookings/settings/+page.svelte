@@ -22,6 +22,11 @@
 	let autoConfirm = $state(true);
 	let bookingHorizon = $state(90);
 
+	// Notification settings
+	let reminderEnabled = $state(true);
+	let reminderHoursBefore = $state(24);
+	let shiftNotificationThreshold = $state(5);
+
 	const dayNames: Record<string, string> = {
 		'0': 'Воскресенье',
 		'1': 'Понедельник',
@@ -51,6 +56,11 @@
 			maxParticipants = config.max_participants;
 			autoConfirm = !!config.auto_confirm;
 			bookingHorizon = config.booking_horizon_days;
+
+			// Notification fields
+			reminderEnabled = !!config.reminder_enabled;
+			reminderHoursBefore = config.reminder_hours_before;
+			shiftNotificationThreshold = config.shift_notification_threshold;
 		} catch (e: any) {
 			error = e.message || 'Failed to load config';
 		} finally {
@@ -73,7 +83,10 @@
 				pricing_adult: JSON.stringify(pricingAdult) as any,
 				pricing_child: JSON.stringify(pricingChild) as any,
 				auto_confirm: autoConfirm as any,
-				booking_horizon_days: bookingHorizon
+				booking_horizon_days: bookingHorizon,
+				reminder_enabled: reminderEnabled as any,
+				reminder_hours_before: reminderHoursBefore,
+				shift_notification_threshold: shiftNotificationThreshold
 			});
 			success = 'Настройки сохранены';
 			setTimeout(() => success = '', 3000);
@@ -188,6 +201,40 @@
 				</div>
 			</section>
 
+			<!-- Notifications -->
+			<section class="settings-card">
+				<h2>Уведомления (Telegram)</h2>
+				<div class="settings-grid">
+					<div class="form-group">
+						<label class="toggle-label">
+							<input type="checkbox" bind:checked={reminderEnabled} />
+							<span>Напоминания о заездах</span>
+						</label>
+						<p class="form-hint">Отправлять напоминание через Telegram бота перед заездом</p>
+					</div>
+					<div class="form-group">
+						<label>За сколько часов напоминать</label>
+						<input type="number" bind:value={reminderHoursBefore} min="1" max="72" class="form-input" disabled={!reminderEnabled} />
+					</div>
+					<div class="form-group">
+						<label>Порог уведомлений о смещении (мин)</label>
+						<input type="number" bind:value={shiftNotificationThreshold} min="0" max="60" class="form-input" />
+						<p class="form-hint">Уведомлять клиентов если смещение больше этого значения</p>
+					</div>
+				</div>
+				<div class="notification-types">
+					<h3>Типы уведомлений</h3>
+					<ul class="notif-list">
+						<li><span class="notif-icon">🏎️</span> Создание бронирования</li>
+						<li><span class="notif-icon">✅</span> Подтверждение бронирования</li>
+						<li><span class="notif-icon">❌</span> Отмена бронирования</li>
+						<li><span class="notif-icon">🔔</span> Напоминание перед заездом</li>
+						<li><span class="notif-icon">⏩</span> Смещение времени</li>
+					</ul>
+					<p class="form-hint">Уведомления отправляются только пользователям с привязанным Telegram аккаунтом</p>
+				</div>
+			</section>
+
 			<!-- Other Settings -->
 			<section class="settings-card">
 				<h2>Другие настройки</h2>
@@ -271,6 +318,13 @@
 	.btn-primary { padding: 0.5rem 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; }
 	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; }
+
+	/* Notification Types */
+	.notification-types { margin-top: 1rem; }
+	.notification-types h3 { margin: 0 0 0.5rem; font-size: 0.9375rem; font-weight: 600; color: #374151; }
+	.notif-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.375rem; }
+	.notif-list li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: #374151; padding: 0.375rem 0; }
+	.notif-icon { font-size: 1rem; }
 
 	@media (max-width: 768px) {
 		.settings-grid { grid-template-columns: 1fr; }
